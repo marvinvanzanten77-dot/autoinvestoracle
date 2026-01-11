@@ -16,8 +16,7 @@ function DashboardHeader({ date }: { date: string }) {
       </div>
       <div className="flex items-center gap-2 text-sm text-slate-200">
         <span className="relative h-2.5 w-2.5">
-          <span className="absolute inset-0 animate-ping rounded-full bg-primary/60"></span>
-          <span className="absolute inset-0 rounded-full bg-primary shadow-[0_0_12px_rgba(70,240,255,0.6)]"></span>
+          <span className="absolute inset-0 rounded-full bg-primary/70 shadow-[0_0_0_4px_rgba(143,185,182,0.12)]"></span>
         </span>
         De scan draait live
       </div>
@@ -28,15 +27,15 @@ function DashboardHeader({ date }: { date: string }) {
 function CircleMeter({ value }: { value: number }) {
   return (
     <div className="relative h-20 w-20">
-      <div className="absolute inset-0 rounded-full bg-slate-900/70 border border-slate-700/60 shadow-inner shadow-black/40" />
+      <div className="absolute inset-0 rounded-full bg-slate-900/70 border border-slate-700/60 shadow-inner shadow-black/30" />
       <div
-        className="absolute inset-1 rounded-full border border-primary/40"
+        className="absolute inset-1 rounded-full border border-primary/30"
         style={{
-          background: `conic-gradient(#46F0FF ${value}%, rgba(30,41,59,0.7) ${value}%)`
+          background: `conic-gradient(#8FB9B6 ${value}%, rgba(15,23,32,0.65) ${value}%)`
         }}
       />
-      <div className="absolute inset-4 rounded-full bg-slate-950/80 flex items-center justify-center text-white font-semibold">
-        <span className="text-lg">{value}</span>
+      <div className="absolute inset-4 rounded-full bg-slate-950/80 flex items-center justify-center text-slate-200 font-medium">
+        <span className="text-base">{value}</span>
       </div>
     </div>
   );
@@ -50,7 +49,7 @@ function TopChanceCard({ topChance }: { topChance: DashboardResponse['topChance'
           <p className="text-subtitle text-white leading-tight">{topChance.assetName}</p>
           <p className="text-muted text-sm">Verwachting: {topChance.confidence} op 100 (hoog vertrouwen)</p>
         </div>
-        <span className="pill border border-primary/50 text-primary bg-primary/10">
+        <span className="pill border border-primary/40 text-primary bg-primary/10">
           {topChance.direction === 'up'
             ? 'Omhoog (long)'
             : topChance.direction === 'down'
@@ -82,8 +81,11 @@ function MarketSentimentCard({ marketSentiment }: { marketSentiment: DashboardRe
   return (
     <Card title="Stemming op de markt" subtitle="Optimistisch (68%)">
       <div className="space-y-3">
-        <div className="h-2.5 w-full rounded-full bg-slate-800 overflow-hidden border border-slate-700">
-          <div className="h-full bg-gradient-to-r from-red-400 via-amber-300 to-emerald-300" style={{ width: `${marketSentiment.percentage}%` }} />
+        <div className="h-2.5 w-full rounded-full bg-slate-800 overflow-hidden border border-slate-700/80">
+          <div
+            className="h-full bg-gradient-to-r from-slate-600 via-primary/70 to-slate-400"
+            style={{ width: `${marketSentiment.percentage}%` }}
+          />
         </div>
         <p className="text-sm text-slate-300">
           Op dit moment zijn mensen vooral: {marketSentiment.label} ({marketSentiment.percentage}%)
@@ -125,17 +127,17 @@ function TopSetupsTable({ setups }: { setups: DashboardResponse['topSetups'] }) 
                 <span className="flex items-center gap-2">
                   {trustLabel} ({row.confidence}%)
                   <span className="h-2 w-24 rounded-full bg-slate-800 overflow-hidden">
-                    <span className="block h-full bg-gradient-to-r from-primary to-accent" style={{ width: barWidth }} />
+                    <span className="block h-full bg-primary/60" style={{ width: barWidth }} />
                   </span>
                 </span>
-                  <span className="text-muted">{row.horizonText}</span>
+                <span className="text-muted">{row.horizonText}</span>
                 <span
                   className={`pill border ${
                     row.riskLabel === 'Hoog'
-                      ? 'border-red-400/40 text-red-200 bg-red-500/10'
-                      : row.riskLabel === 'Normaal'
                       ? 'border-amber-300/40 text-amber-100 bg-amber-500/10'
-                      : 'border-emerald-300/40 text-emerald-100 bg-emerald-500/10'
+                      : row.riskLabel === 'Normaal'
+                      ? 'border-slate-400/40 text-slate-200 bg-slate-500/10'
+                      : 'border-teal-300/40 text-teal-100 bg-teal-500/10'
                   }`}
                 >
                   {row.riskLabel}
@@ -167,7 +169,7 @@ function WarningsCard({ warnings }: { warnings: DashboardResponse['warnings'] })
       <ul className="space-y-3 text-sm text-slate-200">
         {warnings.map((warn) => (
           <li key={warn} className="flex items-start gap-3">
-            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]" />
+            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-amber-300/80 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]" />
             <span>{warn}</span>
           </li>
         ))}
@@ -229,7 +231,7 @@ export function Dashboard() {
         <div className="text-sm text-slate-400">Data laden...</div>
       ) : (
         <>
-          {error && <div className="text-sm text-red-300">{error}</div>}
+          {error && <div className="text-sm text-amber-200">{error}</div>}
 
           <div className="grid gap-4 md:gap-5 md:grid-cols-3">
             <TopChanceCard topChance={payload.topChance} />

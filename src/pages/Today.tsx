@@ -37,13 +37,13 @@ export function Today() {
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="pill border border-primary/60 bg-primary/10 text-primary hover:bg-primary/20 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          className="pill border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 transition disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? 'Bezig...' : 'Dagrapport genereren'}
         </button>
       </div>
 
-      {error && <div className="text-sm text-red-300">{error}</div>}
+      {error && <div className="text-sm text-amber-200">{error}</div>}
 
       <Card title="Dagrapport" subtitle="Stub output">
         {loading && !report && <p className="text-sm text-slate-400">Rapport genereren...</p>}

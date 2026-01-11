@@ -4,16 +4,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#46F0FF',
-        accent: '#7B4DFF',
+        primary: '#8FB9B6',
+        accent: '#BFA98B',
         bg: {
-          DEFAULT: '#020816',
-          dark: '#050B1E'
+          DEFAULT: '#0B1117',
+          dark: '#0F1720'
         },
-        card: '#0B1224'
+        card: '#111827'
       },
       fontFamily: {
-        display: ['"Space Grotesk"', 'Inter', 'system-ui', 'sans-serif']
+        display: ['"IBM Plex Sans"', '"DM Sans"', 'sans-serif']
       },
       fontSize: {
         title: ['1.75rem', { lineHeight: '1.2', fontWeight: '600' }],
@@ -23,7 +23,7 @@ module.exports = {
         muted: ['0.9rem', { lineHeight: '1.5', color: 'rgba(255,255,255,0.7)' }]
       },
       boxShadow: {
-        glow: '0 25px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(70,240,255,0.08)'
+        glow: '0 25px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(143,185,182,0.08)'
       }
     }
   },

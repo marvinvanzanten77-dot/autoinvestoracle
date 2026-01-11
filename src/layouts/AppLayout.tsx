@@ -22,8 +22,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <div className="flex items-center gap-3 text-sm text-slate-300">
                   <span className="flex items-center gap-2">
                     <span className="relative h-2.5 w-2.5">
-                      <span className="absolute inset-0 animate-ping rounded-full bg-primary/60"></span>
-                      <span className="absolute inset-0 rounded-full bg-primary shadow-[0_0_12px_rgba(70,240,255,0.6)]"></span>
+                      <span className="absolute inset-0 rounded-full bg-primary/70 shadow-[0_0_0_4px_rgba(143,185,182,0.12)]"></span>
                     </span>
                     Scan live
                   </span>
