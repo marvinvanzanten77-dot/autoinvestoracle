@@ -34,8 +34,8 @@ function CircleMeter({ value }: { value: number }) {
           background: `conic-gradient(#8FB9B6 ${value}%, rgba(15,23,32,0.65) ${value}%)`
         }}
       />
-      <div className="absolute inset-4 rounded-full bg-slate-950/80 flex items-center justify-center text-slate-200 font-medium">
-        <span className="text-base">{value}</span>
+      <div className="absolute inset-4 rounded-full bg-slate-950/80 flex items-center justify-center text-slate-300 font-medium">
+        <span className="text-sm">{value}</span>
       </div>
     </div>
   );
@@ -61,7 +61,7 @@ function TopChanceCard({ topChance }: { topChance: DashboardResponse['topChance'
         <CircleMeter value={topChance.confidence} />
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Verwachting</p>
-          <p className="text-title text-white">{topChance.confidence} op 100</p>
+          <p className="text-value text-white">{topChance.confidence} op 100</p>
           <p className="text-xs text-slate-400">(hoog vertrouwen)</p>
           <p className="pt-1 text-sm text-slate-200">
             Richting:{' '}
@@ -99,7 +99,7 @@ function MarketSentimentCard({ marketSentiment }: { marketSentiment: DashboardRe
 function RiskLevelCard({ riskLevel }: { riskLevel: DashboardResponse['riskLevel'] }) {
   return (
     <Card title="Algemeen risiconiveau" subtitle="De markt beweegt normaal">
-      <p className="text-title text-white">{riskLevel.label} risico</p>
+      <p className="text-subtitle text-white">{riskLevel.label} risico</p>
       <p className="text-muted text-sm">{riskLevel.description}</p>
     </Card>
   );
@@ -181,7 +181,7 @@ function WarningsCard({ warnings }: { warnings: DashboardResponse['warnings'] })
 function RiskProfileCard({ profile }: { profile: DashboardResponse['userRiskProfile'] }) {
   return (
     <Card title="Jouw manier van investeren" subtitle="Gebalanceerd profiel">
-      <p className="text-title text-white">{profile.label}</p>
+      <p className="text-subtitle text-white">{profile.label}</p>
       <p className="text-sm text-slate-300 mt-1">{profile.description}</p>
       <p className="text-xs text-slate-500 mt-2">Je spreidt automatisch en vermijdt grote gokposities.</p>
     </Card>

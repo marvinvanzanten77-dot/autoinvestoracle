@@ -69,7 +69,7 @@ export function Charts() {
         {miniAssets.map((asset) => (
           <Card key={asset.name} title={asset.name} subtitle="Laatste koers" className="p-4">
             <div className="flex items-center justify-between text-sm text-slate-200">
-              <span className="text-value text-white">{asset.last}</span>
+              <span className="text-sm text-white">{asset.last}</span>
               <span
                 className={`pill ${
                   asset.changePct.startsWith('-')

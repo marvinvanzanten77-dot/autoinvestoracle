@@ -11,14 +11,14 @@
 body {
   @apply bg-[#0B1117] text-slate-100 font-display antialiased;
   background-image:
-    radial-gradient(circle at 18% 18%, rgba(143, 185, 182, 0.12), transparent 30%),
-    radial-gradient(circle at 82% 8%, rgba(191, 169, 139, 0.1), transparent 26%),
-    linear-gradient(130deg, #0B1117, #0F1720 70%);
+    radial-gradient(circle at 22% 22%, rgba(143, 185, 182, 0.08), transparent 36%),
+    radial-gradient(circle at 78% 12%, rgba(191, 169, 139, 0.07), transparent 32%),
+    linear-gradient(160deg, #0B1117, #0E151D 68%);
   min-height: 100vh;
 }
 
 .glass {
-  @apply bg-slate-900/70 border border-slate-700/50 backdrop-blur-xl shadow-[0_24px_55px_rgba(0,0,0,0.35),0_0_0_1px_rgba(143,185,182,0.06)];
+  @apply bg-slate-900/45 border border-white/5 backdrop-blur-xl shadow-[0_18px_40px_rgba(0,0,0,0.25)];
 }
 
 .pill {

@@ -16,8 +16,8 @@ module.exports = {
         display: ['"IBM Plex Sans"', '"DM Sans"', 'sans-serif']
       },
       fontSize: {
-        title: ['1.75rem', { lineHeight: '1.2', fontWeight: '600' }],
-        subtitle: ['1.25rem', { lineHeight: '1.4', fontWeight: '600' }],
+        title: ['1.5rem', { lineHeight: '1.25', fontWeight: '600' }],
+        subtitle: ['1.15rem', { lineHeight: '1.5', fontWeight: '600' }],
         label: ['0.85rem', { letterSpacing: '0.04em', textTransform: 'uppercase' }],
         value: ['1.125rem', { lineHeight: '1.4', fontWeight: '600' }],
         muted: ['0.9rem', { lineHeight: '1.5', color: 'rgba(255,255,255,0.7)' }]
