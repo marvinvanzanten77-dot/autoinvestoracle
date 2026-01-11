@@ -27,30 +27,30 @@ export function Settings() {
       <Card title="Risicoprofiel" subtitle="Stel je risicohouding in">
         <div className="space-y-3">
           {(['Voorzichtig', 'Gebalanceerd', 'Actief'] as RiskProfile[]).map((option) => (
-            <label key={option} className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+            <label key={option} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
               <input
                 type="radio"
                 name="risk"
                 value={option}
                 checked={riskProfile === option}
                 onChange={() => setRiskProfile(option)}
-                className="h-4 w-4 text-primary border-slate-600 focus:ring-primary"
+                className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
               />
               <span>{option}</span>
             </label>
           ))}
-          <p className="text-xs text-slate-400 pt-1">{riskCopy[riskProfile]}</p>
+          <p className="text-xs text-slate-500 pt-1">{riskCopy[riskProfile]}</p>
         </div>
       </Card>
 
       <Card title="Markten" subtitle="Kies welke markten je wilt scannen">
-        <div className="space-y-2 text-sm text-slate-200">
+        <div className="space-y-2 text-sm text-slate-700">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={markets.crypto}
               onChange={(e) => setMarkets((m) => ({ ...m, crypto: e.target.checked }))}
-              className="h-4 w-4 text-primary border-slate-600 focus:ring-primary"
+              className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
             Crypto
           </label>
@@ -59,7 +59,7 @@ export function Settings() {
               type="checkbox"
               checked={markets.stocks}
               onChange={(e) => setMarkets((m) => ({ ...m, stocks: e.target.checked }))}
-              className="h-4 w-4 text-primary border-slate-600 focus:ring-primary"
+              className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
             Aandelen
           </label>
@@ -68,7 +68,7 @@ export function Settings() {
               type="checkbox"
               checked={markets.futures}
               onChange={(e) => setMarkets((m) => ({ ...m, futures: e.target.checked }))}
-              className="h-4 w-4 text-primary border-slate-600 focus:ring-primary"
+              className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
             Index-futures
           </label>
@@ -77,7 +77,7 @@ export function Settings() {
               type="checkbox"
               checked={markets.fx}
               onChange={(e) => setMarkets((m) => ({ ...m, fx: e.target.checked }))}
-              className="h-4 w-4 text-primary border-slate-600 focus:ring-primary"
+              className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
             Valuta
           </label>
@@ -85,7 +85,7 @@ export function Settings() {
       </Card>
 
       <Card title="Notificaties" subtitle="Blijf op de hoogte">
-        <div className="space-y-3 text-sm text-slate-200">
+        <div className="space-y-3 text-sm text-slate-700">
           <label className="flex items-center justify-between gap-2 cursor-pointer">
             <span>Dagrapport per e-mail</span>
             <input
@@ -104,7 +104,7 @@ export function Settings() {
               className="h-4 w-8 accent-primary"
             />
           </label>
-          <p className="text-xs text-slate-400 pt-1">Instellingen zijn lokaal; opslag naar backend volgt later.</p>
+          <p className="text-xs text-slate-500 pt-1">Instellingen zijn lokaal; opslag naar backend volgt later.</p>
         </div>
       </Card>
     </div>

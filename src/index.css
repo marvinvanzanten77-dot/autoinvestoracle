@@ -1,24 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Newsreader:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  @apply bg-[#0B1117] text-slate-100 font-display antialiased;
+  @apply bg-[#F6F3ED] text-slate-900 font-display antialiased;
   background-image:
-    radial-gradient(circle at 22% 22%, rgba(143, 185, 182, 0.08), transparent 36%),
-    radial-gradient(circle at 78% 12%, rgba(191, 169, 139, 0.07), transparent 32%),
-    linear-gradient(160deg, #0B1117, #0E151D 68%);
+    radial-gradient(circle at 18% 14%, rgba(111, 168, 161, 0.18), transparent 38%),
+    radial-gradient(circle at 82% 18%, rgba(227, 200, 162, 0.22), transparent 42%),
+    linear-gradient(160deg, #F6F3ED, #EFE9DF 68%);
   min-height: 100vh;
 }
 
 .glass {
-  @apply bg-slate-900/45 border border-white/5 backdrop-blur-xl shadow-[0_18px_40px_rgba(0,0,0,0.25)];
+  @apply bg-white/70 border border-slate-200/70 backdrop-blur-sm shadow-[0_16px_30px_rgba(15,23,42,0.08)];
 }
 
 .pill {
@@ -26,5 +26,5 @@ body {
 }
 
 .text-muted {
-  @apply text-slate-400;
+  @apply text-slate-600;
 }
