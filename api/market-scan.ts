@@ -4,8 +4,8 @@ const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const COINS = {
   bitcoin: 'bitcoin',
   ethereum: 'ethereum',
-  stablecoins: ['tether', 'usd-coin', 'dai'],
-  altcoins: ['solana', 'ripple', 'cardano', 'dogecoin']
+  stablecoins: ['tether', 'usd-coin'],
+  altcoins: ['solana', 'cardano']
 };
 
 const cache = new Map<string, { timestamp: number; payload: unknown }>();
@@ -30,9 +30,13 @@ function toPercentSeries(series: [number, number][]) {
 }
 
 async function fetchMarketChart(coinId: string, days: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
   const resp = await fetch(
-    `${COINGECKO_BASE}/coins/${coinId}/market_chart?vs_currency=eur&days=${days}`
+    `${COINGECKO_BASE}/coins/${coinId}/market_chart?vs_currency=eur&days=${days}`,
+    { signal: controller.signal }
   );
+  clearTimeout(timeout);
   if (!resp.ok) {
     throw new Error(`CoinGecko error ${resp.status}`);
   }
@@ -49,20 +53,17 @@ async function buildMarketScan(range: MarketRange) {
   };
 
   const config = rangeConfig[range];
-  const [btc, eth, usdt, usdc, dai, sol, xrp, ada, doge] = await Promise.all([
+  const [btc, eth, usdt, usdc, sol, ada] = await Promise.all([
     fetchMarketChart(COINS.bitcoin, config.days),
     fetchMarketChart(COINS.ethereum, config.days),
     fetchMarketChart(COINS.stablecoins[0], config.days),
     fetchMarketChart(COINS.stablecoins[1], config.days),
-    fetchMarketChart(COINS.stablecoins[2], config.days),
     fetchMarketChart(COINS.altcoins[0], config.days),
-    fetchMarketChart(COINS.altcoins[1], config.days),
-    fetchMarketChart(COINS.altcoins[2], config.days),
-    fetchMarketChart(COINS.altcoins[3], config.days)
+    fetchMarketChart(COINS.altcoins[1], config.days)
   ]);
 
-  const stable = averageSeries([usdt, usdc, dai]);
-  const alt = averageSeries([sol, xrp, ada, doge]);
+  const stable = averageSeries([usdt, usdc]);
+  const alt = averageSeries([sol, ada]);
 
   const cutoff = config.windowMs ? now - config.windowMs : null;
   const filter = (series: [number, number][]) =>
@@ -140,15 +141,25 @@ export default async function handler(req: { method?: string; query?: Record<str
     const cacheKey = `market:${range}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 60_000) {
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
       res.status(200).json(cached.payload);
       return;
     }
 
     const payload = await buildMarketScan(range);
     cache.set(cacheKey, { timestamp: Date.now(), payload });
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.status(200).json(payload);
   } catch (err) {
     console.error(err);
+    const range = (req.query?.range as MarketRange) || '24h';
+    const cacheKey = `market:${range}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.status(200).json(cached.payload);
+      return;
+    }
     res.status(500).json({ error: 'Kon marktdata niet ophalen.' });
   }
 }
