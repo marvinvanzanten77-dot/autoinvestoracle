@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { marketUpdates, volatilityStatus } from '../data/marketUpdates';
 import { platforms } from '../data/platforms';
+import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 
 type OnboardingData = {
   goals: string[];
@@ -17,9 +18,10 @@ function DashboardHeader({
 }: {
   onScan: () => void;
   lastScan: string;
-  volatility: typeof volatilityStatus;
+  volatility: MarketScanResponse['volatility'];
 }) {
   const isHigh = volatility.level === 'hoog';
+  const isMid = volatility.level === 'matig';
   return (
     <div className="glass rounded-2xl p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
@@ -35,10 +37,16 @@ function DashboardHeader({
           className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
             isHigh
               ? 'border-amber-300 bg-amber-100 text-amber-700'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : isMid
+                ? 'border-orange-200 bg-orange-100 text-orange-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${isHigh ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isHigh ? 'bg-amber-500' : isMid ? 'bg-orange-500' : 'bg-emerald-500'
+            }`}
+          />
           {volatility.label}
         </div>
         <button
@@ -157,6 +165,9 @@ function PlatformsCard() {
 export function Dashboard() {
   const [profile, setProfile] = useState<OnboardingData | null>(null);
   const [lastScan, setLastScan] = useState('Nog geen check');
+  const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>(
+    volatilityStatus
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -169,16 +180,40 @@ export function Dashboard() {
         setProfile(null);
       }
     }
+    const cachedScan = localStorage.getItem('aio_market_scan_v1');
+    if (cachedScan) {
+      try {
+        const parsed = JSON.parse(cachedScan) as MarketScanResponse;
+        if (parsed.volatility) {
+          setVolatility(parsed.volatility);
+          setLastScan(
+            new Date(parsed.updatedAt).toLocaleTimeString('nl-NL', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          );
+        }
+      } catch {
+        // ignore invalid storage
+      }
+    }
   }, []);
 
-  const handleScan = () => {
+  const handleScan = async () => {
     const time = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
     setLastScan(time);
+    try {
+      const scan = await fetchMarketScan('24h');
+      setVolatility(scan.volatility);
+      localStorage.setItem('aio_market_scan_v1', JSON.stringify(scan));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatilityStatus} />
+      <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ProfileCard profile={profile} />
