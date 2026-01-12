@@ -13,6 +13,7 @@ type OpenAIChatResponse = {
 };
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const cache = new Map<string, { timestamp: number; payload: { summary: string; createdAt: string } }>();
 
 async function generateMarketSummary(input: MarketSummaryInput) {
   if (!OPENAI_API_KEY) {
@@ -75,8 +76,24 @@ export default async function handler(req: { method?: string; body?: MarketSumma
       res.status(400).json({ error: 'range en changes zijn verplicht.' });
       return;
     }
+    const cacheKey = [
+      range,
+      changes.bitcoin.toFixed(2),
+      changes.ethereum.toFixed(2),
+      changes.stablecoins.toFixed(2),
+      changes.altcoins.toFixed(2)
+    ].join('|');
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 120_000) {
+      res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+      res.status(200).json(cached.payload);
+      return;
+    }
     const summary = await generateMarketSummary({ range, changes });
-    res.status(200).json({ summary, createdAt: new Date().toISOString() });
+    const payload = { summary, createdAt: new Date().toISOString() };
+    cache.set(cacheKey, { timestamp: Date.now(), payload });
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+    res.status(200).json(payload);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Kon AI-samenvatting niet ophalen.' });
