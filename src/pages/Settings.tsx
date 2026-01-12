@@ -6,10 +6,10 @@ type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
 export function Settings() {
   const [riskProfile, setRiskProfile] = useState<RiskProfile>('Gebalanceerd');
   const [markets, setMarkets] = useState({
-    crypto: true,
-    stocks: true,
-    futures: true,
-    fx: true
+    bitcoin: true,
+    ethereum: true,
+    stable: true,
+    altcoins: false
   });
   const [notifications, setNotifications] = useState({
     dailyEmail: true,
@@ -43,43 +43,43 @@ export function Settings() {
         </div>
       </Card>
 
-      <Card title="Markten" subtitle="Kies welke markten je wilt scannen">
+      <Card title="Munten" subtitle="Kies welke munten je wilt volgen">
         <div className="space-y-2 text-sm text-slate-700">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={markets.crypto}
-              onChange={(e) => setMarkets((m) => ({ ...m, crypto: e.target.checked }))}
+              checked={markets.bitcoin}
+              onChange={(e) => setMarkets((m) => ({ ...m, bitcoin: e.target.checked }))}
               className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
-            Crypto
+            Bitcoin
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={markets.stocks}
-              onChange={(e) => setMarkets((m) => ({ ...m, stocks: e.target.checked }))}
+              checked={markets.ethereum}
+              onChange={(e) => setMarkets((m) => ({ ...m, ethereum: e.target.checked }))}
               className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
-            Aandelen
+            Ethereum
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={markets.futures}
-              onChange={(e) => setMarkets((m) => ({ ...m, futures: e.target.checked }))}
+              checked={markets.stable}
+              onChange={(e) => setMarkets((m) => ({ ...m, stable: e.target.checked }))}
               className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
-            Index-futures
+            Stablecoins
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={markets.fx}
-              onChange={(e) => setMarkets((m) => ({ ...m, fx: e.target.checked }))}
+              checked={markets.altcoins}
+              onChange={(e) => setMarkets((m) => ({ ...m, altcoins: e.target.checked }))}
               className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
             />
-            Valuta
+            Altcoins
           </label>
         </div>
       </Card>

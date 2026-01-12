@@ -16,7 +16,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <main className="flex flex-col gap-4 md:gap-6">
               <header className="glass rounded-2xl p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-label tracking-[0.04em] text-slate-500">Marktoverzicht</p>
+                  <p className="text-label tracking-[0.04em] text-slate-500">Crypto overzicht</p>
                   <p className="text-title text-slate-900 font-serif">Auto Invest Oracle</p>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -24,7 +24,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <span className="relative h-2.5 w-2.5">
                       <span className="absolute inset-0 rounded-full bg-primary/70 shadow-[0_0_0_4px_rgba(111,168,161,0.12)]"></span>
                     </span>
-                    Scan live
+                    Korte scan
                   </span>
                   <span className="text-slate-400">|</span>
                   <span>Laatst bijgewerkt: 09:42 CET</span>

@@ -8,10 +8,8 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: 'Overzicht', to: '/' },
-  { label: 'Vandaag', to: '/today' },
-  { label: 'Maandoverzicht', to: '/month', locked: true },
-  { label: 'Jaarbeeld', to: '/year', locked: true },
-  { label: 'Koersen', to: '/charts' },
+  { label: 'Updates', to: '/today' },
+  { label: 'Platforms', to: '/charts' },
   { label: 'Instellingen', to: '/settings' }
 ];
 
@@ -29,7 +27,7 @@ export function Sidebar({ userName, badge }: SidebarProps) {
         </div>
         <div>
           <p className="text-subtitle leading-tight text-slate-900 font-serif">Auto Invest Oracle</p>
-          <p className="text-xs text-slate-500">Signalen & inzichten</p>
+          <p className="text-xs text-slate-500">Crypto observaties</p>
         </div>
       </div>
 
