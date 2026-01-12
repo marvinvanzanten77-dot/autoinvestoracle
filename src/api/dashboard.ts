@@ -2,7 +2,7 @@ import { mockSignals } from '../data/mockSignals';
 
 export type DashboardResponse = typeof mockSignals;
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+export const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export async function fetchDashboard(): Promise<DashboardResponse> {
   const resp = await fetch(`${API_BASE}/api/dashboard`);
