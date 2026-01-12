@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { mockSignals } from '../src/data/mockSignals';
 import { generateDailyReportAgent, type DashboardSnapshot } from './ai/dailyReportAgent';
+import { generateMarketSummary } from './ai/openaiClient';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -13,7 +15,9 @@ const allowedOrigins = [
   'http://localhost:5501',
   'http://127.0.0.1:5501',
   'http://localhost:5502',
-  'http://127.0.0.1:5502'
+  'http://127.0.0.1:5502',
+  'https://autoinvestoracle.nl',
+  'https://www.autoinvestoracle.nl'
 ];
 
 app.use(
@@ -104,6 +108,21 @@ app.post('/api/daily-report', (req, res) => {
       console.error(err);
       res.status(500).json({ error: 'Kon dagrapport niet genereren.' });
     });
+});
+
+app.post('/api/market-summary', async (req, res) => {
+  try {
+    const { range, changes } = req.body || {};
+    if (!range || !changes) {
+      res.status(400).json({ error: 'range en changes zijn verplicht.' });
+      return;
+    }
+    const summary = await generateMarketSummary({ range, changes });
+    res.json({ summary, createdAt: new Date().toISOString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Kon AI-samenvatting niet ophalen.' });
+  }
 });
 
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';

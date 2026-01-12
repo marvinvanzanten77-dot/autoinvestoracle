@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { marketContext, marketUpdates, volatilityStatus } from '../data/marketUpdates';
 import { fetchMarketScan, type MarketScanRange, type MarketScanResponse } from '../api/marketScan';
+import { fetchMarketSummary, type MarketSummaryResponse } from '../api/marketSummary';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 export function Today() {
   const [lastScan, setLastScan] = useState('Nog geen check');
   const [range, setRange] = useState<MarketScanRange>('24h');
   const [scanData, setScanData] = useState<MarketScanResponse | null>(null);
+  const [summary, setSummary] = useState<MarketSummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,6 +22,12 @@ export function Today() {
       const data = await fetchMarketScan(targetRange);
       setScanData(data);
       localStorage.setItem('aio_market_scan_v1', JSON.stringify(data));
+      try {
+        const aiSummary = await fetchMarketSummary(targetRange, data.changes);
+        setSummary(aiSummary);
+      } catch (summaryError) {
+        console.error(summaryError);
+      }
     } catch (err) {
       console.error(err);
       setError('Kon marktdata niet ophalen.');
@@ -40,6 +48,10 @@ export function Today() {
             minute: '2-digit'
           })
         );
+        const cachedSummary = localStorage.getItem('aio_market_summary_v1');
+        if (cachedSummary) {
+          setSummary(JSON.parse(cachedSummary) as MarketSummaryResponse);
+        }
       } catch {
         // ignore invalid storage
       }
@@ -49,6 +61,11 @@ export function Today() {
   useEffect(() => {
     handleScan(range);
   }, [range]);
+
+  useEffect(() => {
+    if (!summary) return;
+    localStorage.setItem('aio_market_summary_v1', JSON.stringify(summary));
+  }, [summary]);
 
   const chartData = useMemo(() => {
     if (!scanData?.series?.length) return [];
@@ -173,6 +190,13 @@ export function Today() {
           <p className="text-sm text-slate-700">
             {scanData?.volatility.detail || volatilityStatus.detail}
           </p>
+        </Card>
+        <Card title="AI-duiding" subtitle="Korte samenvatting">
+          {summary ? (
+            <p className="text-sm text-slate-700 whitespace-pre-line">{summary.summary}</p>
+          ) : (
+            <p className="text-sm text-slate-500">Nog geen samenvatting beschikbaar.</p>
+          )}
         </Card>
         <Card title="Extra context" subtitle="In gewone woorden">
           <div className="space-y-3">

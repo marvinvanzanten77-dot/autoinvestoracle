@@ -1,0 +1,64 @@
+type MarketSummaryInput = {
+  range: string;
+  changes: {
+    bitcoin: number;
+    ethereum: number;
+    stablecoins: number;
+    altcoins: number;
+  };
+};
+
+type OpenAIChatResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+export async function generateMarketSummary(input: MarketSummaryInput) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY ontbreekt.');
+  }
+
+  const prompt = [
+    `Geef een korte, rustige duiding in het Nederlands over de crypto markt.`,
+    `Tijdspanne: ${input.range}.`,
+    `Bewegingen (percentage sinds start):`,
+    `- Bitcoin: ${input.changes.bitcoin.toFixed(2)}%`,
+    `- Ethereum: ${input.changes.ethereum.toFixed(2)}%`,
+    `- Stablecoins: ${input.changes.stablecoins.toFixed(2)}%`,
+    `- Altcoins: ${input.changes.altcoins.toFixed(2)}%`,
+    ``,
+    `Schrijf 3 korte zinnen. Geen advies, geen voorspellingen, geen jargon.`
+  ].join('\n');
+
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Je bent een rustige crypto-observator. Je spreekt in mensentaal en blijft neutraal.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]
+    })
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`OpenAI error ${resp.status}: ${text}`);
+  }
+
+  const data = (await resp.json()) as OpenAIChatResponse;
+  return data.choices?.[0]?.message?.content?.trim() || 'Geen samenvatting beschikbaar.';
+}
