@@ -52,7 +52,7 @@ function App() {
   }, []);
 
   if (onboarded === null) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-600">Laden...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-slate-700">Laden...</div>;
   }
 
   return (

@@ -8,8 +8,8 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: 'Overzicht', to: '/' },
-  { label: 'Updates', to: '/today' },
-  { label: 'Platforms', to: '/charts' },
+  { label: 'Marktnieuws', to: '/today' },
+  { label: 'Handelsplatforms', to: '/charts' },
   { label: 'Instellingen', to: '/settings' }
 ];
 

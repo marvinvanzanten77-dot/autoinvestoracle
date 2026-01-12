@@ -12,3 +12,24 @@ export const marketUpdates = [
     detail: 'Kleine uitschieters worden vaker teruggeduwd, het tempo blijft laag.'
   }
 ];
+
+export const marketContext = [
+  {
+    title: 'Wat opvalt in de markt',
+    detail: 'De focus ligt meer op veiligheid dan op snelheid.'
+  },
+  {
+    title: 'Kleine bewegingen, weinig ruis',
+    detail: 'Korte pieken worden snel weer geabsorbeerd.'
+  },
+  {
+    title: 'Meer interesse in lange adem',
+    detail: 'Er is iets minder jacht op snelle winst.'
+  }
+];
+
+export const volatilityStatus = {
+  level: 'rustig',
+  label: 'Rustig tempo',
+  detail: 'Geen sterke uitschieters zichtbaar in de afgelopen uren.'
+};

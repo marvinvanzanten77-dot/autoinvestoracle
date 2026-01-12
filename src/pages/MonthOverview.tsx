@@ -4,7 +4,7 @@ export function MonthOverview() {
   return (
     <div className="grid gap-4">
       <Card title="Maandoverzicht" subtitle="Locked">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-700">
           Deze sectie is nog vergrendeld. Hier komt straks het maandoverzicht met trends, volatiliteit en performance.
         </p>
       </Card>

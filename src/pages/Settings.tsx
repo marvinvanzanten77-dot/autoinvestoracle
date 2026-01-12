@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
@@ -15,6 +15,27 @@ export function Settings() {
     dailyEmail: true,
     volAlerts: true
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('aio_settings_v1');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as { riskProfile?: RiskProfile };
+      if (parsed.riskProfile) {
+        setRiskProfile(parsed.riskProfile);
+      }
+    } catch {
+      // ignore invalid storage
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = JSON.stringify({ riskProfile });
+    localStorage.setItem('aio_settings_v1', payload);
+    window.dispatchEvent(new Event('aio_settings_updated'));
+  }, [riskProfile]);
 
   const riskCopy: Record<RiskProfile, string> = {
     Voorzichtig: 'Lage volatiliteit, focus op defensief gedrag en beperkte drawdowns.',
@@ -92,7 +113,7 @@ export function Settings() {
               type="checkbox"
               checked={notifications.dailyEmail}
               onChange={(e) => setNotifications((n) => ({ ...n, dailyEmail: e.target.checked }))}
-              className="h-4 w-8 accent-primary"
+              className="h-5 w-10 accent-primary"
             />
           </label>
           <label className="flex items-center justify-between gap-2 cursor-pointer">
@@ -101,7 +122,7 @@ export function Settings() {
               type="checkbox"
               checked={notifications.volAlerts}
               onChange={(e) => setNotifications((n) => ({ ...n, volAlerts: e.target.checked }))}
-              className="h-4 w-8 accent-primary"
+              className="h-5 w-10 accent-primary"
             />
           </label>
           <p className="text-xs text-slate-500 pt-1">Instellingen zijn lokaal; opslag naar backend volgt later.</p>
