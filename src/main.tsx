@@ -67,10 +67,13 @@ function App() {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (token) {
-          await fetch('/api/session/auth', {
+          const authResp = await fetch('/api/session/auth', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });
+          if (!authResp.ok) {
+            await fetch('/api/session/init');
+          }
         } else {
           await fetch('/api/session/init');
         }
@@ -89,10 +92,13 @@ function App() {
         return;
       }
       if (session?.access_token) {
-        await fetch('/api/session/auth', {
+        const authResp = await fetch('/api/session/auth', {
           method: 'POST',
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
+        if (!authResp.ok) {
+          await fetch('/api/session/init');
+        }
         await syncProfile();
       }
     });

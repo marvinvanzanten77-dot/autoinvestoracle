@@ -40,6 +40,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   const [acceptedRules, setAcceptedRules] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [data, setData] = useState<UserProfile>({
     displayName: '',
     email: '',
@@ -91,6 +92,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setShowErrors(true);
       return;
     }
+    setSaveError(null);
     fetch('/api/profile/upsert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,7 +103,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         onComplete();
       })
       .catch(() => {
-        setShowErrors(true);
+        setSaveError('Opslaan mislukt. Probeer het opnieuw.');
       });
   };
 
@@ -291,6 +293,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         {errorText && (
           <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200/80 rounded-xl px-4 py-2">
             {errorText}
+          </div>
+        )}
+        {saveError && (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200/80 rounded-xl px-4 py-2">
+            {saveError}
           </div>
         )}
 
