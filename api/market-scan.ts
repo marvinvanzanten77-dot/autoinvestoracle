@@ -29,6 +29,35 @@ function toPercentSeries(series: [number, number][]) {
   }));
 }
 
+function resamplePercentSeries(
+  series: Array<{ ts: number; value: number }>,
+  points: number
+) {
+  if (series.length <= 1 || points <= 1) return series;
+  const start = series[0].ts;
+  const end = series[series.length - 1].ts;
+  const step = (end - start) / (points - 1);
+  const result: Array<{ ts: number; value: number }> = [];
+
+  let cursor = 0;
+  for (let i = 0; i < points; i++) {
+    const target = start + step * i;
+    while (cursor < series.length - 1 && series[cursor + 1].ts < target) {
+      cursor += 1;
+    }
+    const left = series[cursor];
+    const right = series[Math.min(cursor + 1, series.length - 1)];
+    if (right.ts === left.ts) {
+      result.push({ ts: target, value: left.value });
+    } else {
+      const ratio = (target - left.ts) / (right.ts - left.ts);
+      const value = left.value + (right.value - left.value) * ratio;
+      result.push({ ts: target, value });
+    }
+  }
+  return result;
+}
+
 async function fetchMarketSparkline(ids: string[]) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -124,13 +153,24 @@ async function buildMarketScanFromSparkline(range: MarketRange) {
   const stableP = toPercentSeries(filter(stable));
   const altP = toPercentSeries(filter(alt));
 
-  const minLength = Math.min(btcP.length, ethP.length, stableP.length, altP.length);
+  const targetPoints = range === '1h' ? 60 : null;
+  const btcFinal = targetPoints ? resamplePercentSeries(btcP, targetPoints) : btcP;
+  const ethFinal = targetPoints ? resamplePercentSeries(ethP, targetPoints) : ethP;
+  const stableFinal = targetPoints ? resamplePercentSeries(stableP, targetPoints) : stableP;
+  const altFinal = targetPoints ? resamplePercentSeries(altP, targetPoints) : altP;
+
+  const minLength = Math.min(
+    btcFinal.length,
+    ethFinal.length,
+    stableFinal.length,
+    altFinal.length
+  );
   const series = Array.from({ length: minLength }, (_, idx) => ({
-    time: new Date(btcP[idx].ts).toISOString(),
-    bitcoin: Number(btcP[idx].value.toFixed(2)),
-    ethereum: Number(ethP[idx].value.toFixed(2)),
-    stablecoins: Number(stableP[idx].value.toFixed(2)),
-    altcoins: Number(altP[idx].value.toFixed(2))
+    time: new Date(btcFinal[idx].ts).toISOString(),
+    bitcoin: Number(btcFinal[idx].value.toFixed(2)),
+    ethereum: Number(ethFinal[idx].value.toFixed(2)),
+    stablecoins: Number(stableFinal[idx].value.toFixed(2)),
+    altcoins: Number(altFinal[idx].value.toFixed(2))
   }));
 
   const last = series[series.length - 1] || {
