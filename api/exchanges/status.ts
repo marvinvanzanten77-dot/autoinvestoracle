@@ -1,4 +1,5 @@
 import { getStorageAdapter } from '../../src/lib/exchanges/storage';
+import { getSessionUserId } from '../../src/server/session';
 
 export default async function handler(req: { method?: string; query?: Record<string, string> }, res: any) {
   if (req.method !== 'GET') {
@@ -7,7 +8,7 @@ export default async function handler(req: { method?: string; query?: Record<str
   }
 
   try {
-    const userId = req.query?.userId;
+    const userId = req.query?.userId || getSessionUserId(req);
     if (!userId) {
       res.status(400).json({ error: 'userId is verplicht.' });
       return;

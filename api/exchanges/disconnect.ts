@@ -1,5 +1,6 @@
 import { getStorageAdapter } from '../../src/lib/exchanges/storage';
 import type { ExchangeId } from '../../src/lib/exchanges/types';
+import { getSessionUserId } from '../../src/server/session';
 
 type DisconnectBody = {
   userId: string;
@@ -13,7 +14,8 @@ export default async function handler(req: { method?: string; body?: DisconnectB
   }
 
   try {
-    const { userId, exchange } = req.body || {};
+    const { userId: bodyUserId, exchange } = req.body || {};
+    const userId = bodyUserId || getSessionUserId(req);
     if (!userId || !exchange) {
       res.status(400).json({ error: 'userId en exchange zijn verplicht.' });
       return;

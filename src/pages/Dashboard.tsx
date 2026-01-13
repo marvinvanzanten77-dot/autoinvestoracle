@@ -6,13 +6,7 @@ import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { STRATEGIES } from '../data/strategies';
 import { sendChatMessage, type ChatMessage } from '../api/chat';
-
-type OnboardingData = {
-  goals: string[];
-  amount: number;
-  strategies: string[];
-  knowledge: 'Starter' | 'Gemiddeld' | 'Gevorderd' | '';
-};
+import type { UserProfile } from '../lib/profile/types';
 
 function DashboardHeader({
   onScan,
@@ -94,7 +88,7 @@ function ChatCard() {
       <div className="space-y-3">
         <div className="max-h-56 space-y-3 overflow-auto rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700">
           {messages.length === 0 && (
-            <p className="text-slate-500">Vraag bijvoorbeeld: “Wat betekent dit tempo?”</p>
+            <p className="text-slate-500">Vraag bijvoorbeeld: "Wat betekent dit tempo?"</p>
           )}
           {messages.map((msg, idx) => (
             <div
@@ -147,6 +141,66 @@ function WalletCard({ amount }: { amount: number }) {
       </div>
     </Card>
   );
+}
+
+function mapRangeToAmount(range?: UserProfile['startAmountRange']) {
+  switch (range) {
+    case '0-500':
+      return 250;
+    case '500-2k':
+      return 1250;
+    case '2k-10k':
+      return 6000;
+    case '10k-50k':
+      return 30000;
+    case '50k+':
+      return 75000;
+    default:
+      return 0;
+  }
+}
+
+function mapGoalLabel(goal?: UserProfile['primaryGoal']) {
+  switch (goal) {
+    case 'growth':
+      return 'Groeien';
+    case 'income':
+      return 'Inkomen';
+    case 'preserve':
+      return 'Behouden';
+    case 'learn':
+      return 'Leren';
+    default:
+      return 'Onbekend';
+  }
+}
+
+function mapHorizonLabel(horizon?: UserProfile['timeHorizon']) {
+  switch (horizon) {
+    case 'lt1y':
+      return 'Korter dan 1 jaar';
+    case '1-3y':
+      return '1 - 3 jaar';
+    case '3-7y':
+      return '3 - 7 jaar';
+    case '7y+':
+      return '7+ jaar';
+    default:
+      return 'Onbekend';
+  }
+}
+
+function mapKnowledgeLabel(level?: UserProfile['knowledgeLevel']) {
+  switch (level) {
+    case 'beginner':
+      return 'Beginner';
+    case 'intermediate':
+      return 'Gemiddeld';
+    case 'advanced':
+      return 'Ervaren';
+    default:
+      return 'Onbekend';
+  }
 }
 
 function UpdatesCard() {
@@ -319,7 +373,7 @@ function AllocationCard({
 }
 
 export function Dashboard() {
-  const [profile, setProfile] = useState<OnboardingData | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [lastScan, setLastScan] = useState('Nog geen check');
   const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>(
     volatilityStatus
@@ -327,16 +381,17 @@ export function Dashboard() {
   const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('aio_onboarding_v1');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as OnboardingData;
-        setProfile(parsed);
-      } catch {
-        setProfile(null);
-      }
-    }
+    fetch('/api/profile/get')
+      .then(async (res) => {
+        if (!res.ok) {
+          setProfile(null);
+          return;
+        }
+        const data = (await res.json()) as { profile?: UserProfile };
+        setProfile(data.profile ?? null);
+      })
+      .catch(() => setProfile(null));
+
     const cachedScan = localStorage.getItem('aio_market_scan_v1');
     if (cachedScan) {
       try {
@@ -373,16 +428,23 @@ export function Dashboard() {
   };
 
   const handleAllocate = async (strategy: string) => {
-    if (!profile?.amount) return;
+    const amount = mapRangeToAmount(profile?.startAmountRange);
+    if (!amount) return;
+    const goals = profile
+      ? [mapGoalLabel(profile.primaryGoal), mapHorizonLabel(profile.timeHorizon)]
+      : undefined;
+    const knowledge = profile ? mapKnowledgeLabel(profile.knowledgeLevel) : undefined;
     const payload = await fetchPortfolioAllocation({
-      amount: profile.amount,
+      amount,
       strategy,
-      goals: profile.goals,
-      knowledge: profile.knowledge,
+      goals,
+      knowledge,
       changes: scanChanges || undefined
     });
     localStorage.setItem(`aio_allocation_${strategy}`, JSON.stringify(payload));
   };
+
+  const amount = mapRangeToAmount(profile?.startAmountRange);
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
@@ -390,14 +452,14 @@ export function Dashboard() {
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ChatCard />
-        <WalletCard amount={profile?.amount ?? 0} />
+        <WalletCard amount={amount} />
         <UpdatesCard />
       </div>
 
       <AllocationCard
-        amount={profile?.amount ?? 0}
+        amount={amount}
         strategies={[...STRATEGIES]}
-        selectedStrategies={profile?.strategies ?? []}
+        selectedStrategies={[]}
         onAllocate={handleAllocate}
       />
 

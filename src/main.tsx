@@ -28,9 +28,9 @@ function OnboardingGate({ onboarded }: { onboarded: boolean }) {
   return null;
 }
 
-function MainLayoutRoutes() {
+function MainLayoutRoutes({ onboarded }: { onboarded: boolean }) {
   return (
-    <AppLayout>
+    <AppLayout onboarded={onboarded}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/today" element={<Today />} />
@@ -48,9 +48,17 @@ function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('aio_onboarding_v1');
-    setOnboarded(Boolean(stored));
+    fetch('/api/session/init')
+      .then(() => fetch('/api/profile/get'))
+      .then(async (res) => {
+        if (!res.ok) {
+          setOnboarded(false);
+          return;
+        }
+        const data = (await res.json()) as { meta?: { onboardingComplete?: boolean } };
+        setOnboarded(Boolean(data?.meta?.onboardingComplete));
+      })
+      .catch(() => setOnboarded(false));
   }, []);
 
   if (onboarded === null) {
@@ -62,7 +70,7 @@ function App() {
       <OnboardingGate onboarded={onboarded} />
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={() => setOnboarded(true)} />} />
-        <Route path="/*" element={<MainLayoutRoutes />} />
+        <Route path="/*" element={<MainLayoutRoutes onboarded={onboarded} />} />
       </Routes>
     </BrowserRouter>
   );

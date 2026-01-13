@@ -1,30 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
-import { STRATEGIES } from '../data/strategies';
-
-type KnowledgeLevel = 'Starter' | 'Gemiddeld' | 'Gevorderd';
-
-type OnboardingData = {
-  goals: string[];
-  amount: number;
-  strategies: string[];
-  knowledge: KnowledgeLevel | '';
-  acceptedRules: boolean;
-};
-
-const GOALS = [
-  'Rustig vermogen opbouwen',
-  'Leren door te doen',
-  'Beschermen tegen inflatie',
-  'Meer grip op crypto'
-];
-
-const HOUSE_RULES = [
-  'Deze tool geeft geen beslissingen, alleen advies.',
-  'Je blijft zelf verantwoordelijk voor iedere keuze.',
-  'AI kan fouten maken; gebruik altijd je eigen oordeel.',
-  'Investeer alleen geld dat je kunt missen.'
-];
+import type { UserProfile } from '../lib/profile/types';
 
 type OnboardingProps = {
   onComplete: () => void;
@@ -33,57 +9,63 @@ type OnboardingProps = {
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
-  const [amountInput, setAmountInput] = useState('');
-  const [data, setData] = useState<OnboardingData>({
-    goals: [],
-    amount: 0,
-    strategies: [],
-    knowledge: '',
-    acceptedRules: false
+  const [data, setData] = useState<UserProfile>({
+    displayName: '',
+    email: '',
+    primaryGoal: 'growth',
+    timeHorizon: '1-3y',
+    riskTolerance: 5,
+    maxDrawdownComfort: '10',
+    rebalancing: 'quarterly',
+    panicSellLikelihood: 'medium',
+    startAmountRange: '500-2k',
+    monthlyContributionRange: '0',
+    knowledgeLevel: 'beginner',
+    assetPreference: ['crypto'],
+    excludedAssets: [],
+    ethicalConstraints: '',
+    advisorMode: 'balanced',
+    explanationDepth: 'normal'
   });
 
   const progressLabel = useMemo(() => `Stap ${step + 1} van 5`, [step]);
 
   const canContinue = useMemo(() => {
-    if (step === 0) return data.goals.length > 0;
-    if (step === 1) return data.amount > 0;
-    if (step === 2) return data.strategies.length > 0;
-    if (step === 3) return data.knowledge !== '';
-    if (step === 4) return data.acceptedRules;
+    if (step === 0) return data.displayName.trim().length > 1 && data.email.trim().length > 3;
+    if (step === 1) return Boolean(data.primaryGoal && data.timeHorizon);
+    if (step === 2) return Boolean(data.riskTolerance && data.maxDrawdownComfort && data.rebalancing);
+    if (step === 3) return Boolean(data.startAmountRange && data.monthlyContributionRange);
+    if (step === 4) return Boolean(data.knowledgeLevel && data.assetPreference.length);
     return false;
   }, [data, step]);
 
   const errorText = useMemo(() => {
     if (!showErrors || canContinue) return '';
-    if (step === 0) return 'Kies minimaal één doel om door te gaan.';
-    if (step === 1) return 'Vul een bedrag groter dan 0 in.';
-    if (step === 2) return 'Kies minimaal één strategie om door te gaan.';
-    if (step === 3) return 'Kies je kennisniveau.';
-    if (step === 4) return 'Bevestig de huisregels om te starten.';
+    if (step === 0) return 'Vul je naam en e-mailadres in.';
+    if (step === 1) return 'Kies je doel en tijdshorizon.';
+    if (step === 2) return 'Vul je risicoprofiel en gedrag in.';
+    if (step === 3) return 'Kies je startbedrag en maandelijkse inleg.';
+    if (step === 4) return 'Kies je kennisniveau en voorkeuren.';
     return '';
   }, [canContinue, showErrors, step]);
-
-  const updateArray = (field: 'goals' | 'strategies', value: string) => {
-    setData((current) => {
-      const exists = current[field].includes(value);
-      const next = exists
-        ? current[field].filter((item) => item !== value)
-        : [...current[field], value];
-      return { ...current, [field]: next };
-    });
-  };
 
   const handleFinish = () => {
     if (!canContinue) {
       setShowErrors(true);
       return;
     }
-    const payload = {
-      ...data,
-      createdAt: new Date().toISOString()
-    };
-    localStorage.setItem('aio_onboarding_v1', JSON.stringify(payload));
-    onComplete();
+    fetch('/api/profile/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: data })
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Kon profiel niet opslaan.');
+        onComplete();
+      })
+      .catch(() => {
+        setShowErrors(true);
+      });
   };
 
   const handleNext = () => {
@@ -106,123 +88,295 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         <div className="text-center space-y-2">
           <p className="text-label tracking-[0.04em] text-slate-500">{progressLabel}</p>
           <p className="text-title text-slate-900 font-serif">Welkom bij Auto Invest Oracle</p>
-          <p className="text-sm text-slate-700">
-            We vragen je kort naar je doelen en voorkeuren zodat de omgeving rustig kan aansluiten.
-          </p>
+          <p className="text-sm text-slate-700">We stellen je profiel samen om de omgeving te personaliseren.</p>
         </div>
 
         {step === 0 && (
-          <Card title="Doelen" subtitle="Waar wil je naartoe groeien?">
-            <div className="grid gap-3 md:grid-cols-2">
-              {GOALS.map((goal) => (
-                <label key={goal} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={data.goals.includes(goal)}
-                    onChange={() => updateArray('goals', goal)}
-                    className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                  />
-                  <span>{goal}</span>
-                </label>
-              ))}
+          <Card title="Identiteit" subtitle="Wie ben je?">
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={data.displayName}
+                onChange={(event) => setData((current) => ({ ...current, displayName: event.target.value }))}
+                placeholder="Naam"
+                className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+              <input
+                type="email"
+                value={data.email}
+                onChange={(event) =>
+                  setData((current) => ({ ...current, email: event.target.value.toLowerCase() }))
+                }
+                placeholder="E-mailadres"
+                className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
             </div>
           </Card>
         )}
 
         {step === 1 && (
-          <Card title="Startbedrag" subtitle="Hoeveel wil je nu éénmalig inzetten?">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-700">EUR</span>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={amountInput}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    const numeric = Number(raw);
-                    setAmountInput(raw);
-                    setData((current) => ({
-                      ...current,
-                      amount: Number.isFinite(numeric) ? numeric : 0
-                    }));
-                  }}
-                  placeholder="Bijv. 1000"
-                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-              <p className="text-xs text-slate-500">
-                Dit is een startpunt. Later kun je dit uitbreiden naar periodieke inleg.
-              </p>
+          <Card title="Doel & horizon" subtitle="Wat is je richting?">
+            <div className="grid gap-3 md:grid-cols-2 text-sm text-slate-700">
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">Primair doel</span>
+                <select
+                  value={data.primaryGoal}
+                  onChange={(event) =>
+                    setData((current) => ({ ...current, primaryGoal: event.target.value as UserProfile['primaryGoal'] }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                >
+                  <option value="growth">Groeien</option>
+                  <option value="income">Inkomen</option>
+                  <option value="preserve">Behouden</option>
+                  <option value="learn">Leren</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">Tijdshorizon</span>
+                <select
+                  value={data.timeHorizon}
+                  onChange={(event) =>
+                    setData((current) => ({ ...current, timeHorizon: event.target.value as UserProfile['timeHorizon'] }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                >
+                  <option value="lt1y">Korter dan 1 jaar</option>
+                  <option value="1-3y">1 - 3 jaar</option>
+                  <option value="3-7y">3 - 7 jaar</option>
+                  <option value="7y+">7+ jaar</option>
+                </select>
+              </label>
             </div>
           </Card>
         )}
 
         {step === 2 && (
-          <Card title="Strategie" subtitle="Wat vind je interessant om te proberen?">
-            <div className="grid gap-3 md:grid-cols-2">
-              {STRATEGIES.map((strategy) => (
-                <label key={strategy} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={data.strategies.includes(strategy)}
-                    onChange={() => updateArray('strategies', strategy)}
-                    className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                  />
-                  <span>{strategy}</span>
+          <Card title="Risico & gedrag" subtitle="Hoe voel je je bij schommelingen?">
+            <div className="space-y-4 text-sm text-slate-700">
+              <label className="space-y-1 block">
+                <span className="text-xs text-slate-500">Risicotolerantie: {data.riskTolerance}</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={data.riskTolerance}
+                  onChange={(event) =>
+                    setData((current) => ({ ...current, riskTolerance: Number(event.target.value) }))
+                  }
+                  className="w-full"
+                />
+              </label>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">Maximale drawdown</span>
+                  <select
+                    value={data.maxDrawdownComfort}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        maxDrawdownComfort: event.target.value as UserProfile['maxDrawdownComfort']
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  >
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                    <option value="20">20%</option>
+                    <option value="30">30%</option>
+                    <option value="50">50%</option>
+                  </select>
                 </label>
-              ))}
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">Herbalanceren</span>
+                  <select
+                    value={data.rebalancing}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        rebalancing: event.target.value as UserProfile['rebalancing']
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  >
+                    <option value="none">Niet</option>
+                    <option value="quarterly">Per kwartaal</option>
+                    <option value="monthly">Maandelijks</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">Panieksell kans</span>
+                  <select
+                    value={data.panicSellLikelihood}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        panicSellLikelihood: event.target.value as UserProfile['panicSellLikelihood']
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  >
+                    <option value="low">Laag</option>
+                    <option value="medium">Gemiddeld</option>
+                    <option value="high">Hoog</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </Card>
         )}
 
         {step === 3 && (
-          <Card title="Kennisniveau" subtitle="Hoe vertrouwd ben je met trading?">
-            <div className="space-y-3">
-              {(['Starter', 'Gemiddeld', 'Gevorderd'] as KnowledgeLevel[]).map((level) => (
-                <label key={level} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="knowledge"
-                    value={level}
-                    checked={data.knowledge === level}
-                    onChange={() => setData((current) => ({ ...current, knowledge: level }))}
-                    className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                  />
-                  <span>{level}</span>
-                </label>
-              ))}
+          <Card title="Kapitaal & cashflow" subtitle="Waar start je mee?">
+            <div className="grid gap-3 md:grid-cols-2 text-sm text-slate-700">
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">Startbedrag</span>
+                <select
+                  value={data.startAmountRange}
+                  onChange={(event) =>
+                    setData((current) => ({
+                      ...current,
+                      startAmountRange: event.target.value as UserProfile['startAmountRange']
+                    }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                >
+                  <option value="0-500">0 - 500</option>
+                  <option value="500-2k">500 - 2k</option>
+                  <option value="2k-10k">2k - 10k</option>
+                  <option value="10k-50k">10k - 50k</option>
+                  <option value="50k+">50k+</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">Maandelijkse inleg</span>
+                <select
+                  value={data.monthlyContributionRange}
+                  onChange={(event) =>
+                    setData((current) => ({
+                      ...current,
+                      monthlyContributionRange: event.target.value as UserProfile['monthlyContributionRange']
+                    }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                >
+                  <option value="0">0</option>
+                  <option value="1-100">1 - 100</option>
+                  <option value="100-500">100 - 500</option>
+                  <option value="500-2k">500 - 2k</option>
+                  <option value="2k+">2k+</option>
+                </select>
+              </label>
             </div>
           </Card>
         )}
 
         {step === 4 && (
-          <Card title="Huisregels" subtitle="Korte afspraken om rustig te blijven">
-            <div className="space-y-3 text-sm text-slate-700">
-              <ul className="space-y-2">
-                {HOUSE_RULES.map((rule) => (
-                  <li key={rule} className="flex items-start gap-2">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-primary/60" />
-                    <span>{rule}</span>
-                  </li>
-                ))}
-              </ul>
-              <label className="flex items-center gap-2 pt-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={data.acceptedRules}
+          <Card title="Ervaring & voorkeuren" subtitle="Laatste details">
+            <div className="space-y-4 text-sm text-slate-700">
+              <label className="space-y-1 block">
+                <span className="text-xs text-slate-500">Kennisniveau</span>
+                <select
+                  value={data.knowledgeLevel}
                   onChange={(event) =>
                     setData((current) => ({
                       ...current,
-                      acceptedRules: event.target.checked
+                      knowledgeLevel: event.target.value as UserProfile['knowledgeLevel']
                     }))
                   }
-                  className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                />
-                <span>Ik begrijp dit en ga hiermee akkoord.</span>
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Gemiddeld</option>
+                  <option value="advanced">Ervaren</option>
+                </select>
               </label>
+              <div className="space-y-2">
+                <span className="text-xs text-slate-500">Voorkeur assets</span>
+                {(['crypto', 'etf', 'stocks', 'mixed'] as UserProfile['assetPreference']).map((option) => (
+                  <label key={option} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={data.assetPreference.includes(option)}
+                      onChange={() =>
+                        setData((current) => {
+                          const exists = current.assetPreference.includes(option);
+                          const next = exists
+                            ? current.assetPreference.filter((item) => item !== option)
+                            : [...current.assetPreference, option];
+                          return { ...current, assetPreference: next };
+                        })
+                      }
+                      className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">Advisor modus</span>
+                  <select
+                    value={data.advisorMode}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        advisorMode: event.target.value as UserProfile['advisorMode']
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  >
+                    <option value="conservative">Voorzichtig</option>
+                    <option value="balanced">Gebalanceerd</option>
+                    <option value="aggressive">Actief</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-slate-500">Uitlegniveau</span>
+                  <select
+                    value={data.explanationDepth}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        explanationDepth: event.target.value as UserProfile['explanationDepth']
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  >
+                    <option value="short">Kort</option>
+                    <option value="normal">Normaal</option>
+                    <option value="deep">Diep</option>
+                  </select>
+                </label>
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">Uitsluiten (komma's)</span>
+                  <input
+                    type="text"
+                    value={(data.excludedAssets || []).join(', ')}
+                    onChange={(event) =>
+                      setData((current) => ({
+                        ...current,
+                        excludedAssets: event.target.value
+                          .split(',')
+                          .map((val) => val.trim())
+                          .filter(Boolean)
+                      }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  />
+                </label>
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">Ethische voorkeuren</span>
+                  <input
+                    type="text"
+                    value={data.ethicalConstraints || ''}
+                    onChange={(event) =>
+                      setData((current) => ({ ...current, ethicalConstraints: event.target.value }))
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
+                  />
+                </label>
+              </div>
             </div>
           </Card>
         )}
@@ -266,7 +420,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               }`}
               disabled={!canContinue}
             >
-              Start met overzicht
+              Profiel opslaan
             </button>
           )}
         </div>

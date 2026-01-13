@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { createConnector } from '../../src/lib/exchanges/registry';
 import { encryptSecrets, getStorageAdapter } from '../../src/lib/exchanges/storage';
 import type { AuthMethod, ExchangeConnection, ExchangeCredentials, ExchangeId } from '../../src/lib/exchanges/types';
+import { getSessionUserId } from '../../src/server/session';
 
 type ConnectBody = {
   userId: string;
@@ -18,7 +19,8 @@ export default async function handler(req: { method?: string; body?: ConnectBody
   }
 
   try {
-    const { userId, exchange, method, credentials, scopes = [] } = req.body || {};
+    const { userId: bodyUserId, exchange, method, credentials, scopes = [] } = req.body || {};
+    const userId = bodyUserId || getSessionUserId(req);
     if (!userId || !exchange || !method || !credentials) {
       res.status(400).json({ error: 'userId, exchange, method en credentials zijn verplicht.' });
       return;

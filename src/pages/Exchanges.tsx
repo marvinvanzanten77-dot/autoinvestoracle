@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 
 type ExchangeId = 'bitvavo' | 'kraken' | 'coinbase' | 'bybit';
@@ -27,15 +27,6 @@ const EXCHANGES: ExchangeConfig[] = [
   { id: 'coinbase', name: 'Coinbase', requiresPassphrase: true, supportsOAuth: true },
   { id: 'bybit', name: 'Bybit' }
 ];
-
-function getUserId() {
-  if (typeof window === 'undefined') return 'local';
-  const existing = localStorage.getItem('aio_user_id');
-  if (existing) return existing;
-  const next = crypto.randomUUID();
-  localStorage.setItem('aio_user_id', next);
-  return next;
-}
 
 function StatusBadge({ status }: { status: ConnectionStatus }) {
   const styles =
@@ -66,18 +57,35 @@ export function Exchanges() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const userId = useMemo(() => getUserId(), []);
+  const [userId, setUserId] = useState<string>('');
 
-  const loadConnections = async () => {
-    const resp = await fetch(`/api/exchanges/status?userId=${userId}`);
+  const initSession = async () => {
+    const resp = await fetch('/api/session/init');
+    if (!resp.ok) return;
+    const data = (await resp.json()) as { userId: string };
+    setUserId(data.userId);
+  };
+
+  const loadConnections = async (id: string) => {
+    const resp = await fetch(`/api/exchanges/status?userId=${id}`);
     if (!resp.ok) return;
     const data = (await resp.json()) as { connections: ExchangeConnection[] };
     setConnections(data.connections || []);
   };
 
   useEffect(() => {
-    loadConnections();
+    initSession().then(() => {
+      if (userId) {
+        loadConnections(userId);
+      }
+    });
   }, []);
+
+  useEffect(() => {
+    if (userId) {
+      loadConnections(userId);
+    }
+  }, [userId]);
 
   const handleConnect = async () => {
     if (!activeExchange) return;
@@ -85,7 +93,6 @@ export function Exchanges() {
     setError(null);
     try {
       const payload = {
-        userId,
         exchange: activeExchange.id,
         method: 'apiKey',
         credentials: {
@@ -106,7 +113,7 @@ export function Exchanges() {
       setApiKey('');
       setApiSecret('');
       setPassphrase('');
-      await loadConnections();
+      await loadConnections(userId);
     } catch (err) {
       console.error(err);
       setError('Kon niet verbinden. Controleer je API-gegevens.');
@@ -119,18 +126,18 @@ export function Exchanges() {
     await fetch('/api/exchanges/disconnect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, exchange })
+      body: JSON.stringify({ exchange })
     });
-    await loadConnections();
+    await loadConnections(userId);
   };
 
   const handleSync = async (exchange: ExchangeId) => {
     await fetch('/api/exchanges/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, exchange })
+      body: JSON.stringify({ exchange })
     });
-    await loadConnections();
+    await loadConnections(userId);
   };
 
   return (

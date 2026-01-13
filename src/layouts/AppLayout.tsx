@@ -3,9 +3,10 @@ import { Sidebar } from '../components/Sidebar';
 
 type AppLayoutProps = {
   children: ReactNode;
+  onboarded?: boolean;
 };
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, onboarded = true }: AppLayoutProps) {
   const [riskLabel, setRiskLabel] = useState<'Voorzichtig' | 'Gebalanceerd' | 'Actief'>('Gebalanceerd');
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 md:gap-6">
             <Sidebar userName="Jij" badge={riskLabel} />
 
-            <main className="flex flex-col gap-4 md:gap-6">
+            <main className="relative flex flex-col gap-4 md:gap-6">
               <header className="glass rounded-2xl p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-label tracking-[0.04em] text-slate-500">Crypto overzicht</p>
@@ -58,6 +59,22 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
               </header>
               {children}
+              {!onboarded && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
+                  <div className="max-w-md text-center space-y-3 px-6">
+                    <p className="text-subtitle text-slate-900 font-serif">Rond onboarding af</p>
+                    <p className="text-sm text-slate-700">
+                      Maak eerst je profiel aan om toegang te krijgen tot analyses en advies.
+                    </p>
+                    <a
+                      href="/onboarding"
+                      className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-primary/30 px-4 py-2 text-sm text-primary hover:bg-primary/40 transition"
+                    >
+                      Naar onboarding
+                    </a>
+                  </div>
+                </div>
+              )}
             </main>
           </div>
         </div>
