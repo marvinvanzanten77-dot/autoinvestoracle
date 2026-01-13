@@ -57,18 +57,47 @@ async function buildMarketScan(range: MarketRange) {
   const stableList = useCompact ? [COINS.stablecoins[0]] : COINS.stablecoins;
   const altList = useCompact ? [COINS.altcoins[0]] : COINS.altcoins;
 
-  const requests = [
-    fetchMarketChart(COINS.bitcoin, config.days),
-    fetchMarketChart(COINS.ethereum, config.days),
-    ...stableList.map((coin) => fetchMarketChart(coin, config.days)),
-    ...altList.map((coin) => fetchMarketChart(coin, config.days))
+  const requestList: Array<{ key: string; fetcher: Promise<[number, number][]> }> = [
+    { key: 'btc', fetcher: fetchMarketChart(COINS.bitcoin, config.days) },
+    { key: 'eth', fetcher: fetchMarketChart(COINS.ethereum, config.days) },
+    ...stableList.map((coin, idx) => ({
+      key: `stable_${idx}`,
+      fetcher: fetchMarketChart(coin, config.days)
+    })),
+    ...altList.map((coin, idx) => ({
+      key: `alt_${idx}`,
+      fetcher: fetchMarketChart(coin, config.days)
+    }))
   ];
 
-  const responses = await Promise.all(requests);
-  const btc = responses[0];
-  const eth = responses[1];
-  const stable = averageSeries(responses.slice(2, 2 + stableList.length));
-  const alt = averageSeries(responses.slice(2 + stableList.length));
+  const settled = await Promise.allSettled(requestList.map((item) => item.fetcher));
+  const seriesMap = new Map<string, [number, number][]>();
+  settled.forEach((result, idx) => {
+    const key = requestList[idx].key;
+    if (result.status === 'fulfilled') {
+      seriesMap.set(key, result.value);
+    } else {
+      console.error(`Market fetch failed: ${key}`, result.reason);
+    }
+  });
+
+  const btc = seriesMap.get('btc');
+  const eth = seriesMap.get('eth');
+  if (!btc || !eth) {
+    throw new Error('Kernmarktdata ontbreekt.');
+  }
+
+  const stableSeries = stableList.map((_, idx) => seriesMap.get(`stable_${idx}`)).filter(Boolean) as [
+    number,
+    number
+  ][][];
+  const altSeries = altList.map((_, idx) => seriesMap.get(`alt_${idx}`)).filter(Boolean) as [
+    number,
+    number
+  ][][];
+
+  const stable = stableSeries.length ? averageSeries(stableSeries) : btc;
+  const alt = altSeries.length ? averageSeries(altSeries) : eth;
 
   const cutoff = config.windowMs ? now - config.windowMs : null;
   const filter = (series: [number, number][]) =>
