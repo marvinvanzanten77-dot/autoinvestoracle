@@ -161,16 +161,10 @@ async function buildMarketScanFromSparkline(range: MarketRange) {
   };
 }
 
-async function buildMarketScan(range: MarketRange) {
+async function buildMarketScan(_range: MarketRange) {
   const now = Date.now();
-  const rangeConfig: Record<MarketRange, { days: number; windowMs?: number }> = {
-    '1h': { days: 1, windowMs: 60 * 60 * 1000 },
-    '24h': { days: 1 },
-    '7d': { days: 7 }
-  };
-
-  const config = rangeConfig[range];
-  const useCompact = range !== '24h';
+  const config = { days: 1 };
+  const useCompact = false;
   const stableList = useCompact ? [COINS.stablecoins[0]] : COINS.stablecoins;
   const altList = useCompact ? [COINS.altcoins[0]] : COINS.altcoins;
 
@@ -216,9 +210,8 @@ async function buildMarketScan(range: MarketRange) {
   const stable = stableSeries.length ? averageSeries(stableSeries) : btc;
   const alt = altSeries.length ? averageSeries(altSeries) : eth;
 
-  const cutoff = config.windowMs ? now - config.windowMs : null;
-  const filter = (series: [number, number][]) =>
-    cutoff ? series.filter(([ts]) => ts >= cutoff) : series;
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const filter = (series: [number, number][]) => series.filter(([ts]) => ts >= cutoff);
 
   const btcP = toPercentSeries(filter(btc));
   const ethP = toPercentSeries(filter(eth));
