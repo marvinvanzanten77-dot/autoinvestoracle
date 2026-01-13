@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { supabase } from '../lib/supabase/client';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
 
 export function Settings() {
   const [riskProfile, setRiskProfile] = useState<RiskProfile>('Gebalanceerd');
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [markets, setMarkets] = useState({
     bitcoin: true,
     ethereum: true,
@@ -28,6 +31,12 @@ export function Settings() {
     } catch {
       // ignore invalid storage
     }
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setAccountEmail(data.session?.user?.email ?? null);
+    });
   }, []);
 
   useEffect(() => {
@@ -126,6 +135,29 @@ export function Settings() {
             />
           </label>
           <p className="text-xs text-slate-500 pt-1">Instellingen zijn lokaal; opslag naar backend volgt later.</p>
+        </div>
+      </Card>
+
+      <Card title="Account" subtitle="Login via magic link">
+        <div className="space-y-3 text-sm text-slate-700">
+          <p>{accountEmail ? `Ingelogd als ${accountEmail}.` : 'Niet ingelogd.'}</p>
+          {signOutError && <p className="text-sm text-amber-700">{signOutError}</p>}
+          <button
+            type="button"
+            onClick={async () => {
+              setSignOutError(null);
+              const { error } = await supabase.auth.signOut();
+              if (error) {
+                setSignOutError('Uitloggen mislukt. Probeer het opnieuw.');
+                return;
+              }
+              await fetch('/api/session/logout', { method: 'POST' });
+              window.location.href = '/login';
+            }}
+            className="pill border border-slate-200 bg-white/70 text-slate-600 hover:bg-white transition"
+          >
+            Uitloggen
+          </button>
         </div>
       </Card>
     </div>

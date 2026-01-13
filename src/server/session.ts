@@ -28,6 +28,20 @@ export function buildSessionCookie(userId: string) {
     .join('; ');
 }
 
+export function buildClearSessionCookie() {
+  const secure = process.env.NODE_ENV === 'production';
+  return [
+    'aio_uid=',
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+    secure ? 'Secure' : ''
+  ]
+    .filter(Boolean)
+    .join('; ');
+}
+
 export function getSessionUserId(req: { headers?: { cookie?: string } }) {
   const cookies = parseCookies(req.headers?.cookie);
   return cookies.aio_uid || '';

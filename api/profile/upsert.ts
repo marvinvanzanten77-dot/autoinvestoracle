@@ -25,7 +25,8 @@ export default async function handler(req: { method?: string; body?: Body; heade
     }
     const result = await upsertProfile(userId, {
       ...profile,
-      email: profile.email.toLowerCase()
+      email: profile.email.toLowerCase(),
+      strategies: Array.isArray(profile.strategies) ? profile.strategies : []
     });
     res.status(200).json(result);
   } catch (err) {

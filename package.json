@@ -10,6 +10,7 @@
     "dev:server": "tsx --tsconfig tsconfig.server.json server/index.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
     "@vercel/kv": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",

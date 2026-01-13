@@ -1,6 +1,7 @@
 export type UserProfile = {
   displayName: string;
   email: string;
+  strategies: string[];
   primaryGoal: 'growth' | 'income' | 'preserve' | 'learn';
   timeHorizon: 'lt1y' | '1-3y' | '3-7y' | '7y+';
   riskTolerance: number;

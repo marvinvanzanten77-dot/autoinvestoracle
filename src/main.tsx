@@ -11,16 +11,18 @@ import { Charts } from './pages/Charts';
 import { Settings } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
 import { Exchanges } from './pages/Exchanges';
+import { Login } from './pages/Login';
+import { supabase } from './lib/supabase/client';
 
 function OnboardingGate({ onboarded }: { onboarded: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!onboarded && location.pathname !== '/onboarding') {
+    if (!onboarded && location.pathname !== '/onboarding' && location.pathname !== '/login') {
       navigate('/onboarding', { replace: true });
     }
-    if (onboarded && location.pathname === '/onboarding') {
+    if (onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
       navigate('/', { replace: true });
     }
   }, [location.pathname, navigate, onboarded]);
@@ -48,17 +50,57 @@ function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/api/session/init')
-      .then(() => fetch('/api/profile/get'))
-      .then(async (res) => {
-        if (!res.ok) {
-          setOnboarded(false);
-          return;
+    let active = true;
+
+    const syncProfile = async () => {
+      const res = await fetch('/api/profile/get');
+      if (!res.ok) {
+        if (active) setOnboarded(false);
+        return;
+      }
+      const data = (await res.json()) as { meta?: { onboardingComplete?: boolean } };
+      if (active) setOnboarded(Boolean(data?.meta?.onboardingComplete));
+    };
+
+    const init = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (token) {
+          await fetch('/api/session/auth', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } else {
+          await fetch('/api/session/init');
         }
-        const data = (await res.json()) as { meta?: { onboardingComplete?: boolean } };
-        setOnboarded(Boolean(data?.meta?.onboardingComplete));
-      })
-      .catch(() => setOnboarded(false));
+      } catch {
+        await fetch('/api/session/init');
+      }
+      await syncProfile();
+    };
+
+    init();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        await fetch('/api/session/logout', { method: 'POST' });
+        if (active) setOnboarded(false);
+        return;
+      }
+      if (session?.access_token) {
+        await fetch('/api/session/auth', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        await syncProfile();
+      }
+    });
+
+    return () => {
+      active = false;
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   if (onboarded === null) {
@@ -70,6 +112,7 @@ function App() {
       <OnboardingGate onboarded={onboarded} />
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={() => setOnboarded(true)} />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/*" element={<MainLayoutRoutes onboarded={onboarded} />} />
       </Routes>
     </BrowserRouter>

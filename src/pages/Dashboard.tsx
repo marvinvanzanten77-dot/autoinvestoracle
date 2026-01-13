@@ -459,7 +459,7 @@ export function Dashboard() {
       <AllocationCard
         amount={amount}
         strategies={[...STRATEGIES]}
-        selectedStrategies={[]}
+        selectedStrategies={profile?.strategies ?? []}
         onAllocate={handleAllocate}
       />
 
