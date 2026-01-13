@@ -1,8 +1,9 @@
 import crypto from 'crypto';
-import { createConnector } from '../../src/lib/exchanges/registry';
-import { encryptSecrets, getStorageAdapter } from '../../src/lib/exchanges/storage';
-import type { AuthMethod, ExchangeConnection, ExchangeCredentials, ExchangeId } from '../../src/lib/exchanges/types';
-import { getSessionUserId } from '../../src/server/session';
+import type { ApiRequest, ApiResponse } from '../types';
+import { createConnector } from '../../../lib/exchanges/registry';
+import { encryptSecrets, getStorageAdapter } from '../../../lib/exchanges/storage';
+import type { AuthMethod, ExchangeConnection, ExchangeCredentials, ExchangeId } from '../../../lib/exchanges/types';
+import { getSessionUserId } from '../../session';
 
 type ConnectBody = {
   userId: string;
@@ -12,14 +13,14 @@ type ConnectBody = {
   scopes?: string[];
 };
 
-export default async function handler(req: { method?: string; body?: ConnectBody }, res: any) {
+export async function handleExchangeConnect(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const { userId: bodyUserId, exchange, method, credentials, scopes = [] } = req.body || {};
+    const { userId: bodyUserId, exchange, method, credentials, scopes = [] } = (req.body || {}) as ConnectBody;
     const userId = bodyUserId || getSessionUserId(req);
     if (!userId || !exchange || !method || !credentials) {
       res.status(400).json({ error: 'userId, exchange, method en credentials zijn verplicht.' });

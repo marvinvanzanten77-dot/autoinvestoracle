@@ -1,3 +1,5 @@
+import type { ApiRequest, ApiResponse } from './types';
+
 type MarketRange = '1h' | '24h' | '7d';
 
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
@@ -220,7 +222,7 @@ async function buildMarketScanFromSparkline(range: MarketRange) {
   };
 }
 
-export default async function handler(req: { method?: string; query?: Record<string, string> }, res: any) {
+export async function handleMarketScan(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -232,14 +234,14 @@ export default async function handler(req: { method?: string; query?: Record<str
     const cacheKey = `market:${range}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 60_000) {
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.setHeader?.('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
       res.status(200).json(cached.payload);
       return;
     }
 
     const payload = await buildMarketScanFromSparkline(effectiveRange);
     cache.set(cacheKey, { timestamp: Date.now(), payload });
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.setHeader?.('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.status(200).json(payload);
   } catch (err) {
     console.error(err);
@@ -247,14 +249,14 @@ export default async function handler(req: { method?: string; query?: Record<str
     const cacheKey = `market:${range}`;
     const cached = cache.get(cacheKey);
     if (cached) {
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.setHeader?.('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
       res.status(200).json(cached.payload);
       return;
     }
     try {
       const payload = await buildMarketScanFromSparkline(range);
       cache.set(cacheKey, { timestamp: Date.now(), payload });
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.setHeader?.('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
       res.status(200).json(payload);
       return;
     } catch (fallbackErr) {

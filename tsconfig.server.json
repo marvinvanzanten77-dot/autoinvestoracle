@@ -9,5 +9,10 @@
     "outDir": "dist-server",
     "types": ["node"]
   },
-  "include": ["server/**/*", "src/data/mockSignals.ts"]
+  "include": [
+    "api/index.ts",
+    "src/server/**/*",
+    "src/lib/security/**/*",
+    "src/lib/exchanges/**/*"
+  ]
 }

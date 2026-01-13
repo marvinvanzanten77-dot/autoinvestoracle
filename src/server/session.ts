@@ -42,7 +42,9 @@ export function buildClearSessionCookie() {
     .join('; ');
 }
 
-export function getSessionUserId(req: { headers?: { cookie?: string } }) {
-  const cookies = parseCookies(req.headers?.cookie);
+export function getSessionUserId(req: { headers?: Record<string, string | string[] | undefined> }) {
+  const cookieHeader = req.headers?.cookie;
+  const cookieValue = Array.isArray(cookieHeader) ? cookieHeader.join('; ') : cookieHeader;
+  const cookies = parseCookies(cookieValue);
   return cookies.aio_uid || '';
 }

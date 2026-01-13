@@ -1,3 +1,5 @@
+import type { ApiRequest, ApiResponse } from './types';
+
 type AllocationInput = {
   amount: number;
   strategy: string;
@@ -132,14 +134,14 @@ async function generateAllocation(input: AllocationInput) {
   };
 }
 
-export default async function handler(req: { method?: string; body?: AllocationInput }, res: any) {
+export async function handlePortfolioAllocate(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const { amount, strategy, goals, knowledge, changes } = req.body || {};
+    const { amount, strategy, goals, knowledge, changes } = (req.body || {}) as AllocationInput;
     if (!amount || !strategy) {
       res.status(400).json({ error: 'amount en strategy zijn verplicht.' });
       return;

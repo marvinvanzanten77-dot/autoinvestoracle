@@ -1,7 +1,8 @@
-import { getProfile } from '../../src/server/profile';
-import { getSessionUserId } from '../../src/server/session';
+import type { ApiRequest, ApiResponse } from './types';
+import { getProfile } from '../profile';
+import { getSessionUserId } from '../session';
 
-export default async function handler(req: { method?: string; headers?: { cookie?: string } }, res: any) {
+export async function handleProfileGet(req: ApiRequest, res: ApiResponse) {
   if (req.method && req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;

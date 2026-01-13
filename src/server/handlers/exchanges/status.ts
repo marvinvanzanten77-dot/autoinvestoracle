@@ -1,14 +1,15 @@
-import { getStorageAdapter } from '../../src/lib/exchanges/storage';
-import { getSessionUserId } from '../../src/server/session';
+import type { ApiRequest, ApiResponse } from '../types';
+import { getStorageAdapter } from '../../../lib/exchanges/storage';
+import { getSessionUserId } from '../../session';
 
-export default async function handler(req: { method?: string; query?: Record<string, string> }, res: any) {
+export async function handleExchangeStatus(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const userId = req.query?.userId || getSessionUserId(req);
+    const userId = (req.query?.userId as string) || getSessionUserId(req);
     if (!userId) {
       res.status(400).json({ error: 'userId is verplicht.' });
       return;

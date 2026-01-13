@@ -1,20 +1,21 @@
-import { getStorageAdapter } from '../../src/lib/exchanges/storage';
-import type { ExchangeId } from '../../src/lib/exchanges/types';
-import { getSessionUserId } from '../../src/server/session';
+import type { ApiRequest, ApiResponse } from '../types';
+import { getStorageAdapter } from '../../../lib/exchanges/storage';
+import type { ExchangeId } from '../../../lib/exchanges/types';
+import { getSessionUserId } from '../../session';
 
-type DisconnectBody = {
-  userId: string;
+type Body = {
+  userId?: string;
   exchange: ExchangeId;
 };
 
-export default async function handler(req: { method?: string; body?: DisconnectBody }, res: any) {
+export async function handleExchangeDisconnect(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const { userId: bodyUserId, exchange } = req.body || {};
+    const { userId: bodyUserId, exchange } = (req.body || {}) as Body;
     const userId = bodyUserId || getSessionUserId(req);
     if (!userId || !exchange) {
       res.status(400).json({ error: 'userId en exchange zijn verplicht.' });

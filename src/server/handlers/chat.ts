@@ -1,3 +1,5 @@
+import type { ApiRequest, ApiResponse } from './types';
+
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -47,14 +49,14 @@ async function generateChatReply(messages: ChatMessage[]) {
   return data.choices?.[0]?.message?.content?.trim() || 'Geen antwoord beschikbaar.';
 }
 
-export default async function handler(req: { method?: string; body?: ChatRequest }, res: any) {
+export async function handleChat(req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const { messages } = req.body || {};
+    const { messages } = (req.body || {}) as ChatRequest;
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'messages is verplicht.' });
       return;
