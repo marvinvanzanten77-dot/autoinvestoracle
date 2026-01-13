@@ -44,6 +44,123 @@ async function fetchMarketChart(coinId: string, days: number) {
   return data.prices;
 }
 
+async function fetchMarketSparkline(ids: string[]) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  const resp = await fetch(
+    `${COINGECKO_BASE}/coins/markets?vs_currency=eur&ids=${ids.join(',')}&sparkline=true`,
+    { signal: controller.signal }
+  );
+  clearTimeout(timeout);
+  if (!resp.ok) {
+    throw new Error(`CoinGecko error ${resp.status}`);
+  }
+  const data = (await resp.json()) as Array<{
+    id: string;
+    sparkline_in_7d?: { price?: number[] };
+  }>;
+  return data;
+}
+
+function seriesFromSparkline(prices: number[]) {
+  const totalMs = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const count = prices.length;
+  if (count === 0) return [];
+  const step = totalMs / Math.max(count - 1, 1);
+  const start = now - totalMs;
+  return prices.map((price, idx) => [start + idx * step, price] as [number, number]);
+}
+
+async function buildMarketScanFromSparkline(range: MarketRange) {
+  const ids = [
+    COINS.bitcoin,
+    COINS.ethereum,
+    ...COINS.stablecoins,
+    ...COINS.altcoins
+  ];
+  const rows = await fetchMarketSparkline(ids);
+  const map = new Map<string, [number, number][]>();
+  rows.forEach((row) => {
+    const prices = row.sparkline_in_7d?.price || [];
+    map.set(row.id, seriesFromSparkline(prices));
+  });
+
+  const btc = map.get(COINS.bitcoin) || [];
+  const eth = map.get(COINS.ethereum) || [];
+  const stableSeries = COINS.stablecoins.map((id) => map.get(id)).filter(Boolean) as [number, number][][];
+  const altSeries = COINS.altcoins.map((id) => map.get(id)).filter(Boolean) as [number, number][][];
+
+  const stable = stableSeries.length ? averageSeries(stableSeries) : btc;
+  const alt = altSeries.length ? averageSeries(altSeries) : eth;
+
+  const windowMs =
+    range === '1h' ? 60 * 60 * 1000 : range === '24h' ? 24 * 60 * 60 * 1000 : null;
+  const cutoff = windowMs ? Date.now() - windowMs : null;
+  const filter = (series: [number, number][]) =>
+    cutoff ? series.filter(([ts]) => ts >= cutoff) : series;
+
+  const btcP = toPercentSeries(filter(btc));
+  const ethP = toPercentSeries(filter(eth));
+  const stableP = toPercentSeries(filter(stable));
+  const altP = toPercentSeries(filter(alt));
+
+  const minLength = Math.min(btcP.length, ethP.length, stableP.length, altP.length);
+  const series = Array.from({ length: minLength }, (_, idx) => ({
+    time: new Date(btcP[idx].ts).toISOString(),
+    bitcoin: Number(btcP[idx].value.toFixed(2)),
+    ethereum: Number(ethP[idx].value.toFixed(2)),
+    stablecoins: Number(stableP[idx].value.toFixed(2)),
+    altcoins: Number(altP[idx].value.toFixed(2))
+  }));
+
+  const last = series[series.length - 1] || {
+    bitcoin: 0,
+    ethereum: 0,
+    stablecoins: 0,
+    altcoins: 0
+  };
+
+  const avgAbs =
+    (Math.abs(last.bitcoin) +
+      Math.abs(last.ethereum) +
+      Math.abs(last.stablecoins) +
+      Math.abs(last.altcoins)) /
+    4;
+
+  const volatility =
+    avgAbs >= 4
+      ? {
+          level: 'hoog',
+          label: 'Onrustig tempo',
+          detail: 'De bewegingen zijn vandaag duidelijk groter dan normaal.'
+        }
+      : avgAbs >= 2
+        ? {
+            level: 'matig',
+            label: 'Licht onrustig',
+            detail: 'Er is wat meer beweging, maar geen extreme uitschieters.'
+          }
+        : {
+            level: 'rustig',
+            label: 'Rustig tempo',
+            detail: 'Geen sterke uitschieters zichtbaar in de afgelopen uren.'
+          };
+
+  return {
+    range,
+    updatedAt: new Date().toISOString(),
+    changes: {
+      bitcoin: last.bitcoin,
+      ethereum: last.ethereum,
+      stablecoins: last.stablecoins,
+      altcoins: last.altcoins
+    },
+    volatility,
+    series
+  };
+}
+
 async function buildMarketScan(range: MarketRange) {
   const now = Date.now();
   const rangeConfig: Record<MarketRange, { days: number; windowMs?: number }> = {
@@ -172,6 +289,7 @@ export default async function handler(req: { method?: string; query?: Record<str
 
   try {
     const range = (req.query?.range as MarketRange) || '24h';
+    const effectiveRange: MarketRange = range === '24h' ? '24h' : '24h';
     const cacheKey = `market:${range}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 60_000) {
@@ -180,7 +298,14 @@ export default async function handler(req: { method?: string; query?: Record<str
       return;
     }
 
-    const payload = await buildMarketScan(range);
+    let payload;
+    try {
+      payload = await buildMarketScan(effectiveRange);
+    } catch (err) {
+      console.error('Primary market scan failed, using sparkline fallback.', err);
+      payload = await buildMarketScanFromSparkline(effectiveRange);
+    }
+    payload = { ...payload, range };
     cache.set(cacheKey, { timestamp: Date.now(), payload });
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.status(200).json(payload);
@@ -193,6 +318,25 @@ export default async function handler(req: { method?: string; query?: Record<str
       res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
       res.status(200).json(cached.payload);
       return;
+    }
+    try {
+      const payload = await buildMarketScanFromSparkline('24h');
+      const ranged = { ...payload, range };
+      cache.set(cacheKey, { timestamp: Date.now(), payload: ranged });
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.status(200).json(ranged);
+      return;
+    } catch (fallbackErr) {
+      console.error(fallbackErr);
+    }
+    try {
+      const payload = await buildMarketScanFromSparkline(range);
+      cache.set(cacheKey, { timestamp: Date.now(), payload });
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.status(200).json(payload);
+      return;
+    } catch (fallbackErr) {
+      console.error(fallbackErr);
     }
     res.status(500).json({ error: 'Kon marktdata niet ophalen.' });
   }
