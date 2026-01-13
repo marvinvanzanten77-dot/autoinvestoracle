@@ -1,64 +1,36 @@
+import { handleChat } from '../src/server/handlers/chat';
+import { handleMarketScan } from '../src/server/handlers/marketScan';
+import { handleMarketSummary } from '../src/server/handlers/marketSummary';
+import { handlePortfolioAllocate } from '../src/server/handlers/portfolioAllocate';
+import { handleProfileGet } from '../src/server/handlers/profileGet';
+import { handleProfileUpsert } from '../src/server/handlers/profileUpsert';
+import { handleSessionAuth } from '../src/server/handlers/sessionAuth';
+import { handleSessionInit } from '../src/server/handlers/sessionInit';
+import { handleSessionLogout } from '../src/server/handlers/sessionLogout';
+import { handleExchangeConnect } from '../src/server/handlers/exchanges/connect';
+import { handleExchangeDisconnect } from '../src/server/handlers/exchanges/disconnect';
+import { handleExchangeStatus } from '../src/server/handlers/exchanges/status';
+import { handleExchangeSync } from '../src/server/handlers/exchanges/sync';
+import { handleExchangeHealth } from '../src/server/handlers/exchanges/health';
 import type { ApiRequest, ApiResponse } from '../src/server/handlers/types';
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void;
 
 const routes: Record<string, Handler> = {
-  chat: async (req, res) => {
-    const { handleChat } = await import('../src/server/handlers/chat');
-    return handleChat(req, res);
-  },
-  'market-scan': async (req, res) => {
-    const { handleMarketScan } = await import('../src/server/handlers/marketScan');
-    return handleMarketScan(req, res);
-  },
-  'market-summary': async (req, res) => {
-    const { handleMarketSummary } = await import('../src/server/handlers/marketSummary');
-    return handleMarketSummary(req, res);
-  },
-  'portfolio-allocate': async (req, res) => {
-    const { handlePortfolioAllocate } = await import('../src/server/handlers/portfolioAllocate');
-    return handlePortfolioAllocate(req, res);
-  },
-  'profile/get': async (req, res) => {
-    const { handleProfileGet } = await import('../src/server/handlers/profileGet');
-    return handleProfileGet(req, res);
-  },
-  'profile/upsert': async (req, res) => {
-    const { handleProfileUpsert } = await import('../src/server/handlers/profileUpsert');
-    return handleProfileUpsert(req, res);
-  },
-  'session/init': async (req, res) => {
-    const { handleSessionInit } = await import('../src/server/handlers/sessionInit');
-    return handleSessionInit(req, res);
-  },
-  'session/auth': async (req, res) => {
-    const { handleSessionAuth } = await import('../src/server/handlers/sessionAuth');
-    return handleSessionAuth(req, res);
-  },
-  'session/logout': async (req, res) => {
-    const { handleSessionLogout } = await import('../src/server/handlers/sessionLogout');
-    return handleSessionLogout(req, res);
-  },
-  'exchanges/connect': async (req, res) => {
-    const { handleExchangeConnect } = await import('../src/server/handlers/exchanges/connect');
-    return handleExchangeConnect(req, res);
-  },
-  'exchanges/disconnect': async (req, res) => {
-    const { handleExchangeDisconnect } = await import('../src/server/handlers/exchanges/disconnect');
-    return handleExchangeDisconnect(req, res);
-  },
-  'exchanges/status': async (req, res) => {
-    const { handleExchangeStatus } = await import('../src/server/handlers/exchanges/status');
-    return handleExchangeStatus(req, res);
-  },
-  'exchanges/sync': async (req, res) => {
-    const { handleExchangeSync } = await import('../src/server/handlers/exchanges/sync');
-    return handleExchangeSync(req, res);
-  },
-  'exchanges/_health': async (req, res) => {
-    const { handleExchangeHealth } = await import('../src/server/handlers/exchanges/health');
-    return handleExchangeHealth(req, res);
-  }
+  chat: handleChat,
+  'market-scan': handleMarketScan,
+  'market-summary': handleMarketSummary,
+  'portfolio-allocate': handlePortfolioAllocate,
+  'profile/get': handleProfileGet,
+  'profile/upsert': handleProfileUpsert,
+  'session/init': handleSessionInit,
+  'session/auth': handleSessionAuth,
+  'session/logout': handleSessionLogout,
+  'exchanges/connect': handleExchangeConnect,
+  'exchanges/disconnect': handleExchangeDisconnect,
+  'exchanges/status': handleExchangeStatus,
+  'exchanges/sync': handleExchangeSync,
+  'exchanges/_health': handleExchangeHealth
 };
 
 function getOriginalPath(req: { headers?: Record<string, string | string[] | undefined>; url?: string }) {
