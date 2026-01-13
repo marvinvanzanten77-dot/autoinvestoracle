@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { marketUpdates, volatilityStatus } from '../data/marketUpdates';
 import { platforms } from '../data/platforms';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
+import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 
 type OnboardingData = {
   goals: string[];
@@ -162,12 +163,115 @@ function PlatformsCard() {
   );
 }
 
+function AllocationCard({
+  amount,
+  strategies,
+  onAllocate
+}: {
+  amount: number;
+  strategies: string[];
+  onAllocate: (strategy: string) => Promise<void>;
+}) {
+  const [activeStrategy, setActiveStrategy] = useState(strategies[0] || 'Rustig spreiden over tijd');
+  const [data, setData] = useState<PortfolioAllocationResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!amount) return;
+    const cached = localStorage.getItem(`aio_allocation_${activeStrategy}`);
+    if (cached) {
+      try {
+        setData(JSON.parse(cached) as PortfolioAllocationResponse);
+      } catch {
+        // ignore invalid cache
+      }
+    }
+  }, [activeStrategy, amount]);
+
+  const handleAllocate = async (strategy: string) => {
+    setActiveStrategy(strategy);
+    if (!amount) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await onAllocate(strategy);
+      const cached = localStorage.getItem(`aio_allocation_${strategy}`);
+      if (cached) {
+        setData(JSON.parse(cached) as PortfolioAllocationResponse);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Kon AI-verdeling niet ophalen.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card title="Verdeling in potjes" subtitle="Op basis van jouw strategie">
+      <div className="flex flex-wrap gap-2 text-xs text-slate-500 mb-3">
+        {strategies.map((strategy) => (
+          <button
+            key={strategy}
+            type="button"
+            onClick={() => handleAllocate(strategy)}
+            className={`pill border transition ${
+              activeStrategy === strategy
+                ? 'border-primary/40 bg-primary/30 text-primary'
+                : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-white'
+            }`}
+          >
+            {strategy}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {loading && <p className="text-sm text-slate-500">Verdeling ophalen...</p>}
+        {error && <p className="text-sm text-amber-700">{error}</p>}
+        {data?.allocation ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {data.allocation.map((item) => {
+              const value = amount * (item.pct / 100);
+              const formatted = new Intl.NumberFormat('nl-NL', {
+                style: 'currency',
+                currency: 'EUR',
+                maximumFractionDigits: 0
+              }).format(value);
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-slate-200/70 bg-white/70 p-4 space-y-1"
+                >
+                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                  <p className="text-xs text-slate-500">{item.pct}%</p>
+                  <p className="text-sm text-slate-700">{formatted}</p>
+                  <p className="text-xs text-slate-500">{item.rationale}</p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          !loading && <p className="text-sm text-slate-500">Nog geen verdeling beschikbaar.</p>
+        )}
+        {data?.note && (
+          <div className="rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700">
+            <p className="text-xs text-slate-500 mb-1">AI-toelichting</p>
+            {data.note}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function Dashboard() {
   const [profile, setProfile] = useState<OnboardingData | null>(null);
   const [lastScan, setLastScan] = useState('Nog geen check');
   const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>(
     volatilityStatus
   );
+  const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -193,6 +297,9 @@ export function Dashboard() {
             })
           );
         }
+        if (parsed.changes) {
+          setScanChanges(parsed.changes);
+        }
       } catch {
         // ignore invalid storage
       }
@@ -205,10 +312,23 @@ export function Dashboard() {
     try {
       const scan = await fetchMarketScan('24h');
       setVolatility(scan.volatility);
+      setScanChanges(scan.changes);
       localStorage.setItem('aio_market_scan_v1', JSON.stringify(scan));
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleAllocate = async (strategy: string) => {
+    if (!profile?.amount) return;
+    const payload = await fetchPortfolioAllocation({
+      amount: profile.amount,
+      strategy,
+      goals: profile.goals,
+      knowledge: profile.knowledge,
+      changes: scanChanges || undefined
+    });
+    localStorage.setItem(`aio_allocation_${strategy}`, JSON.stringify(payload));
   };
 
   return (
@@ -220,6 +340,12 @@ export function Dashboard() {
         <WalletCard amount={profile?.amount ?? 0} />
         <UpdatesCard />
       </div>
+
+      <AllocationCard
+        amount={profile?.amount ?? 0}
+        strategies={profile?.strategies?.length ? profile.strategies : ['Rustig spreiden over tijd']}
+        onAllocate={handleAllocate}
+      />
 
       <PlatformsCard />
     </div>
