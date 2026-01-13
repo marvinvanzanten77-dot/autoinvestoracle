@@ -10,6 +10,7 @@ const navItems: NavItem[] = [
   { label: 'Overzicht', to: '/' },
   { label: 'Marktnieuws', to: '/today' },
   { label: 'Handelsplatforms', to: '/charts' },
+  { label: 'Exchange koppelingen', to: '/settings/exchanges' },
   { label: 'Instellingen', to: '/settings' }
 ];
 
