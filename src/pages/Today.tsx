@@ -134,42 +134,52 @@ export function Today() {
         </div>
         {error && <p className="text-sm text-amber-700">{error}</p>}
         {!error && (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
-                <CartesianGrid stroke="rgba(15,23,42,0.08)" vertical={false} />
-                <XAxis
-                  dataKey="time"
-                  tickFormatter={tickFormatter}
-                  stroke="rgba(71,85,105,0.6)"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: 'rgba(71,85,105,0.75)', fontSize: 11 }}
-                />
-                <YAxis
-                  stroke="rgba(71,85,105,0.6)"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: 'rgba(71,85,105,0.75)', fontSize: 11 }}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip
-                  formatter={(value: number) => `${value.toFixed(2)}%`}
-                  labelFormatter={(label) => `Tijd: ${tickFormatter(label)}`}
-                  contentStyle={{
-                    background: '#F9F7F2',
-                    border: '1px solid rgba(148,163,184,0.35)',
-                    borderRadius: '12px',
-                    color: '#0f172a'
-                  }}
-                  labelStyle={{ color: '#475569' }}
-                />
-                <Line type="monotone" dataKey="Bitcoin" stroke="#6FA8A1" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="Ethereum" stroke="#8FA6C3" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="Stablecoins" stroke="#C7B28A" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="Altcoins" stroke="#BFA2C6" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="space-y-4">
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
+                  <CartesianGrid stroke="rgba(15,23,42,0.08)" vertical={false} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={tickFormatter}
+                    stroke="rgba(71,85,105,0.6)"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: 'rgba(71,85,105,0.75)', fontSize: 11 }}
+                  />
+                  <YAxis
+                    stroke="rgba(71,85,105,0.6)"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: 'rgba(71,85,105,0.75)', fontSize: 11 }}
+                    tickFormatter={(value) => `${value}%`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toFixed(2)}%`}
+                    labelFormatter={(label) => `Tijd: ${tickFormatter(label)}`}
+                    contentStyle={{
+                      background: '#F9F7F2',
+                      border: '1px solid rgba(148,163,184,0.35)',
+                      borderRadius: '12px',
+                      color: '#0f172a'
+                    }}
+                    labelStyle={{ color: '#475569' }}
+                  />
+                  <Line type="monotone" dataKey="Bitcoin" stroke="#6FA8A1" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Ethereum" stroke="#8FA6C3" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Stablecoins" stroke="#C7B28A" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Altcoins" stroke="#BFA2C6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="rounded-xl border border-slate-200/70 bg-white/70 p-4 text-sm text-slate-700">
+              <p className="text-xs text-slate-500 mb-1">AI-toelichting</p>
+              {summary ? (
+                <p className="whitespace-pre-line">{summary.summary}</p>
+              ) : (
+                <p className="text-slate-500">Nog geen samenvatting beschikbaar.</p>
+              )}
+            </div>
           </div>
         )}
       </Card>
@@ -190,13 +200,6 @@ export function Today() {
           <p className="text-sm text-slate-700">
             {scanData?.volatility.detail || volatilityStatus.detail}
           </p>
-        </Card>
-        <Card title="AI-duiding" subtitle="Korte samenvatting">
-          {summary ? (
-            <p className="text-sm text-slate-700 whitespace-pre-line">{summary.summary}</p>
-          ) : (
-            <p className="text-sm text-slate-500">Nog geen samenvatting beschikbaar.</p>
-          )}
         </Card>
         <Card title="Extra context" subtitle="In gewone woorden">
           <div className="space-y-3">

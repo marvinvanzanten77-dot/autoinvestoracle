@@ -53,17 +53,22 @@ async function buildMarketScan(range: MarketRange) {
   };
 
   const config = rangeConfig[range];
-  const [btc, eth, usdt, usdc, sol, ada] = await Promise.all([
+  const useCompact = range !== '24h';
+  const stableList = useCompact ? [COINS.stablecoins[0]] : COINS.stablecoins;
+  const altList = useCompact ? [COINS.altcoins[0]] : COINS.altcoins;
+
+  const requests = [
     fetchMarketChart(COINS.bitcoin, config.days),
     fetchMarketChart(COINS.ethereum, config.days),
-    fetchMarketChart(COINS.stablecoins[0], config.days),
-    fetchMarketChart(COINS.stablecoins[1], config.days),
-    fetchMarketChart(COINS.altcoins[0], config.days),
-    fetchMarketChart(COINS.altcoins[1], config.days)
-  ]);
+    ...stableList.map((coin) => fetchMarketChart(coin, config.days)),
+    ...altList.map((coin) => fetchMarketChart(coin, config.days))
+  ];
 
-  const stable = averageSeries([usdt, usdc]);
-  const alt = averageSeries([sol, ada]);
+  const responses = await Promise.all(requests);
+  const btc = responses[0];
+  const eth = responses[1];
+  const stable = averageSeries(responses.slice(2, 2 + stableList.length));
+  const alt = averageSeries(responses.slice(2 + stableList.length));
 
   const cutoff = config.windowMs ? now - config.windowMs : null;
   const filter = (series: [number, number][]) =>
