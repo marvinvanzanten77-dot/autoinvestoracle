@@ -4,6 +4,8 @@ import { marketUpdates, volatilityStatus } from '../data/marketUpdates';
 import { platforms } from '../data/platforms';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
+import { STRATEGIES } from '../data/strategies';
+import { sendChatMessage, type ChatMessage } from '../api/chat';
 
 type OnboardingData = {
   goals: string[];
@@ -62,24 +64,66 @@ function DashboardHeader({
   );
 }
 
-function ProfileCard({ profile }: { profile: OnboardingData | null }) {
-  const goals = profile?.goals.length ? profile.goals.join(', ') : 'Nog niet ingevuld';
-  const strategies = profile?.strategies.length ? profile.strategies.join(', ') : 'Nog niet ingevuld';
-  const knowledge = profile?.knowledge || 'Nog niet ingevuld';
+function ChatCard() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text) return;
+    const nextMessages = [...messages, { role: 'user', content: text }];
+    setMessages(nextMessages);
+    setInput('');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await sendChatMessage(nextMessages);
+      setMessages((current) => [...current, { role: 'assistant', content: res.reply }]);
+    } catch (err) {
+      console.error(err);
+      setError('Kon AI-chat niet ophalen.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Card title="Jouw startpunt" subtitle="Gekozen voorkeuren">
-      <div className="space-y-3 text-sm text-slate-700">
-        <div>
-          <p className="text-xs text-slate-500">Doel</p>
-          <p>{goals}</p>
+    <Card title="AI-chat" subtitle="Stel gerust je vragen">
+      <div className="space-y-3">
+        <div className="max-h-56 space-y-3 overflow-auto rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700">
+          {messages.length === 0 && (
+            <p className="text-slate-500">Vraag bijvoorbeeld: “Wat betekent dit tempo?”</p>
+          )}
+          {messages.map((msg, idx) => (
+            <div
+              key={`${msg.role}-${idx}`}
+              className={`rounded-lg px-3 py-2 ${
+                msg.role === 'user' ? 'bg-slate-100 text-slate-800' : 'bg-primary/10 text-slate-700'
+              }`}
+            >
+              {msg.content}
+            </div>
+          ))}
         </div>
-        <div>
-          <p className="text-xs text-slate-500">Strategie</p>
-          <p>{strategies}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500">Kennisniveau</p>
-          <p>{knowledge}</p>
+        {error && <p className="text-sm text-amber-700">{error}</p>}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Typ je vraag..."
+            className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={loading}
+            className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? '...' : 'Stuur'}
+          </button>
         </div>
       </div>
     </Card>
@@ -166,13 +210,17 @@ function PlatformsCard() {
 function AllocationCard({
   amount,
   strategies,
+  selectedStrategies,
   onAllocate
 }: {
   amount: number;
   strategies: string[];
+  selectedStrategies: string[];
   onAllocate: (strategy: string) => Promise<void>;
 }) {
-  const [activeStrategy, setActiveStrategy] = useState(strategies[0] || 'Rustig spreiden over tijd');
+  const [activeStrategy, setActiveStrategy] = useState(
+    selectedStrategies[0] || strategies[0] || 'Rustig spreiden over tijd'
+  );
   const [data, setData] = useState<PortfolioAllocationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,6 +274,11 @@ function AllocationCard({
           </button>
         ))}
       </div>
+      {selectedStrategies.length > 0 && (
+        <p className="text-xs text-slate-500">
+          Jouw keuzes: {selectedStrategies.join(', ')}
+        </p>
+      )}
       <div className="space-y-3">
         {loading && <p className="text-sm text-slate-500">Verdeling ophalen...</p>}
         {error && <p className="text-sm text-amber-700">{error}</p>}
@@ -336,14 +389,15 @@ export function Dashboard() {
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
-        <ProfileCard profile={profile} />
+        <ChatCard />
         <WalletCard amount={profile?.amount ?? 0} />
         <UpdatesCard />
       </div>
 
       <AllocationCard
         amount={profile?.amount ?? 0}
-        strategies={profile?.strategies?.length ? profile.strategies : ['Rustig spreiden over tijd']}
+        strategies={[...STRATEGIES]}
+        selectedStrategies={profile?.strategies ?? []}
         onAllocate={handleAllocate}
       />
 

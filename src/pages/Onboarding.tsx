@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { STRATEGIES } from '../data/strategies';
 
 type KnowledgeLevel = 'Starter' | 'Gemiddeld' | 'Gevorderd';
 
@@ -16,13 +17,6 @@ const GOALS = [
   'Leren door te doen',
   'Beschermen tegen inflatie',
   'Meer grip op crypto'
-];
-
-const STRATEGIES = [
-  'Rustig spreiden over tijd',
-  'Meebewegen als het tempo stijgt',
-  'Wachten tot het beeld rustiger is',
-  'Kiezen voor kleine stappen'
 ];
 
 const HOUSE_RULES = [
