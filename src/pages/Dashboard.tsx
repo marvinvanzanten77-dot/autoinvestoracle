@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { marketUpdates, volatilityStatus } from '../data/marketUpdates';
-import { platforms } from '../data/platforms';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { STRATEGIES } from '../data/strategies';
@@ -218,48 +217,6 @@ function UpdatesCard() {
   );
 }
 
-function PlatformsCard() {
-  return (
-    <Card title="Handelsplatforms om te verkennen" subtitle="Plus- en minpunten op een rij">
-      <div className="grid gap-4 md:grid-cols-2">
-        {platforms.map((platform) => (
-          <div key={platform.name} className="rounded-xl border border-slate-200/70 bg-white/70 p-4">
-            <div className="space-y-1">
-              <p className="text-subtitle text-slate-900 font-serif">{platform.name}</p>
-              <p className="text-sm text-slate-700">{platform.tone}</p>
-              <a
-                href={platform.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary hover:underline"
-              >
-                Bekijk platform
-              </a>
-            </div>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <div>
-                <p className="text-xs text-slate-500">Plus</p>
-                <ul className="list-disc pl-4">
-                  {platform.pros.map((pro) => (
-                    <li key={pro}>{pro}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Min</p>
-                <ul className="list-disc pl-4">
-                  {platform.cons.map((con) => (
-                    <li key={con}>{con}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
 
 function AllocationCard({
   amount,
@@ -463,7 +420,6 @@ export function Dashboard() {
         onAllocate={handleAllocate}
       />
 
-      <PlatformsCard />
     </div>
   );
 }

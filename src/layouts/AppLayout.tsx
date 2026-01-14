@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
+import type { UserProfile } from '../lib/profile/types';
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -8,6 +9,7 @@ type AppLayoutProps = {
 
 export function AppLayout({ children, onboarded = true }: AppLayoutProps) {
   const [riskLabel, setRiskLabel] = useState<'Voorzichtig' | 'Gebalanceerd' | 'Actief'>('Gebalanceerd');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const load = () => {
@@ -34,12 +36,28 @@ export function AppLayout({ children, onboarded = true }: AppLayoutProps) {
     };
   }, []);
 
+  useEffect(() => {
+    fetch('/api/profile/get')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { profile?: UserProfile };
+        setProfile(data.profile ?? null);
+      })
+      .catch(() => {
+        // ignore profile fetch error
+      });
+  }, []);
+
   return (
     <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-6 md:px-10 lg:px-12 py-8 md:py-10">
         <div className="glass rounded-3xl p-3 md:p-4">
           <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 md:gap-6">
-            <Sidebar userName="Jij" badge={riskLabel} />
+            <Sidebar
+              userName={profile?.displayName || 'Jij'}
+              avatarUrl={profile?.avatarUrl}
+              badge={riskLabel}
+            />
 
             <main className="relative flex flex-col gap-4 md:gap-6">
               <header className="glass rounded-2xl p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

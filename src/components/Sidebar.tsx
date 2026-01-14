@@ -16,10 +16,11 @@ const navItems: NavItem[] = [
 
 type SidebarProps = {
   userName: string;
-  badge: 'Gebalanceerd' | 'Pro';
+  avatarUrl?: string;
+  badge: string;
 };
 
-export function Sidebar({ userName, badge }: SidebarProps) {
+export function Sidebar({ userName, avatarUrl, badge }: SidebarProps) {
   return (
     <aside className="glass rounded-2xl p-4 md:p-5 flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -50,18 +51,23 @@ export function Sidebar({ userName, badge }: SidebarProps) {
           >
             <span className={`h-2 w-2 rounded-full ${item.locked ? 'bg-slate-300' : 'bg-primary/70'}`} />
             <span className="flex-1">{item.label}</span>
-            {item.locked && (
-              <span className="text-xs text-slate-400">
-                🔒
-              </span>
-            )}
+            {item.locked && <span className="text-xs text-slate-400">Vergrendeld</span>}
           </NavLink>
         ))}
       </nav>
 
-      <div className="glass rounded-xl p-3 border border-slate-200/70 mt-auto">
-        <p className="text-sm font-semibold text-slate-900">{userName}</p>
-        <p className="text-xs text-slate-500">{badge}</p>
+      <div className="glass rounded-2xl p-3.5 border border-slate-200/70 mt-auto flex items-center gap-3">
+        <div className="h-12 w-12 rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center text-xs text-slate-500">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
+          ) : (
+            'AI'
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">{userName}</p>
+          <p className="text-xs text-slate-500">{badge}</p>
+        </div>
       </div>
     </aside>
   );
