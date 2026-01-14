@@ -100,6 +100,10 @@ async function fetchSupabaseUser(accessToken: string): Promise<SupabaseUserRespo
 type UserProfile = {
   displayName: string;
   email: string;
+  avatarUrl?: string;
+  phone?: string;
+  location?: string;
+  bio?: string;
   strategies: string[];
   primaryGoal: 'growth' | 'income' | 'preserve' | 'learn';
   timeHorizon: 'lt1y' | '1-3y' | '3-7y' | '7y+';
