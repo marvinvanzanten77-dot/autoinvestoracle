@@ -1759,8 +1759,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const nextReq: ApiRequest = {
-    ...req,
+    method: req.method,
     url: req.url,
+    headers: req.headers,
+    body: req.body,
     query: buildQuery(url)
   };
 
