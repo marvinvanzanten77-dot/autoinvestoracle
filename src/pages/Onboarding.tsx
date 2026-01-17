@@ -22,6 +22,13 @@ const HORIZONS: Array<{ value: UserProfile['timeHorizon']; label: string }> = [
   { value: '7y+', label: 'Heel lang (7+ jaar)' }
 ];
 
+const STRATEGY_DETAILS: Record<string, string> = {
+  'Rustig spreiden over tijd': 'Kleine stappen met focus op stabiliteit.',
+  'Meebewegen als het tempo stijgt': 'Iets meer meeschuiven met het ritme.',
+  'Wachten op rustiger moment': 'Pas in actie als het tempo kalm is.',
+  'Kleine stappen, lage spanning': 'Rustig beginnen en overzicht houden.'
+};
+
 const START_AMOUNTS: Array<{ value: UserProfile['startAmountRange']; label: string }> = [
   { value: '0-500', label: '0 - 500' },
   { value: '500-2k', label: '500 - 2k' },
@@ -44,6 +51,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [data, setData] = useState<UserProfile>({
     displayName: '',
     email: '',
+    emailUpdatesOptIn: false,
     strategies: [STRATEGIES[0]],
     primaryGoal: 'growth',
     timeHorizon: '1-3y',
@@ -71,6 +79,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }, []);
 
   const progressLabel = useMemo(() => `Stap ${step + 1} van 3`, [step]);
+  const activeStrategy = data.strategies[0];
 
   const canContinue = useMemo(() => {
     if (step === 0) return data.displayName.trim().length > 1 && data.email.trim().length > 3;
@@ -149,6 +158,21 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 placeholder="E-mailadres"
                 className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={Boolean(data.emailUpdatesOptIn)}
+                  onChange={(event) =>
+                    setData((current) => ({ ...current, emailUpdatesOptIn: event.target.checked }))
+                  }
+                  className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
+                />
+                Ik ontvang af en toe een korte update per e-mail.
+              </label>
+              <p className="text-xs text-slate-500">
+                We gebruiken je gegevens alleen om je profiel en voorkeuren op te slaan. Je kunt e-mailupdates altijd
+                uitzetten.
+              </p>
               <p className="text-xs text-slate-500">
                 Heb je al een account?{' '}
                 <a href="/login" className="text-primary hover:underline">
@@ -184,6 +208,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     );
                   })}
                 </div>
+                {activeStrategy && STRATEGY_DETAILS[activeStrategy] && (
+                  <p className="text-xs text-slate-500">{STRATEGY_DETAILS[activeStrategy]}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <p className="text-xs text-slate-500">Waarom doe je dit?</p>

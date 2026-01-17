@@ -104,6 +104,7 @@ type UserProfile = {
   phone?: string;
   location?: string;
   bio?: string;
+  emailUpdatesOptIn?: boolean;
   strategies: string[];
   primaryGoal: 'growth' | 'income' | 'preserve' | 'learn';
   timeHorizon: 'lt1y' | '1-3y' | '3-7y' | '7y+';
@@ -1166,16 +1167,71 @@ type ChatMessage = {
   content: string;
 };
 
+type ChatContext = {
+  profile?: {
+    displayName?: string;
+    strategy?: string;
+    primaryGoal?: string;
+    timeHorizon?: string;
+    knowledgeLevel?: string;
+    startAmountRange?: string;
+  };
+  market?: {
+    volatilityLabel?: string;
+    volatilityLevel?: string;
+    lastScan?: string;
+    changes?: {
+      bitcoin: number;
+      ethereum: number;
+      stablecoins: number;
+      altcoins: number;
+    };
+  };
+};
+
 type OpenAIChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-async function generateChatReply(messages: ChatMessage[]) {
+function formatChatContext(context?: ChatContext) {
+  if (!context) return '';
+  const lines: string[] = [];
+  if (context.profile) {
+    const profileParts = [
+      context.profile.displayName ? `Naam: ${context.profile.displayName}` : null,
+      context.profile.strategy ? `Strategie: ${context.profile.strategy}` : null,
+      context.profile.primaryGoal ? `Doel: ${context.profile.primaryGoal}` : null,
+      context.profile.timeHorizon ? `Horizon: ${context.profile.timeHorizon}` : null,
+      context.profile.knowledgeLevel ? `Kennisniveau: ${context.profile.knowledgeLevel}` : null,
+      context.profile.startAmountRange ? `Startbedrag: ${context.profile.startAmountRange}` : null
+    ].filter(Boolean);
+    if (profileParts.length > 0) {
+      lines.push('Gebruikersprofiel:', ...profileParts);
+    }
+  }
+  if (context.market) {
+    const marketParts = [
+      context.market.lastScan ? `Laatste check: ${context.market.lastScan}` : null,
+      context.market.volatilityLabel ? `Tempo: ${context.market.volatilityLabel}` : null,
+      context.market.changes
+        ? `Bewegingen (%): BTC ${context.market.changes.bitcoin}, ETH ${context.market.changes.ethereum}, Stable ${context.market.changes.stablecoins}, Alt ${context.market.changes.altcoins}`
+        : null
+    ].filter(Boolean);
+    if (marketParts.length > 0) {
+      lines.push('Marktcontext:', ...marketParts);
+    }
+  }
+  return lines.length > 0 ? lines.join('\n') : '';
+}
+
+async function generateChatReply(messages: ChatMessage[], context?: ChatContext) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY ontbreekt.');
   }
+
+  const contextMessage = formatChatContext(context);
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -1192,6 +1248,15 @@ async function generateChatReply(messages: ChatMessage[]) {
           content:
             'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.'
         },
+        ...(contextMessage
+          ? [
+              {
+                role: 'system',
+                content:
+                  `Context (alleen gebruiken om te verduidelijken, nooit om te adviseren):\n${contextMessage}`
+              }
+            ]
+          : []),
         ...messages
       ]
     })
@@ -1497,12 +1562,15 @@ const routes: Record<string, Handler> = {
       return;
     }
     try {
-      const { messages } = (req.body || {}) as { messages: ChatMessage[] };
+      const { messages, context } = (req.body || {}) as {
+        messages: ChatMessage[];
+        context?: ChatContext;
+      };
       if (!Array.isArray(messages) || messages.length === 0) {
         res.status(400).json({ error: 'messages is verplicht.' });
         return;
       }
-      const reply = await generateChatReply(messages);
+      const reply = await generateChatReply(messages, context);
       res.status(200).json({ reply, createdAt: new Date().toISOString() });
     } catch (err) {
       console.error(err);

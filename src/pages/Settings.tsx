@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { supabase } from '../lib/supabase/client';
 import type { UserProfile } from '../lib/profile/types';
+import { educationSnippets } from '../data/educationSnippets';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
 
@@ -16,7 +17,8 @@ export function Settings() {
     avatarUrl: '',
     phone: '',
     location: '',
-    bio: ''
+    bio: '',
+    emailUpdatesOptIn: false
   });
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -64,7 +66,8 @@ export function Settings() {
           avatarUrl: data.profile.avatarUrl || '',
           phone: data.profile.phone || '',
           location: data.profile.location || '',
-          bio: data.profile.bio || ''
+          bio: data.profile.bio || '',
+          emailUpdatesOptIn: Boolean(data.profile.emailUpdatesOptIn)
         });
       })
       .catch(() => {
@@ -108,6 +111,7 @@ export function Settings() {
         phone: profileForm.phone || undefined,
         location: profileForm.location || undefined,
         bio: profileForm.bio || undefined,
+        emailUpdatesOptIn: profileForm.emailUpdatesOptIn,
         strategies: Array.isArray(profile.strategies) ? profile.strategies : []
       };
       const resp = await fetch('/api/profile/upsert', {
@@ -198,6 +202,17 @@ export function Settings() {
                 }
                 className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2"
               />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-600 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={profileForm.emailUpdatesOptIn}
+                onChange={(event) =>
+                  setProfileForm((current) => ({ ...current, emailUpdatesOptIn: event.target.checked }))
+                }
+                className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
+              />
+              Ik ontvang af en toe een korte update per e-mail.
             </label>
             <label className="space-y-1">
               <span className="text-xs text-slate-500">Telefoon (optioneel)</span>
@@ -321,7 +336,20 @@ export function Settings() {
               className="h-5 w-10 accent-primary"
             />
           </label>
-          <p className="text-xs text-slate-500 pt-1">Instellingen zijn lokaal; opslag naar backend volgt later.</p>
+          <p className="text-xs text-slate-500 pt-1">
+            Notificaties worden lokaal bewaard. Frequentie en tijdstip volgen later.
+          </p>
+        </div>
+      </Card>
+
+      <Card title="Basiskennis" subtitle="Rustig instappen">
+        <div className="space-y-3 text-sm text-slate-700">
+          {educationSnippets.slice(0, 4).map((item) => (
+            <div key={item.title} className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+              <p className="text-sm text-slate-700">{item.detail}</p>
+            </div>
+          ))}
         </div>
       </Card>
 

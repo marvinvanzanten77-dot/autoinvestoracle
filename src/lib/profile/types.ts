@@ -5,6 +5,7 @@ export type UserProfile = {
   phone?: string;
   location?: string;
   bio?: string;
+  emailUpdatesOptIn?: boolean;
   strategies: string[];
   primaryGoal: 'growth' | 'income' | 'preserve' | 'learn';
   timeHorizon: 'lt1y' | '1-3y' | '3-7y' | '7y+';

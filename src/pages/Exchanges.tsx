@@ -143,6 +143,9 @@ export function Exchanges() {
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       <Card title="Exchange koppelingen" subtitle="Koppel je accounts veilig">
+        <p className="text-xs text-slate-500 mb-4">
+          We gebruiken alleen leesrechten. Je sleutels worden versleuteld opgeslagen en je kunt altijd verbreken.
+        </p>
         <div className="grid gap-4 md:grid-cols-2">
           {EXCHANGES.map((exchange) => {
             const connection = connections.find((item) => item.exchange === exchange.id);
@@ -188,7 +191,7 @@ export function Exchanges() {
                     </button>
                   )}
                   {exchange.supportsOAuth && (
-                    <span className="text-xs text-slate-400">OAuth binnenkort beschikbaar</span>
+                    <span className="text-xs text-slate-400">OAuth in voorbereiding</span>
                   )}
                 </div>
               </div>
@@ -199,7 +202,7 @@ export function Exchanges() {
 
       {activeExchange && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-subtitle text-slate-900 font-serif">
@@ -231,10 +234,13 @@ export function Exchanges() {
                   type="text"
                   value={passphrase}
                   onChange={(event) => setPassphrase(event.target.value)}
-                  placeholder="Passphrase (indien van toepassing)"
+                  placeholder="Passphrase (alleen als je die gebruikt)"
                   className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm"
                 />
               )}
+              <p className="text-xs text-slate-500">
+                Tip: kies alleen leesrechten bij het aanmaken van je sleutel.
+              </p>
               {error && <p className="text-sm text-amber-700">{error}</p>}
               <button
                 type="button"

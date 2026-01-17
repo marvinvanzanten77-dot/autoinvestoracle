@@ -1,30 +1,49 @@
 export const marketUpdates = [
   {
-    title: 'Rustige start van de dag',
-    detail: 'De grote munten bewegen weinig, veel handelaren wachten af.'
+    title: 'Bewegingen blijven klein, richting wordt gezocht',
+    detail: 'De grotere munten bewegen in korte golven, zonder duidelijke versnelling.'
   },
   {
-    title: 'Meer aandacht voor betrouwbare munten',
-    detail: 'De interesse verschuift naar munten met een langere historie en duidelijke verhalen.'
+    title: 'Altcoins reageren sneller dan de basis',
+    detail: 'Kleinere munten laten sneller beweging zien, terwijl Bitcoin en Ethereum rustiger blijven.'
   },
   {
-    title: 'Soms korte pieken, snel weer vlak',
-    detail: 'Kleine uitschieters worden vaker teruggeduwd, het tempo blijft laag.'
+    title: 'Stablecoins houden de onderlaag kalm',
+    detail: 'De stabiele munten bewegen nauwelijks, waardoor veel handel vertraagd blijft.'
+  },
+  {
+    title: 'Korte pieken, terug naar het midden',
+    detail: 'Na kleine uitschieters zakt de markt meestal snel terug naar het normale tempo.'
+  }
+];
+
+export const dashboardUpdates = [
+  {
+    title: 'Tempo blijft gelijkmatig',
+    detail: 'De markt beweegt rustig door, zonder grote uitschieters.'
+  },
+  {
+    title: 'Focus op bekende munten',
+    detail: 'De meeste aandacht blijft bij de grotere en stabielere munten.'
+  },
+  {
+    title: 'Kleine pieken, snel terug',
+    detail: 'Er zijn korte bewegingen, maar het tempo zakt steeds terug.'
   }
 ];
 
 export const marketContext = [
   {
-    title: 'Wat opvalt in de markt',
-    detail: 'De focus ligt meer op veiligheid dan op snelheid.'
+    title: 'Waar de rust vandaan komt',
+    detail: 'Veel handelsvolume blijft bij de grotere munten, wat voor minder verrassingen zorgt.'
   },
   {
-    title: 'Kleine bewegingen, weinig ruis',
-    detail: 'Korte pieken worden snel weer geabsorbeerd.'
+    title: 'De markt luistert naar kleine signalen',
+    detail: 'Kort nieuws zorgt voor korte bewegingen, maar zelden voor een blijvende omslag.'
   },
   {
-    title: 'Meer interesse in lange adem',
-    detail: 'Er is iets minder jacht op snelle winst.'
+    title: 'Meer wachten dan jagen',
+    detail: 'Het algemene tempo blijft laag, met vooral afwachtende bewegingen.'
   }
 ];
 

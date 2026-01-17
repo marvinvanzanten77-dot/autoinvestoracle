@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
-import { marketUpdates, volatilityStatus } from '../data/marketUpdates';
+import { dashboardUpdates, volatilityStatus } from '../data/marketUpdates';
+import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { STRATEGIES } from '../data/strategies';
-import { sendChatMessage, type ChatMessage } from '../api/chat';
+import { sendChatMessage, type ChatContext, type ChatMessage } from '../api/chat';
 import type { UserProfile } from '../lib/profile/types';
 
 function DashboardHeader({
@@ -57,7 +58,7 @@ function DashboardHeader({
   );
 }
 
-function ChatCard() {
+function ChatCard({ context }: { context?: ChatContext }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -72,7 +73,7 @@ function ChatCard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await sendChatMessage(nextMessages);
+      const res = await sendChatMessage(nextMessages, context);
       setMessages((current) => [...current, { role: 'assistant', content: res.reply }]);
     } catch (err) {
       console.error(err);
@@ -87,7 +88,9 @@ function ChatCard() {
       <div className="space-y-3">
         <div className="max-h-56 space-y-3 overflow-auto rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700">
           {messages.length === 0 && (
-            <p className="text-slate-500">Vraag bijvoorbeeld: "Wat betekent dit tempo?"</p>
+            <p className="text-slate-500">
+              Vraag bijvoorbeeld: "Wat betekent dit tempo voor mijn strategie?"
+            </p>
           )}
           {messages.map((msg, idx) => (
             <div
@@ -136,6 +139,9 @@ function WalletCard({ amount }: { amount: number }) {
         <p className="text-title text-slate-900 font-serif">{formatted}</p>
         <p className="text-sm text-slate-700">
           Dit is het saldo dat je als start hebt opgegeven.
+        </p>
+        <p className="text-xs text-slate-500">
+          Later kun je dit vervangen door echte bedragen of een koppeling.
         </p>
       </div>
     </Card>
@@ -206,7 +212,22 @@ function UpdatesCard() {
   return (
     <Card title="Markt in mensentaal" subtitle="Korte observaties">
       <div className="space-y-3">
-        {marketUpdates.map((item) => (
+        {dashboardUpdates.map((item) => (
+          <div key={item.title} className="space-y-1">
+            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+            <p className="text-sm text-slate-700">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function EducationCard() {
+  return (
+    <Card title="Mini-uitleg" subtitle="Even snel begrijpen">
+      <div className="space-y-3">
+        {educationSnippets.slice(0, 3).map((item) => (
           <div key={item.title} className="space-y-1">
             <p className="text-sm font-semibold text-slate-900">{item.title}</p>
             <p className="text-sm text-slate-700">{item.detail}</p>
@@ -247,6 +268,28 @@ function AllocationCard({
       }
     }
   }, [activeStrategy, amount]);
+
+  useEffect(() => {
+    if (!amount || loading || data) return;
+    const cached = localStorage.getItem(`aio_allocation_${activeStrategy}`);
+    if (cached) return;
+    setLoading(true);
+    setError(null);
+    onAllocate(activeStrategy)
+      .then(() => {
+        const fresh = localStorage.getItem(`aio_allocation_${activeStrategy}`);
+        if (fresh) {
+          setData(JSON.parse(fresh) as PortfolioAllocationResponse);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Kon AI-verdeling niet ophalen.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [activeStrategy, amount, data, loading, onAllocate]);
 
   const handleAllocate = async (strategy: string) => {
     setActiveStrategy(strategy);
@@ -402,24 +445,44 @@ export function Dashboard() {
   };
 
   const amount = mapRangeToAmount(profile?.startAmountRange);
+  const chatContext: ChatContext | undefined = profile
+    ? {
+        profile: {
+          displayName: profile.displayName,
+          strategy: profile.strategies?.[0],
+          primaryGoal: mapGoalLabel(profile.primaryGoal),
+          timeHorizon: mapHorizonLabel(profile.timeHorizon),
+          knowledgeLevel: mapKnowledgeLabel(profile.knowledgeLevel),
+          startAmountRange: profile.startAmountRange
+        },
+        market: {
+          volatilityLabel: volatility.label,
+          volatilityLevel: volatility.level,
+          lastScan,
+          changes: scanChanges || undefined
+        }
+      }
+    : undefined;
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
-        <ChatCard />
+        <ChatCard context={chatContext} />
         <WalletCard amount={amount} />
         <UpdatesCard />
       </div>
 
-      <AllocationCard
-        amount={amount}
-        strategies={[...STRATEGIES]}
-        selectedStrategies={profile?.strategies ?? []}
-        onAllocate={handleAllocate}
-      />
-
+      <div className="grid gap-4 md:gap-5 md:grid-cols-2">
+        <AllocationCard
+          amount={amount}
+          strategies={[...STRATEGIES]}
+          selectedStrategies={profile?.strategies ?? []}
+          onAllocate={handleAllocate}
+        />
+        <EducationCard />
+      </div>
     </div>
   );
 }

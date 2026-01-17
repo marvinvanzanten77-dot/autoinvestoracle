@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { marketContext, marketUpdates, volatilityStatus } from '../data/marketUpdates';
+import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanRange, type MarketScanResponse } from '../api/marketScan';
 import { fetchMarketSummary, type MarketSummaryResponse } from '../api/marketSummary';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -212,6 +213,17 @@ export function Today() {
           </div>
         </Card>
       </div>
+
+      <Card title="Leren in kleine stappen" subtitle="Korte uitleg zonder jargon">
+        <div className="grid gap-3 md:grid-cols-3">
+          {educationSnippets.slice(0, 6).map((item) => (
+            <div key={item.title} className="rounded-xl border border-slate-200/70 bg-white/70 p-4">
+              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+              <p className="text-sm text-slate-700 mt-1">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
