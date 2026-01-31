@@ -317,26 +317,40 @@ export function formatAggregatedData(data: AggregatedMarketData) {
 // ============================================================================
 
 let autoLoadCache: { data: AutoLoadedData; timestamp: number } | null = null;
-const CACHE_DURATION_MS = 60000; // 1 minute
+const CACHE_DURATION_MS = 300000; // 5 minutes (conservative, no auto-refresh)
 
 /**
  * Cached version of auto-loaded data
+ * Only fetches if cache is stale (5 min) and user is active
+ * 
+ * IMPORTANT: Does NOT auto-refresh. User must trigger via app interaction.
+ * This prevents excessive API calls and OpenAI costs.
  */
 export async function getAutoLoadedDataCached(): Promise<AutoLoadedData> {
   const now = Date.now();
 
   if (autoLoadCache && now - autoLoadCache.timestamp < CACHE_DURATION_MS) {
+    // Use cache if available and fresh
     return autoLoadCache.data;
   }
 
+  // Cache expired or missing - fetch fresh data
   const data = await fetchAutoLoadedData();
   autoLoadCache = { data, timestamp: now };
   return data;
 }
 
 /**
- * Clear auto-load cache
+ * Clear auto-load cache (for manual refresh)
  */
 export function clearAutoLoadCache() {
   autoLoadCache = null;
+}
+
+/**
+ * Force refresh auto-load data (user triggered)
+ */
+export async function refreshAutoLoadedData(): Promise<AutoLoadedData> {
+  clearAutoLoadCache();
+  return getAutoLoadedDataCached();
 }

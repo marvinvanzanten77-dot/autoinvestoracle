@@ -1,6 +1,9 @@
 /**
  * Auto-loaded Market Data Component
  * Displays real-time aggregated market data
+ * 
+ * Note: Does NOT auto-refresh (user must click Refresh button)
+ * This prevents excessive API calls and OpenAI costs.
  */
 
 import React, { useEffect, useState } from 'react';
