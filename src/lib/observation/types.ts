@@ -19,6 +19,12 @@ export type ConfidenceLevel = 'laag' | 'middel' | 'hoog';
 /**
  * Observatie — wat zien we gebeuren in de markt?
  * Dit is NIET een trade-signaal, maar een feitelijke waarneming.
+ * 
+ * Gevoed door multi-source data-aggregator:
+ * - CoinGecko (prijs, volume, momentum)
+ * - Fear & Greed Index (sentiment)
+ * - FRED (macro-economische context)
+ * - On-chain data (toekomstig)
  */
 export type MarketObservation = {
   id: string;
@@ -44,6 +50,25 @@ export type MarketObservation = {
     exchangeSpread?: number; // percent difference
   };
   
+  // Multi-source data aggregatie
+  dataSources: {
+    sources: string[]; // ['coingecko', 'fearGreed', 'fred']
+    priceData: {
+      usd: number;
+      change24h: number;
+      change7d: number;
+    };
+    sentiment: {
+      fearGreedValue: number;
+      classification: string;
+    };
+    macro?: {
+      fedRatePercent: number;
+      inflation: number;
+    };
+    quality: number; // 0-100, percentage of available sources
+  };
+  
   // Optioneel: exchange-afwijkingen
   exchangeAnomalies?: Array<{
     exchange: string;
@@ -51,8 +76,8 @@ export type MarketObservation = {
     confidence: ConfidenceLevel;
   }>;
   
-  // Createdmetadata
-  source: 'manual-scan' | 'api-monitor' | 'alert';
+  // Created metadata
+  source: 'manual-scan' | 'api-monitor' | 'alert' | 'scheduled-aggregation';
   
   // Placeholder voor latere uitkomst
   outcomeLoggedAt?: string;

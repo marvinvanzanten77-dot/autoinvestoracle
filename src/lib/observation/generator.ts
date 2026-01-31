@@ -4,7 +4,7 @@
  * Vertaal marktscans naar observaties (feitelijke waarnemingen).
  * Dit is het hart van de heroriëntatie.
  * 
- * INPUT: Marktdata (prijzen, volumes, exchanges)
+ * INPUT: Marktdata (prijzen, volumes, exchanges) + Multi-source aggregation
  * OUTPUT: Observatie (wat zien we? onder welke omstandigheden? op welke exchanges?)
  * 
  * ✅ Wat dit WEL doet:
@@ -12,6 +12,7 @@
  * - Contextualisering (volatiliteit, trend, range)
  * - Exchange-afwijkingen noemen
  * - Relatieve bewegingen vergelijken
+ * - Multi-source data integreren (prijs, sentiment, macro)
  * 
  * ❌ Wat dit NIET doet:
  * - Voorspellingen doen
@@ -21,6 +22,7 @@
  */
 
 import type { MarketObservation, AssetCategory, MarketContext } from './types';
+import { getAggregator } from '../dataSources/aggregator';
 
 export type RawMarketData = {
   range: '1h' | '24h' | '7d';
@@ -41,14 +43,14 @@ export type RawMarketData = {
 };
 
 /**
- * Genereer observatie uit marktdata.
+ * Genereer observatie uit marktdata + multi-source aggregatie.
  * Dit is ZUIVER beschrijvend, geen predictie.
  */
-export function generateObservation(
+export async function generateObservation(
   userId: string,
   rawData: RawMarketData,
   assetCategory: AssetCategory = 'BTC'
-): Partial<MarketObservation> {
+): Promise<Partial<MarketObservation>> {
   const now = new Date();
   const changes = rawData.changes;
   
@@ -70,19 +72,87 @@ export function generateObservation(
     ? findExchangeAnomalies(rawData.exchanges, changes)
     : undefined;
   
-  return {
-    userId,
-    timestamp: now.toISOString(),
-    range: rawData.range,
-    assetCategory,
-    exchanges: rawData.exchanges?.map(e => e.name) || [],
-    marketContext,
-    volatilityLevel: rawData.volatility.level,
-    observedBehavior,
-    relativeMomentum,
-    exchangeAnomalies: exchangeAnomalies?.length ? exchangeAnomalies : undefined,
-    source: 'api-monitor'
+  // Multi-source data aggregatie
+  let dataSources = {
+    sources: [] as string[],
+    priceData: {
+      usd: assetCategory === 'BTC' ? 45000 : 2500, // Fallback
+      change24h: changes.bitcoin,
+      change7d: 0,
+    },
+    sentiment: {
+      fearGreedValue: 50,
+      classification: 'Neutral',
+    },
+    macro: undefined as any,
+    quality: 0,
   };
+  
+  // Try to fetch aggregated data
+  try {
+    const aggregator = getAggregator();
+    const assetForAggregation = assetCategory === 'BTC' ? 'BTC' : 'ETH';
+    
+    const aggregatedData = await aggregator.aggregate(assetForAggregation);
+    const observations = aggregator.generateObservationStrings(aggregatedData);
+    
+    dataSources = {
+      sources: aggregatedData.sources,
+      priceData: {
+        usd: aggregatedData.price.usd,
+        change24h: aggregatedData.momentum.change24h,
+        change7d: aggregatedData.momentum.change7d,
+      },
+      sentiment: {
+        fearGreedValue: aggregatedData.sentiment.fearGreedValue,
+        classification: aggregatedData.sentiment.fearGreedClassification,
+      },
+      macro: aggregatedData.macro,
+      quality: aggregatedData.qualityScore,
+    };
+    
+    // Enriched behavior with aggregated data
+    const enrichedObservation = [
+      observedBehavior,
+      observations.sentimentContext,
+      observations.macroContext ? `Macro: ${observations.macroContext}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+    
+    return {
+      userId,
+      timestamp: now.toISOString(),
+      range: rawData.range,
+      assetCategory,
+      exchanges: rawData.exchanges?.map(e => e.name) || [],
+      marketContext,
+      volatilityLevel: rawData.volatility.level,
+      observedBehavior: enrichedObservation,
+      relativeMomentum,
+      exchangeAnomalies: exchangeAnomalies?.length ? exchangeAnomalies : undefined,
+      dataSources,
+      source: 'scheduled-aggregation'
+    };
+  } catch (error) {
+    // Fallback if aggregator fails
+    console.warn('[ObservationGenerator] Aggregator failed, using raw data:', error);
+    
+    return {
+      userId,
+      timestamp: now.toISOString(),
+      range: rawData.range,
+      assetCategory,
+      exchanges: rawData.exchanges?.map(e => e.name) || [],
+      marketContext,
+      volatilityLevel: rawData.volatility.level,
+      observedBehavior,
+      relativeMomentum,
+      exchangeAnomalies: exchangeAnomalies?.length ? exchangeAnomalies : undefined,
+      dataSources,
+      source: 'api-monitor'
+    };
+  }
 }
 
 /**
