@@ -27,37 +27,67 @@ export class BitvavoConnector implements ExchangeConnector {
 
   async fetchAccounts(): Promise<Account[]> {
     // TODO: Bitvavo account endpoint + signing.
+    // https://api.bitvavo.com/v2/account
+    // Requires: HMAC-SHA256 signing met API secret
+    console.warn('⚠️ Bitvavo fetchAccounts not implemented');
     return [];
   }
 
   async fetchBalances(): Promise<Balance[]> {
     // TODO: Bitvavo balance endpoint + signing.
+    // https://api.bitvavo.com/v2/balance
+    // Returns array van { symbol, available, held }
+    console.warn('⚠️ Bitvavo fetchBalances not implemented');
     return [];
   }
 
   async fetchPositions(): Promise<Position[]> {
+    // Bitvavo ondersteunt geen futures/margin
+    console.warn('⚠️ Bitvavo fetchPositions not available (spot only)');
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
     // TODO: Bitvavo deposits/withdrawals/trades.
+    // https://api.bitvavo.com/v2/deposits
+    // https://api.bitvavo.com/v2/withdrawals
+    // Requires filtering & aggregation
+    console.warn('⚠️ Bitvavo fetchTransactions not implemented');
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
     // TODO: Bitvavo orders endpoint + signing.
+    // https://api.bitvavo.com/v2/orders
+    // Filters open orders
+    console.warn('⚠️ Bitvavo fetchOrders not implemented');
     return [];
   }
 
   async fetchMarketData(params: MarketDataParams): Promise<MarketCandle[]> {
     const symbol = params.symbols[0] || 'BTC-EUR';
     const interval = params.interval || '1h';
-    const url = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${symbol}/candles?interval=${interval}`;
-    const resp = await fetch(url);
-    if (!resp.ok) {
+    try {
+      const url = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${symbol}/candles?interval=${interval}`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) {
+        console.error(`Bitvavo market data error: ${resp.status}`);
+        return [];
+      }
+      const data = (await resp.json()) as Array<[number, number, number, number, number, number]>;
+      return data.map(([timestamp, open, high, low, close, volume]) => ({
+        timestamp,
+        open,
+        high,
+        low,
+        close,
+        volume
+      }));
+    } catch (err) {
+      console.error('Bitvavo fetchMarketData error:', err);
       return [];
     }
-    const data = (await resp.json()) as Array<[number, number, number, number, number, number]>;
+  }
     return data.map((row) => ({
       exchange: this.id,
       symbol,

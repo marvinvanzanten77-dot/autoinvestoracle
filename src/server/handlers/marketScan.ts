@@ -2,6 +2,8 @@ import type { ApiRequest, ApiResponse } from './types';
 import { generateObservation } from '../../lib/observation/generator';
 import { generateTicketsFromObservation } from '../../lib/observation/ticketGenerator';
 import { logObservation, logTicket } from '../../lib/observation/logger';
+import type { MarketObservation } from '../../lib/observation/types';
+import type { Ticket } from '../../lib/observation/types';
 
 type MarketRange = '1h' | '24h' | '7d';
 
@@ -247,16 +249,34 @@ export async function handleMarketScan(req: ApiRequest, res: ApiResponse) {
     
     // 📊 NIEUWE LAAG: Log deze scan als observatie
     try {
-      const observation = generateObservation(userId, payload, 'BTC');
-      const observationId = await logObservation(observation as any);
+      const observation = generateObservation(userId, payload, 'BTC') as MarketObservation;
+      observation.id = `obs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const observationId = await logObservation(observation);
       
       // Genereer tickets uit observatie
-      const tickets = generateTicketsFromObservation(userId, { ...observation, id: observationId } as any);
-      for (const ticket of tickets) {
-        await logTicket(ticket as any);
+      const observationWithId = { ...observation, id: observationId };
+      const ticketsPartial = generateTicketsFromObservation(userId, observationWithId);
+      
+      for (const ticketPartial of ticketsPartial) {
+        const ticket: Ticket = {
+          id: `tkt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId,
+          type: ticketPartial.type || 'observatie',
+          title: ticketPartial.title || 'Markt observatie',
+          description: ticketPartial.description || '',
+          confidence: ticketPartial.confidence || 'middel',
+          priority: ticketPartial.priority || 'medium',
+          createdAt: new Date().toISOString(),
+          validUntil: ticketPartial.validUntil || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          relatedObservationId: ticketPartial.relatedObservationId,
+          pattern: ticketPartial.pattern || '',
+          context: ticketPartial.context || ''
+        };
+        await logTicket(ticket);
       }
       
-      console.log(`✅ Observatie-laag: Scan gelogd als observatie ${observationId} met ${tickets.length} tickets`);
+      console.log(`✅ Observatie-laag: Scan gelogd als observatie ${observationId} met ${ticketsPartial.length} tickets`);
     } catch (obsErr) {
       // Observatie-laag mag niet de scan blokkeren
       console.warn('Observatie-logging mislukt (niet kritiek):', obsErr);
