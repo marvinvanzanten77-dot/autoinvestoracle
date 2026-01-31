@@ -8,6 +8,7 @@
  */
 
 import { getAggregator } from '../dataSources/aggregator';
+import { withTimeout, API_TIMEOUT_MS, autoLoadRateLimiter } from '../lib/rateLimiter';
 import type { AggregatedMarketData } from '../dataSources/types';
 import type { MarketObservation } from '../lib/observation/types';
 
@@ -151,16 +152,34 @@ export interface AutoLoadedData {
 
 /**
  * Fetch auto-loaded market data
- * Called on page load and periodically refreshed
+ * Called on page load and on user request only (no auto-refresh)
+ * 
+ * PROTECTED BY:
+ * - Rate limiting (3 requests per 5 min)
+ * - Timeout (15 seconds)
  */
 export async function fetchAutoLoadedData(): Promise<AutoLoadedData> {
   try {
+    // Check rate limit first
+    const limitCheck = autoLoadRateLimiter.check();
+    if (!limitCheck.allowed) {
+      const error = new Error(limitCheck.reason || 'Rate limited');
+      (error as any).isRateLimited = true;
+      (error as any).waitMs = limitCheck.waitMs;
+      throw error;
+    }
+
     const aggregator = getAggregator();
 
-    const [btcData, ethData] = await Promise.all([
-      aggregator.aggregate('BTC'),
-      aggregator.aggregate('ETH'),
-    ]);
+    // Fetch with timeout protection
+    const [btcData, ethData] = await withTimeout(
+      Promise.all([
+        aggregator.aggregate('BTC'),
+        aggregator.aggregate('ETH'),
+      ]),
+      API_TIMEOUT_MS,
+      'Market data aggregation'
+    );
 
     return {
       marketData: {

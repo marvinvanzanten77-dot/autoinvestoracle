@@ -126,7 +126,7 @@ function ChatCard({ context }: { context?: ChatContext }) {
   );
 }
 
-function WalletCard({ amount }: { amount: number }) {
+function WalletCard({ amount, onEdit }: { amount: number; onEdit?: () => void }) {
   const formatted = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
     currency: 'EUR',
@@ -134,14 +134,20 @@ function WalletCard({ amount }: { amount: number }) {
   }).format(amount || 0);
 
   return (
-    <Card title="Portemonnee (voorbeeld)" subtitle="Beschikbaar saldo">
-      <div className="space-y-2">
+    <Card title="Portemonnee" subtitle="Beschikbaar saldo">
+      <div className="space-y-3">
         <p className="text-title text-slate-900 font-serif">{formatted}</p>
-        <p className="text-sm text-slate-700">
-          Dit is het saldo dat je als start hebt opgegeven.
-        </p>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="pill border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 transition text-sm"
+          >
+            Saldo aanpassen
+          </button>
+        )}
         <p className="text-xs text-slate-500">
-          Later kun je dit vervangen door echte bedragen of een koppeling.
+          Dit is je startbedrag. Je kunt dit later aanpassen in de instellingen.
         </p>
       </div>
     </Card>
@@ -238,6 +244,72 @@ function EducationCard() {
   );
 }
 
+
+function BalanceEditDialog({ 
+  isOpen, 
+  currentBalance, 
+  onSave, 
+  onCancel 
+}: { 
+  isOpen: boolean; 
+  currentBalance: number; 
+  onSave: (balance: number) => void; 
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(currentBalance.toString());
+  
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newBalance = parseFloat(value);
+    if (!isNaN(newBalance) && newBalance >= 0) {
+      onSave(newBalance);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-3xl p-6 max-w-sm w-full mx-4 space-y-4">
+        <div>
+          <p className="text-subtitle text-slate-900 font-serif">Saldo aanpassen</p>
+          <p className="text-sm text-slate-600 mt-1">Wijzig je beschikbare investeringsbedrag</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Bedrag (€)
+            </label>
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              min="0"
+              step="0.01"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            >
+              Annuleren
+            </button>
+            <button
+              type="submit"
+              className="flex-1 rounded-lg bg-primary/20 border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/30 transition"
+            >
+              Opslaan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function AllocationCard({
   amount,
@@ -379,6 +451,8 @@ export function Dashboard() {
     volatilityStatus
   );
   const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
+  const [editingBalance, setEditingBalance] = useState(false);
+  const [customBalance, setCustomBalance] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/profile/get')
@@ -389,6 +463,14 @@ export function Dashboard() {
         }
         const data = (await res.json()) as { profile?: UserProfile };
         setProfile(data.profile ?? null);
+        // Load custom balance from localStorage
+        const stored = localStorage.getItem('aio_custom_balance');
+        if (stored) {
+          const balance = parseFloat(stored);
+          if (!isNaN(balance)) {
+            setCustomBalance(balance);
+          }
+        }
       })
       .catch(() => setProfile(null));
 
@@ -428,7 +510,7 @@ export function Dashboard() {
   };
 
   const handleAllocate = async (strategy: string) => {
-    const amount = mapRangeToAmount(profile?.startAmountRange);
+    const amount = customBalance ?? mapRangeToAmount(profile?.startAmountRange);
     if (!amount) return;
     const goals = profile
       ? [mapGoalLabel(profile.primaryGoal), mapHorizonLabel(profile.timeHorizon)]
@@ -444,7 +526,13 @@ export function Dashboard() {
     localStorage.setItem(`aio_allocation_${strategy}`, JSON.stringify(payload));
   };
 
-  const amount = mapRangeToAmount(profile?.startAmountRange);
+  const handleBalanceEdit = (newBalance: number) => {
+    setCustomBalance(newBalance);
+    localStorage.setItem('aio_custom_balance', String(newBalance));
+    setEditingBalance(false);
+  };
+
+  const amount = customBalance ?? mapRangeToAmount(profile?.startAmountRange);
   const chatContext: ChatContext | undefined = profile
     ? {
         profile: {
@@ -466,11 +554,18 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
+      <BalanceEditDialog
+        isOpen={editingBalance}
+        currentBalance={amount || 0}
+        onSave={handleBalanceEdit}
+        onCancel={() => setEditingBalance(false)}
+      />
+
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ChatCard context={chatContext} />
-        <WalletCard amount={amount} />
+        <WalletCard amount={amount} onEdit={() => setEditingBalance(true)} />
         <UpdatesCard />
       </div>
 
