@@ -4,6 +4,14 @@ import cors from 'cors';
 import { mockSignals } from '../src/data/mockSignals';
 import { generateDailyReportAgent, type DashboardSnapshot } from './ai/dailyReportAgent';
 import { generateMarketSummary } from './ai/openaiClient';
+import {
+  handleAutoLoadMarketData,
+  handleGetObservations,
+  handleGetLearnedPatterns,
+  handleGetDetailedAnalysis,
+  handleGetComparison,
+  handleGetSourcesHealth,
+} from '../src/server/handlers/marketData';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -251,6 +259,32 @@ async function buildMarketScan(range: string) {
     series
   };
 }
+
+// ============================================================================
+// NEW: MARKET DATA ENDPOINTS (Auto-loaded + Manual-request)
+// ============================================================================
+
+// Auto-loaded: Real-time aggregated market data (BTC + ETH)
+app.get('/api/market/auto-load', handleAutoLoadMarketData);
+
+// Manual-request: Detailed observations (requires user trigger)
+app.get('/api/market/observations', handleGetObservations);
+
+// Manual-request: Learned patterns (requires user trigger)
+app.get('/api/market/patterns', handleGetLearnedPatterns);
+
+// Manual-request: Deep analysis with OpenAI (requires user trigger)
+app.get('/api/market/analysis', handleGetDetailedAnalysis);
+
+// Manual-request: BTC vs ETH comparison (requires user trigger)
+app.get('/api/market/comparison', handleGetComparison);
+
+// Manual-request: Data source health (diagnostics)
+app.get('/api/market/sources-health', handleGetSourcesHealth);
+
+// ============================================================================
+// LEGACY ENDPOINTS (Keep for backward compatibility)
+// ============================================================================
 
 app.get('/api/market-scan', async (req, res) => {
   try {
