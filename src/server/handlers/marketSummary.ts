@@ -21,18 +21,26 @@ async function generateSummary(input: MarketSummaryRequest) {
     throw new Error('OPENAI_API_KEY ontbreekt.');
   }
 
+  // 🧠 HERORIËNTEERDE AI-ROL: Interpretatie, niet predictie
+  // De AI noemt patronen die ze ziet, zonder te zeggen wat er gaat gebeuren.
   const prompt = [
-    `Vat in mensentaal samen wat er is gebeurd in de cryptomarkt.`,
+    `Je bent een observator, niet een voorspeller.`,
+    `Beschrijf ZUIVER wat gebeurde in de cryptomarkt, zonder voorspellingen of advies.`,
+    ``,
     `Periode: ${input.range}.`,
-    `Bewegingen:`,
+    `Waargenomen bewegingen:`,
     `- Bitcoin: ${input.changes.bitcoin}%`,
     `- Ethereum: ${input.changes.ethereum}%`,
     `- Stablecoins: ${input.changes.stablecoins}%`,
     `- Altcoins: ${input.changes.altcoins}%`,
     ``,
-    `Regels:`,
-    `- Geen advies of voorspellingen.`,
-    `- 2 zinnen, rustig en duidelijk.`
+    `Taak:`,
+    `1. Noem welke assets het meest/minst bewogen.`,
+    `2. Beschrijf correlaties (of ontkoppeling).`,
+    `3. Noem wat dit mogelijk aangeeft over markt-fase (niet wat gaat gebeuren).`,
+    `4. 3-4 zinnen, rustig, feitelijk.`,
+    ``,
+    `VERBODEN: geen "koopen/verkopen", geen "zal stijgen/dalen", geen returns.`
   ].join('\n');
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {

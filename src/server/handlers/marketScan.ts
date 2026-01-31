@@ -1,4 +1,7 @@
 import type { ApiRequest, ApiResponse } from './types';
+import { generateObservation } from '../../lib/observation/generator';
+import { generateTicketsFromObservation } from '../../lib/observation/ticketGenerator';
+import { logObservation, logTicket } from '../../lib/observation/logger';
 
 type MarketRange = '1h' | '24h' | '7d';
 
@@ -231,6 +234,7 @@ export async function handleMarketScan(req: ApiRequest, res: ApiResponse) {
   try {
     const range = (req.query?.range as MarketRange) || '24h';
     const effectiveRange: MarketRange = range;
+    const userId = (req.query?.userId as string) || 'anonymous';
     const cacheKey = `market:${range}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 60_000) {
@@ -240,6 +244,24 @@ export async function handleMarketScan(req: ApiRequest, res: ApiResponse) {
     }
 
     const payload = await buildMarketScanFromSparkline(effectiveRange);
+    
+    // 📊 NIEUWE LAAG: Log deze scan als observatie
+    try {
+      const observation = generateObservation(userId, payload, 'BTC');
+      const observationId = await logObservation(observation as any);
+      
+      // Genereer tickets uit observatie
+      const tickets = generateTicketsFromObservation(userId, { ...observation, id: observationId } as any);
+      for (const ticket of tickets) {
+        await logTicket(ticket as any);
+      }
+      
+      console.log(`✅ Observatie-laag: Scan gelogd als observatie ${observationId} met ${tickets.length} tickets`);
+    } catch (obsErr) {
+      // Observatie-laag mag niet de scan blokkeren
+      console.warn('Observatie-logging mislukt (niet kritiek):', obsErr);
+    }
+    
     cache.set(cacheKey, { timestamp: Date.now(), payload });
     res.setHeader?.('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     res.status(200).json(payload);
