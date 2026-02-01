@@ -851,12 +851,32 @@ async function writeFileStore(userId: string, data: StoreData) {
 }
 
 async function readKvStore(userId: string): Promise<StoreData> {
-  const data = (await kv.get(`exchange:${userId}:store`)) as StoreData | null;
-  return data || { ...EMPTY_STORE };
+  try {
+    if (!kv) {
+      return { ...EMPTY_STORE };
+    }
+    const raw = (await kv.get(`exchange:${userId}:store`)) as string | null;
+    if (!raw) {
+      return { ...EMPTY_STORE };
+    }
+    return JSON.parse(raw) as StoreData;
+  } catch (err) {
+    console.error('[readKvStore] Error:', err);
+    return { ...EMPTY_STORE };
+  }
 }
 
 async function writeKvStore(userId: string, data: StoreData) {
-  await kv.set(`exchange:${userId}:store`, data);
+  try {
+    if (!kv) {
+      throw new Error('KV store niet beschikbaar.');
+    }
+    // KV.set is async, need to await it
+    await kv.set(`exchange:${userId}:store`, JSON.stringify(data));
+  } catch (err) {
+    console.error('[writeKvStore] Error:', err);
+    throw err;
+  }
 }
 
 function buildAdapter(driver: StorageDriver): StorageAdapter {
@@ -1820,8 +1840,12 @@ const routes: Record<string, Handler> = {
       await storage.saveConnection(userId, connection);
       res.status(200).json({ ok: true, connection });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Kon verbinding niet opslaan.' });
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[exchanges/connect] Error:', {
+        error: errorMsg,
+        stack: err instanceof Error ? err.stack : undefined
+      });
+      res.status(500).json({ error: `Kon verbinding niet opslaan: ${errorMsg}` });
     }
   },
   'exchanges/disconnect': async (req, res) => {
