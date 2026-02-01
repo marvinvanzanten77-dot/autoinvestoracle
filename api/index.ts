@@ -1002,15 +1002,19 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 800): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>): Promise<T>;
+async function withRetry<T>(fn: () => Promise<T>, retries: number): Promise<T>;
+async function withRetry<T>(fn: () => Promise<T>, retries?: number, delayMs?: number): Promise<T> {
   let attempt = 0;
+  const maxRetries = retries ?? 2;
+  const delay = delayMs ?? 800;
   while (true) {
     try {
       return await fn();
     } catch (err) {
       attempt += 1;
-      if (attempt > retries) throw err;
-      await sleep(delayMs * attempt);
+      if (attempt > maxRetries) throw err;
+      await sleep(delay * attempt);
     }
   }
 }
