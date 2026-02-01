@@ -4,6 +4,7 @@ import { dashboardUpdates, volatilityStatus } from '../data/marketUpdates';
 import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
+import { fetchInsights, type InsightInput } from '../api/chat';
 import { STRATEGIES } from '../data/strategies';
 import { sendChatMessage, type ChatContext, type ChatMessage } from '../api/chat';
 import type { UserProfile } from '../lib/profile/types';
@@ -229,6 +230,63 @@ function UpdatesCard() {
   );
 }
 
+function InsightsCard({
+  profile,
+  market,
+  allocation
+}: {
+  profile?: any;
+  market?: any;
+  allocation?: Array<{ label: string; pct: number }>;
+}) {
+  const [insights, setInsights] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profile || !market) return;
+    setLoading(true);
+    setError(null);
+    const input: InsightInput = {
+      profile: {
+        displayName: profile.displayName,
+        strategy: profile.strategies?.[0],
+        primaryGoal: profile.primaryGoal,
+        timeHorizon: profile.timeHorizon,
+        knowledgeLevel: profile.knowledgeLevel
+      },
+      market: {
+        volatilityLevel: market.volatility?.level,
+        volatilityLabel: market.volatility?.label,
+        changes: market.changes
+      },
+      currentAllocation: allocation
+    };
+    fetchInsights(input)
+      .then((res) => setInsights(res.insights))
+      .catch((err) => {
+        console.error(err);
+        setError('Kon inzichten niet ophalen.');
+      })
+      .finally(() => setLoading(false));
+  }, [profile, market, allocation]);
+
+  return (
+    <Card title="Inzichten" subtitle="Gegeven jouw profiel">
+      {loading && <p className="text-sm text-slate-500">Inzichten laden...</p>}
+      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {insights && !loading && (
+        <div className="space-y-2 text-sm text-slate-700 whitespace-pre-wrap">
+          {insights}
+        </div>
+      )}
+      {!insights && !loading && !error && (
+        <p className="text-sm text-slate-500">Nog geen inzichten beschikbaar.</p>
+      )}
+    </Card>
+  );
+}
+
 
 function BalanceEditDialog({ 
   isOpen, 
@@ -439,6 +497,7 @@ export function Dashboard() {
   const [editingBalance, setEditingBalance] = useState(false);
   const [customBalance, setCustomBalance] = useState<number | null>(null);
   const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
+  const [currentAllocation, setCurrentAllocation] = useState<Array<{ label: string; pct: number }>>();
 
   useEffect(() => {
     // Fetch profile
@@ -526,6 +585,7 @@ export function Dashboard() {
       changes: scanChanges || undefined
     });
     localStorage.setItem(`aio_allocation_${strategy}`, JSON.stringify(payload));
+    setCurrentAllocation(payload.allocation);
   };
 
   const handleBalanceEdit = (newBalance: number) => {
@@ -573,6 +633,12 @@ export function Dashboard() {
         <WalletCard amount={amount} onEdit={() => setEditingBalance(true)} />
         <UpdatesCard />
       </div>
+
+      <InsightsCard
+        profile={profile}
+        market={{ volatility, changes: scanChanges }}
+        allocation={currentAllocation}
+      />
 
       <AllocationCard
         amount={amount}

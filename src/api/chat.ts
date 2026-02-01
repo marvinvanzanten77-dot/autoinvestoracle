@@ -39,6 +39,32 @@ export type ChatResponse = {
   createdAt: string;
 };
 
+export type InsightInput = {
+  profile?: {
+    displayName?: string;
+    strategy?: string;
+    primaryGoal?: string;
+    timeHorizon?: string;
+    knowledgeLevel?: string;
+  };
+  market?: {
+    volatilityLevel?: string;
+    volatilityLabel?: string;
+    changes?: {
+      bitcoin: number;
+      ethereum: number;
+      stablecoins: number;
+      altcoins: number;
+    };
+  };
+  currentAllocation?: Array<{ label: string; pct: number }>;
+};
+
+export type InsightResponse = {
+  insights: string;
+  createdAt: string;
+};
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   context?: ChatContext
@@ -47,6 +73,18 @@ export async function sendChatMessage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, context })
+  });
+  if (!resp.ok) {
+    throw new Error(`API error ${resp.status}`);
+  }
+  return resp.json();
+}
+
+export async function fetchInsights(input: InsightInput): Promise<InsightResponse> {
+  const resp = await fetch(`${API_BASE}/api/insights`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input)
   });
   if (!resp.ok) {
     throw new Error(`API error ${resp.status}`);

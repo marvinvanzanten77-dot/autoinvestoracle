@@ -1656,6 +1656,127 @@ async function generateAllocation(input: {
   };
 }
 
+type InsightInput = {
+  profile?: {
+    displayName?: string;
+    strategy?: string;
+    primaryGoal?: string;
+    timeHorizon?: string;
+    knowledgeLevel?: string;
+  };
+  market?: {
+    volatilityLevel?: string;
+    volatilityLabel?: string;
+    changes?: {
+      bitcoin: number;
+      ethereum: number;
+      stablecoins: number;
+      altcoins: number;
+    };
+  };
+  currentAllocation?: Array<{ label: string; pct: number }>;
+};
+
+async function generateInsights(input: InsightInput): Promise<string> {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY ontbreekt.');
+  }
+
+  const profileInfo = input.profile
+    ? `- Doelstelling: ${input.profile.primaryGoal}
+- Horizon: ${input.profile.timeHorizon}
+- Kennis: ${input.profile.knowledgeLevel}
+- Strategie: ${input.profile.strategy}`
+    : 'Geen profiel beschikbaar';
+
+  const marketInfo = input.market
+    ? `- Tempo: ${input.market.volatilityLabel}
+- Bewegingen: BTC ${input.market.changes?.bitcoin}%, ETH ${input.market.changes?.ethereum}%, Stablecoins ${input.market.changes?.stablecoins}%, Altcoins ${input.market.changes?.altcoins}%`
+    : 'Geen marktdata beschikbaar';
+
+  const allocationInfo = input.currentAllocation
+    ? input.currentAllocation.map((a) => `- ${a.label}: ${a.pct}%`).join('\n')
+    : 'Geen allocatie beschikbaar';
+
+  const prompt = [
+    'Gegeven onderstaande profielgegevens en marktomstandigheden, presenteer relevante observaties.',
+    '',
+    'PROFIEL:',
+    profileInfo,
+    '',
+    'MARKT NU:',
+    marketInfo,
+    '',
+    'HUIDIGE ALLOCATIE:',
+    allocationInfo,
+    '',
+    'INSTRUCTIES:',
+    '- Geef GEEN directe adviezen zoals "koop nu" of "verkoop dat"',
+    '- Geef WEL observaties: "Gegeven jouw horizon kun je X overwegen"',
+    '- Gebruik voorwaardelijk taalgebruik: "IF..., zou..., kun je..."',
+    '- Link profiel aan markt: "Met jouw kennis... en gegeven dit tempo..."',
+    '- Presenteer als overwegingen, niet als bevelen',
+    '- Maximaal 3-4 relevante punten',
+    '- Wees duidelijk en in mensentaal'
+  ].join('\n');
+
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Je bent een crypto-observator. Je presenteert observaties en overwegingen zonder directe adviezen of voorspellingen.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]
+    })
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`OpenAI error ${resp.status}: ${text}`);
+  }
+
+  const data = (await resp.json()) as OpenAIChatResponse;
+  return data.choices?.[0]?.message?.content?.trim() || 'Geen inzichten beschikbaar.';
+}
+
+function fallbackInsights(input: InsightInput): string {
+  const observations: string[] = [];
+
+  if (input.profile?.timeHorizon === '7y+') {
+    observations.push('Met jouw lange horizon (7+ jaar) kun je typisch meer volatiliteit dragen.');
+  }
+  if (input.profile?.knowledgeLevel === 'beginner' && input.market?.volatilityLevel === 'hoog') {
+    observations.push('Gegeven het onrustige tempo nu, merken beginners dat dit een moment is om rustig te observeren.');
+  }
+  if (input.market?.changes?.bitcoin && input.market.changes.bitcoin > 5) {
+    observations.push('Bitcoin beweegt opvallend omhoog (+' + input.market.changes.bitcoin + '%), wat kan wijzen op marktsentiment.');
+  }
+  if (
+    input.currentAllocation &&
+    input.profile?.primaryGoal === 'preserve' &&
+    input.currentAllocation.find((a) => a.label === 'Altcoins' && a.pct > 30)
+  ) {
+    observations.push('Je allocatie heeft veel altcoins (>30%), wat tegen je bewaardoel ingaat gezien het hogere risico.');
+  }
+
+  return observations.length > 0
+    ? observations.join('\n\n')
+    : 'Geen specifieke observaties beschikbaar.';
+}
+
 const routes: Record<string, Handler> = {
   'session/init': async (req, res) => {
     if (req.method && req.method !== 'GET') {
@@ -1852,6 +1973,22 @@ const routes: Record<string, Handler> = {
     } catch (err) {
       console.error(err);
       res.status(200).json(fallbackAllocation());
+    }
+  },
+  insights: async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const payload = (req.body || {}) as InsightInput;
+      const insights = await generateInsights(payload);
+      res.status(200).json({ insights, createdAt: new Date().toISOString() });
+    } catch (err) {
+      console.error(err);
+      const payload = (req.body || {}) as InsightInput;
+      const fallback = fallbackInsights(payload);
+      res.status(200).json({ insights: fallback, createdAt: new Date().toISOString() });
     }
   },
   'exchanges/connect': async (req, res) => {
