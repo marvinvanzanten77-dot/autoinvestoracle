@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { EXCHANGE_CONFIG } from '../config';
 import type {
   Account,
@@ -17,77 +18,144 @@ export class BitvavoConnector implements ExchangeConnector {
   id = 'bitvavo' as const;
   name = EXCHANGE_CONFIG.bitvavo.name;
   capabilities = EXCHANGE_CONFIG.bitvavo.capabilities;
+  private apiKey: string = '';
+  private apiSecret: string = '';
 
-  async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
+  setCredentials(credentials: ExchangeCredentials) {
     if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
       throw new ValidationError('API key/secret ontbreekt.');
     }
-    return { ok: true, scopes: ['read'] };
+    this.apiKey = credentials.apiKey;
+    this.apiSecret = credentials.apiSecret;
+  }
+
+  private async makeRequest(method: string, endpoint: string, body?: Record<string, unknown>) {
+    const timestamp = Date.now();
+    
+    let bodyStr = '';
+    if (body) {
+      bodyStr = JSON.stringify(body);
+    }
+
+    // Bitvavo signing: HMAC-SHA256(apiSecret, timestamp + method + path + body)
+    // Path includes /v2 prefix!
+    const path = `/v2${endpoint}`;
+    const message = timestamp + method + path + bodyStr;
+    const signature = crypto
+      .createHmac('sha256', this.apiSecret)
+      .update(message)
+      .digest('hex');
+
+    console.log('[Bitvavo] Request:', {
+      endpoint,
+      method,
+      timestamp,
+      hasApiKey: !!this.apiKey,
+      hasApiSecret: !!this.apiSecret,
+      bodyStr: bodyStr ? 'has body' : 'no body',
+      message: message.substring(0, 100) + '...'
+    });
+
+    const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Bitvavo-Access-Key': this.apiKey,
+        'Bitvavo-Access-Timestamp': timestamp.toString(),
+        'Bitvavo-Access-Signature': signature
+      },
+      body: bodyStr || undefined,
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[Bitvavo] Error response:', { status: resp.status, body: errText });
+      throw new Error(`Bitvavo API error ${resp.status}: ${errText}`);
+    }
+
+    return resp.json();
+  }
+
+  async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
+    try {
+      this.setCredentials(credentials);
+      // Test connection by fetching accounts
+      await this.makeRequest('GET', '/account');
+      return { ok: true, scopes: ['read'] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Onbekende fout';
+      return { ok: false, message: `Bitvavo verbinding mislukt: ${msg}` };
+    }
   }
 
   async fetchAccounts(): Promise<Account[]> {
-    // TODO: Bitvavo account endpoint + signing.
-    // https://api.bitvavo.com/v2/account
-    // Requires: HMAC-SHA256 signing met API secret
-    console.warn('⚠️ Bitvavo fetchAccounts not implemented');
-    return [];
+    try {
+      const data = await this.makeRequest('GET', '/account');
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      return data.map((acc: any) => ({
+        id: acc.id || crypto.randomUUID(),
+        userId: '', // Will be set by caller
+        exchange: this.id,
+        accountId: acc.id,
+        name: acc.nickname || 'Main Account',
+        type: 'spot',
+        currency: 'EUR'
+      }));
+    } catch (err) {
+      console.error('Bitvavo fetchAccounts error:', err);
+      return [];
+    }
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    // TODO: Bitvavo balance endpoint + signing.
-    // https://api.bitvavo.com/v2/balance
-    // Returns array van { symbol, available, held }
-    console.warn('⚠️ Bitvavo fetchBalances not implemented');
-    return [];
+    try {
+      const data = await this.makeRequest('GET', '/balance');
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      return data
+        .filter((bal: any) => Number(bal.available) > 0 || Number(bal.held) > 0)
+        .map((bal: any) => ({
+          id: crypto.randomUUID(),
+          userId: '', // Will be set by caller
+          exchange: this.id,
+          asset: bal.symbol,
+          total: Number(bal.available) + Number(bal.held),
+          available: Number(bal.available)
+        }));
+    } catch (err) {
+      console.error('Bitvavo fetchBalances error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
-    // Bitvavo ondersteunt geen futures/margin
-    console.warn('⚠️ Bitvavo fetchPositions not available (spot only)');
+    // Bitvavo is spot only
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
-    // TODO: Bitvavo deposits/withdrawals/trades.
-    // https://api.bitvavo.com/v2/deposits
-    // https://api.bitvavo.com/v2/withdrawals
-    // Requires filtering & aggregation
-    console.warn('⚠️ Bitvavo fetchTransactions not implemented');
+    // TODO: Implement deposits/withdrawals
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
-    // TODO: Bitvavo orders endpoint + signing.
-    // https://api.bitvavo.com/v2/orders
-    // Filters open orders
-    console.warn('⚠️ Bitvavo fetchOrders not implemented');
+    // TODO: Implement orders
     return [];
   }
 
   async fetchMarketData(params: MarketDataParams): Promise<MarketCandle[]> {
     const symbol = params.symbols[0] || 'BTC-EUR';
     const interval = params.interval || '1h';
-    try {
-      const url = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${symbol}/candles?interval=${interval}`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (!resp.ok) {
-        console.error(`Bitvavo market data error: ${resp.status}`);
-        return [];
-      }
-      const data = (await resp.json()) as Array<[number, number, number, number, number, number]>;
-      return data.map(([timestamp, open, high, low, close, volume]) => ({
-        timestamp,
-        open,
-        high,
-        low,
-        close,
-        volume
-      }));
-    } catch (err) {
-      console.error('Bitvavo fetchMarketData error:', err);
+    const url = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${symbol}/candles?interval=${interval}`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) {
       return [];
     }
-  }
+    const data = (await resp.json()) as Array<[number, number, number, number, number, number]>;
     return data.map((row) => ({
       exchange: this.id,
       symbol,
