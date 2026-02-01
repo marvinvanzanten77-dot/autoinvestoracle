@@ -386,31 +386,121 @@ class BitvavoConnector implements ExchangeConnector {
   id = 'bitvavo' as const;
   name = EXCHANGE_CONFIG.bitvavo.name;
   capabilities = EXCHANGE_CONFIG.bitvavo.capabilities;
+  private apiKey: string = '';
+  private apiSecret: string = '';
 
-  async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
+  setCredentials(credentials: ExchangeCredentials) {
     if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
       throw new ValidationError('API key/secret ontbreekt.');
     }
-    return { ok: true, scopes: ['read'] };
+    this.apiKey = credentials.apiKey;
+    this.apiSecret = credentials.apiSecret;
+  }
+
+  private async makeRequest(method: string, endpoint: string, body?: Record<string, unknown>) {
+    const timestamp = Date.now();
+    const nonce = crypto.randomUUID();
+    
+    let bodyStr = '';
+    if (body) {
+      bodyStr = JSON.stringify(body);
+    }
+
+    // Bitvavo signing: HMAC-SHA256(apiSecret, method + endpoint + body + timestamp + nonce)
+    const message = method + endpoint + bodyStr + timestamp + nonce;
+    const signature = crypto
+      .createHmac('sha256', this.apiSecret)
+      .update(message)
+      .digest('hex');
+
+    const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'BITVAVO-KEY': this.apiKey,
+        'BITVAVO-TIMESTAMP': timestamp.toString(),
+        'BITVAVO-NONCE': nonce,
+        'BITVAVO-SIGNATURE': signature
+      },
+      body: bodyStr || undefined,
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Bitvavo API error ${resp.status}: ${errText}`);
+    }
+
+    return resp.json();
+  }
+
+  async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
+    try {
+      this.setCredentials(credentials);
+      // Test connection by fetching accounts
+      await this.makeRequest('GET', '/account');
+      return { ok: true, scopes: ['read'] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Onbekende fout';
+      return { ok: false, message: `Bitvavo verbinding mislukt: ${msg}` };
+    }
   }
 
   async fetchAccounts(): Promise<Account[]> {
-    return [];
+    try {
+      const data = await this.makeRequest('GET', '/account');
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      return data.map((acc: any) => ({
+        id: acc.id || crypto.randomUUID(),
+        userId: '', // Will be set by caller
+        exchange: this.id,
+        accountId: acc.id,
+        name: acc.nickname || 'Main Account',
+        type: 'spot',
+        currency: 'EUR'
+      }));
+    } catch (err) {
+      console.error('Bitvavo fetchAccounts error:', err);
+      return [];
+    }
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    return [];
+    try {
+      const data = await this.makeRequest('GET', '/balance');
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      return data
+        .filter((bal: any) => Number(bal.available) > 0 || Number(bal.held) > 0)
+        .map((bal: any) => ({
+          id: crypto.randomUUID(),
+          userId: '', // Will be set by caller
+          exchange: this.id,
+          asset: bal.symbol,
+          total: Number(bal.available) + Number(bal.held),
+          available: Number(bal.available)
+        }));
+    } catch (err) {
+      console.error('Bitvavo fetchBalances error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
+    // Bitvavo is spot only
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
+    // TODO: Implement deposits/withdrawals
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
+    // TODO: Implement orders
     return [];
   }
 
@@ -418,7 +508,7 @@ class BitvavoConnector implements ExchangeConnector {
     const symbol = params.symbols[0] || 'BTC-EUR';
     const interval = params.interval || '1h';
     const url = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${symbol}/candles?interval=${interval}`;
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) {
       return [];
     }
@@ -889,20 +979,29 @@ async function syncExchange(userId: string, exchange: ExchangeId): Promise<SyncR
   const connector = createConnector(exchange);
   const credentials = decryptSecrets(connection.encryptedSecrets);
 
-  try {
-    const accounts = await withRetry(() => connector.fetchAccounts(userId, credentials as any));
-    const balances = await withRetry(() => connector.fetchBalances(userId, credentials as any));
-    const positions = await withRetry(() => connector.fetchPositions(userId, credentials as any));
-    const transactions = await withRetry(() =>
-      connector.fetchTransactions(userId, credentials as any, {})
-    );
-    const orders = await withRetry(() => connector.fetchOrders(userId, credentials as any, {}));
+  // Set credentials for connectors that need them
+  if ('setCredentials' in connector) {
+    (connector as any).setCredentials(credentials);
+  }
 
-    await storage.saveAccounts(userId, accounts);
-    await storage.saveBalances(userId, balances);
-    await storage.savePositions(userId, positions);
-    await storage.saveTransactions(userId, transactions);
-    await storage.saveOrders(userId, orders);
+  try {
+    const accounts = await withRetry(() => connector.fetchAccounts());
+    const balances = await withRetry(() => connector.fetchBalances());
+    const positions = await withRetry(() => connector.fetchPositions());
+    const transactions = await withRetry(() => connector.fetchTransactions());
+    const orders = await withRetry(() => connector.fetchOrders());
+
+    const accountsWithUserId = accounts.map((a) => ({ ...a, userId }));
+    const balancesWithUserId = balances.map((b) => ({ ...b, userId }));
+    const positionsWithUserId = positions.map((p) => ({ ...p, userId }));
+    const transactionsWithUserId = transactions.map((t) => ({ ...t, userId }));
+    const ordersWithUserId = orders.map((o) => ({ ...o, userId }));
+
+    await storage.saveAccounts(userId, accountsWithUserId);
+    await storage.saveBalances(userId, balancesWithUserId);
+    await storage.savePositions(userId, positionsWithUserId);
+    await storage.saveTransactions(userId, transactionsWithUserId);
+    await storage.saveOrders(userId, ordersWithUserId);
 
     await storage.saveConnection(userId, {
       ...connection,
@@ -1694,6 +1793,12 @@ const routes: Record<string, Handler> = {
         return;
       }
       const connector = createConnector(exchange);
+      
+      // For connectors that need credentials set before testing
+      if ('setCredentials' in connector) {
+        (connector as any).setCredentials(credentials);
+      }
+      
       const result = await connector.connect(credentials);
       if (!result.ok) {
         res.status(400).json({ error: result.message || 'Kon niet verbinden.' });
