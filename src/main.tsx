@@ -36,6 +36,10 @@ function OnboardingGate({ onboarded }: { onboarded: boolean }) {
     if (hasSession && onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
       navigate('/', { replace: true });
     }
+    // Ingelogd + niet geboarded + op login → Ga naar onboarding
+    if (hasSession && !onboarded && location.pathname === '/login') {
+      navigate('/onboarding', { replace: true });
+    }
   }, [location.pathname, navigate, onboarded, hasSession]);
 
   return null;
