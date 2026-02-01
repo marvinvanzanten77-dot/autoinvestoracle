@@ -143,8 +143,11 @@ async function upsertProfile(userId: string, profile: UserProfile) {
     updatedAt: now,
     onboardingComplete: true
   };
-  await kv.set(`user:${userId}:profile`, profile);
-  await kv.set(`user:${userId}:meta`, meta);
+  // Parallel writes om race conditions te voorkomen
+  await Promise.all([
+    kv.set(`user:${userId}:profile`, profile),
+    kv.set(`user:${userId}:meta`, meta)
+  ]);
   return { profile, meta };
 }
 
