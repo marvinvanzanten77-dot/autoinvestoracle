@@ -76,7 +76,7 @@ export function Login() {
     }
     setLoading(true);
     setStatus(null);
-    const { error } = await supabase.auth.signUp({
+    const { error, data } = await supabase.auth.signUp({
       email: email.toLowerCase(),
       password,
       options: {
@@ -85,10 +85,24 @@ export function Login() {
     });
     if (error) {
       setStatus(error.message || 'Registratie mislukt. Probeer het opnieuw.');
-    } else {
-      setStatus('Account gemaakt! Ga naar onboarding...');
-      setTimeout(() => navigate('/onboarding'), 1000);
+      setLoading(false);
+      return;
     }
+    
+    // Na succesvolle registratie, login direct met dezelfde credentials
+    // zodat je sesie krijgt en naar onboarding kunt gaan
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password
+    });
+    
+    if (signInError) {
+      setStatus('Account aangemaakt, maar automatisch inloggen mislukt. Probeer handmatig in te loggen.');
+      setLoading(false);
+      return;
+    }
+    
+    setStatus('Account gemaakt en ingelogd! Je wordt naar onboarding gestuurd...');
     setLoading(false);
   };
 
