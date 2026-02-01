@@ -10,6 +10,7 @@ import { MonthOverview } from './pages/MonthOverview';
 import { YearView } from './pages/YearView';
 import { Charts } from './pages/Charts';
 import { Settings } from './pages/Settings';
+import { Academy } from './pages/Academy';
 import { Onboarding } from './pages/Onboarding';
 import { Exchanges } from './pages/Exchanges';
 import { Login } from './pages/Login';
@@ -40,6 +41,7 @@ function MainLayoutRoutes({ onboarded }: { onboarded: boolean }) {
         <Route path="/month" element={<MonthOverview />} />
         <Route path="/year" element={<YearView />} />
         <Route path="/charts" element={<Charts />} />
+        <Route path="/academy" element={<Academy />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/exchanges" element={<Exchanges />} />
       </Routes>

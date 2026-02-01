@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { supabase } from '../lib/supabase/client';
 import type { UserProfile } from '../lib/profile/types';
-import { getLimitedEducation } from '../lib/dataService';
 import { useTheme } from '../lib/theme/ThemeContext';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
@@ -394,17 +393,6 @@ export function Settings() {
           <p className="text-xs text-slate-500 pt-1">
             Notificaties worden lokaal bewaard. Frequentie en tijdstip volgen later.
           </p>
-        </div>
-      </Card>
-
-      <Card title="Basiskennis" subtitle="Rustig instappen">
-        <div className="space-y-3 text-sm text-slate-700">
-          {getLimitedEducation(4).map((item) => (
-            <div key={item.id} className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-              <p className="text-sm text-slate-700">{item.detail}</p>
-            </div>
-          ))}
         </div>
       </Card>
 

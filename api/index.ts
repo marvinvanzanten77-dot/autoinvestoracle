@@ -1798,6 +1798,109 @@ const routes: Record<string, Handler> = {
       console.error(err);
       res.status(500).json({ ok: false, error: 'Health check mislukt.' });
     }
+  },
+  'academy/progress': async (req, res) => {
+    if (req.method && req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { data: completed } = await supabaseClient
+        .from('academy_module_progress')
+        .select('module_id')
+        .eq('user_id', userId)
+        .not('completed_at', 'is', null);
+
+      const { data: badges } = await supabaseClient
+        .from('user_badges')
+        .select('badge_id')
+        .eq('user_id', userId);
+
+      const progressMap: Record<string, boolean> = {};
+      const badgeMap: Record<string, boolean> = {};
+
+      completed?.forEach((item: any) => {
+        progressMap[item.module_id] = true;
+      });
+
+      badges?.forEach((item: any) => {
+        badgeMap[item.badge_id] = true;
+      });
+
+      res.status(200).json({
+        progress: progressMap,
+        badges: badgeMap
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon voortgang niet ophalen.' });
+    }
+  },
+  'academy/complete-module': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { moduleId } = (req.body || {}) as { moduleId?: string };
+      if (!moduleId) {
+        res.status(400).json({ error: 'moduleId is verplicht.' });
+        return;
+      }
+
+      const { error: completeError } = await supabaseClient
+        .from('academy_module_progress')
+        .upsert(
+          {
+            user_id: userId,
+            module_id: moduleId,
+            completed_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,module_id' }
+        );
+
+      if (completeError) throw completeError;
+
+      const { data: completed } = await supabaseClient
+        .from('academy_module_progress')
+        .select('module_id')
+        .eq('user_id', userId)
+        .not('completed_at', 'is', null);
+
+      const { data: badges } = await supabaseClient
+        .from('user_badges')
+        .select('badge_id')
+        .eq('user_id', userId);
+
+      const progressMap: Record<string, boolean> = {};
+      const badgeMap: Record<string, boolean> = {};
+
+      completed?.forEach((item: any) => {
+        progressMap[item.module_id] = true;
+      });
+
+      badges?.forEach((item: any) => {
+        badgeMap[item.badge_id] = true;
+      });
+
+      res.status(200).json({
+        progress: progressMap,
+        badges: badgeMap
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon module niet afmaken.' });
+    }
   }
 };
 
