@@ -401,22 +401,16 @@ export function Settings() {
           {/* Theme Toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Donkere modus</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Wissel tussen licht en donker thema</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thema</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Huidig: {theme === 'dark' ? '🌙 Donker' : '☀️ Licht'}
+              </p>
             </div>
             <button
               onClick={toggleTheme}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                theme === 'dark' 
-                  ? 'bg-slate-700 dark:bg-primary' 
-                  : 'bg-slate-200 dark:bg-slate-700'
-              }`}
+              className="pill bg-primary text-white hover:bg-primary/90 px-4 py-2 font-medium transition"
             >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-slate-800 transition-transform ${
-                  theme === 'dark' ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
+              {theme === 'dark' ? '☀️ Naar Licht' : '🌙 Naar Donker'}
             </button>
           </div>
         </div>

@@ -15,9 +15,12 @@ body {
   min-height: 100vh;
 }
 
-.dark body {
-  @apply bg-slate-950 text-slate-100;
+:root.dark {
   color-scheme: dark;
+}
+
+:root.dark body {
+  @apply bg-slate-950 text-slate-100;
   background-image:
     radial-gradient(circle at 18% 14%, rgba(111, 168, 161, 0.08), transparent 38%),
     radial-gradient(circle at 82% 18%, rgba(227, 200, 162, 0.08), transparent 42%),
