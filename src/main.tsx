@@ -19,9 +19,9 @@ import { supabase } from './lib/supabase/client';
 function OnboardingGate({ onboarded }: { onboarded: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [hasSession, setHasSession] = React.useState(false);
+  const [hasSession, setHasSession] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setHasSession(!!data.session);
     });
