@@ -438,7 +438,15 @@ class BitvavoConnector implements ExchangeConnector {
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error('[Bitvavo] Error response:', { status: resp.status, body: errText });
+      console.error('[Bitvavo] Error response:', { 
+        status: resp.status, 
+        statusText: resp.statusText,
+        endpoint,
+        method,
+        path,
+        body: errText,
+        message: `Signature might be wrong. Expected: timestamp+method+/v2{path}+body`
+      });
       throw new Error(`Bitvavo API error ${resp.status}: ${errText}`);
     }
 
@@ -1824,7 +1832,13 @@ const routes: Record<string, Handler> = {
         return;
       }
       const connector = createConnector(exchange);
+      console.log('[exchanges/connect] Testing', exchange, 'with credentials:', {
+        exchange,
+        hasApiKey: !!(credentials as any)?.apiKey,
+        hasApiSecret: !!(credentials as any)?.apiSecret
+      });
       const result = await connector.connect(credentials);
+      console.log('[exchanges/connect] Result:', result);
       if (!result.ok) {
         res.status(400).json({ error: result.message || 'Kon niet verbinden.' });
         return;
