@@ -3,10 +3,12 @@ import { Card } from '../components/ui/Card';
 import { supabase } from '../lib/supabase/client';
 import type { UserProfile } from '../lib/profile/types';
 import { getLimitedEducation } from '../lib/dataService';
+import { useTheme } from '../lib/theme/ThemeContext';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
 
 export function Settings() {
+  const { theme, toggleTheme } = useTheme();
   const [riskProfile, setRiskProfile] = useState<RiskProfile>('Gebalanceerd');
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -406,10 +408,36 @@ export function Settings() {
         </div>
       </Card>
 
+      <Card title="Voorkeur" subtitle="Weergave en gedrag">
+        <div className="space-y-4">
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Donkere modus</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Wissel tussen licht en donker thema</p>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                theme === 'dark' 
+                  ? 'bg-slate-700 dark:bg-primary' 
+                  : 'bg-slate-200 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-slate-800 transition-transform ${
+                  theme === 'dark' ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </Card>
+
       <Card title="Account" subtitle="Login via magic link">
-        <div className="space-y-3 text-sm text-slate-700">
+        <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
           <p>{accountEmail ? `Ingelogd als ${accountEmail}.` : 'Niet ingelogd.'}</p>
-          {signOutError && <p className="text-sm text-amber-700">{signOutError}</p>}
+          {signOutError && <p className="text-sm text-amber-700 dark:text-amber-400">{signOutError}</p>}
           <button
             type="button"
             onClick={async () => {
@@ -422,7 +450,7 @@ export function Settings() {
               await fetch('/api/session/logout', { method: 'POST' });
               window.location.href = '/login';
             }}
-            className="pill border border-slate-200 bg-white/70 text-slate-600 hover:bg-white transition"
+            className="pill border border-slate-200 dark:border-slate-600 bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition"
           >
             Uitloggen
           </button>

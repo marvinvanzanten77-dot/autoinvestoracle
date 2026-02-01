@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { AppLayout } from './layouts/AppLayout';
+import { ThemeProvider } from './lib/theme/ThemeContext';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { Today } from './pages/Today';
@@ -127,6 +128,8 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </React.StrictMode>
 );
