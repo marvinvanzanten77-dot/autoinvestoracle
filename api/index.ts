@@ -885,11 +885,15 @@ async function readKvStore(userId: string): Promise<StoreData> {
     if (!kv) {
       return { ...EMPTY_STORE };
     }
-    const raw = (await kv.get(`exchange:${userId}:store`)) as string | null;
+    const raw = await kv.get(`exchange:${userId}:store`);
     if (!raw) {
       return { ...EMPTY_STORE };
     }
-    return JSON.parse(raw) as StoreData;
+    // Vercel KV returns the object directly, not a string
+    if (typeof raw === 'string') {
+      return JSON.parse(raw) as StoreData;
+    }
+    return raw as StoreData;
   } catch (err) {
     console.error('[readKvStore] Error:', err);
     return { ...EMPTY_STORE };
@@ -901,8 +905,8 @@ async function writeKvStore(userId: string, data: StoreData) {
     if (!kv) {
       throw new Error('KV store niet beschikbaar.');
     }
-    // KV.set is async, need to await it
-    await kv.set(`exchange:${userId}:store`, JSON.stringify(data));
+    // Vercel KV automatically serializes, so don't JSON.stringify here
+    await kv.set(`exchange:${userId}:store`, data);
   } catch (err) {
     console.error('[writeKvStore] Error:', err);
     throw err;
