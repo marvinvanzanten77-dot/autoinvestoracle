@@ -13,18 +13,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>('light');
   const [mounted, setMounted] = useState(false);
 
-  // Initialize theme from localStorage or system preference
+  // Initialize theme from localStorage or default to light
   useEffect(() => {
     const stored = localStorage.getItem('aio_theme') as Theme | null;
     if (stored) {
       setTheme(stored);
       applyTheme(stored);
     } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const initialTheme = prefersDark ? 'dark' : 'light';
-      setTheme(initialTheme);
-      applyTheme(initialTheme);
+      // Default to light theme (don't check system preference)
+      setTheme('light');
+      applyTheme('light');
     }
     setMounted(true);
   }, []);
