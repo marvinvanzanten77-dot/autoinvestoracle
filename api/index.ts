@@ -1415,6 +1415,10 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
   const contextMessage = formatChatContext(context);
   const hasExchangeAccess = context?.exchanges?.connected?.length ?? 0 > 0;
 
+  console.log('[generateChatReply] Context message length:', contextMessage.length);
+  console.log('[generateChatReply] Has exchange access:', hasExchangeAccess);
+  console.log('[generateChatReply] System prompt:', hasExchangeAccess ? 'WITH exchange access' : 'WITHOUT exchange access');
+
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1448,11 +1452,14 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
 
   if (!resp.ok) {
     const text = await resp.text();
+    console.error('[generateChatReply] OpenAI error:', resp.status, text);
     throw new Error(`OpenAI error ${resp.status}: ${text}`);
   }
 
   const data = (await resp.json()) as OpenAIChatResponse;
-  return data.choices?.[0]?.message?.content?.trim() || 'Geen antwoord beschikbaar.'
+  const reply = data.choices?.[0]?.message?.content?.trim() || 'Geen antwoord beschikbaar.';
+  console.log('[generateChatReply] Reply length:', reply.length);
+  return reply;
 }
 
 async function generateSummary(input: {
@@ -1876,10 +1883,13 @@ const routes: Record<string, Handler> = {
         res.status(400).json({ error: 'messages is verplicht.' });
         return;
       }
+      console.log('[chat] Received context:', JSON.stringify(context, null, 2));
+      console.log('[chat] Messages:', messages.length, 'messages');
       const reply = await generateChatReply(messages, context);
+      console.log('[chat] Generated reply');
       res.status(200).json({ reply, createdAt: new Date().toISOString() });
     } catch (err) {
-      console.error(err);
+      console.error('[chat] Error:', err);
       res.status(500).json({ error: 'Kon chat niet ophalen.' });
     }
   },
@@ -1982,12 +1992,15 @@ const routes: Record<string, Handler> = {
     }
     try {
       const payload = (req.body || {}) as InsightInput;
+      console.log('[insights] Received input:', JSON.stringify(payload, null, 2));
       const insights = await generateInsights(payload);
+      console.log('[insights] Generated insights');
       res.status(200).json({ insights, createdAt: new Date().toISOString() });
     } catch (err) {
-      console.error(err);
+      console.error('[insights] Error:', err);
       const payload = (req.body || {}) as InsightInput;
       const fallback = fallbackInsights(payload);
+      console.log('[insights] Using fallback');
       res.status(200).json({ insights: fallback, createdAt: new Date().toISOString() });
     }
   },

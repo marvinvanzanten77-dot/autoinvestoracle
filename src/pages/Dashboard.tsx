@@ -85,7 +85,10 @@ function ChatCard({ context }: { context?: ChatContext }) {
   };
 
   return (
-    <Card title="AI-chat" subtitle="Stel gerust je vragen">
+    <Card 
+      title="AI-chat" 
+      subtitle={context ? "✓ Met volledige context" : "Stel gerust je vragen"}
+    >
       <div className="space-y-3">
         <div className="max-h-56 space-y-3 overflow-auto rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700">
           {messages.length === 0 && (
@@ -287,18 +290,134 @@ function InsightsCard({
   );
 }
 
-
-function BalanceEditDialog({ 
-  isOpen, 
-  currentBalance, 
-  onSave, 
-  onCancel 
-}: { 
-  isOpen: boolean; 
-  currentBalance: number; 
-  onSave: (balance: number) => void; 
-  onCancel: () => void;
+function DataOverviewPanel({
+  profile,
+  market,
+  exchanges,
+  allocation,
+  customBalance
+}: {
+  profile?: UserProfile | null;
+  market?: { volatility: MarketScanResponse['volatility']; changes: MarketScanResponse['changes'] | null };
+  exchanges: string[];
+  allocation?: Array<{ label: string; pct: number }>;
+  customBalance?: number | null;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!isExpanded) {
+    return (
+      <button
+        onClick={() => setIsExpanded(true)}
+        className="w-full text-xs text-slate-500 hover:text-slate-700 py-2 px-3 rounded-lg border border-dashed border-slate-300 hover:border-slate-400 transition"
+      >
+        📊 Toon alle beschikbare data
+      </button>
+    );
+  }
+
+  return (
+    <Card title="Alle beschikbare data" subtitle="Voor AI-context en debugging">
+      <div className="space-y-4 text-xs max-h-96 overflow-auto">
+        <div className="grid grid-cols-2 gap-3">
+          {/* Profiel */}
+          <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+            <p className="font-semibold text-slate-700">Profiel</p>
+            <div className="text-slate-600 space-y-0.5">
+              <div><span className="font-medium">Naam:</span> {profile?.displayName || '-'}</div>
+              <div><span className="font-medium">Strategie:</span> {profile?.strategies?.[0] || '-'}</div>
+              <div><span className="font-medium">Doel:</span> {profile?.primaryGoal || '-'}</div>
+              <div><span className="font-medium">Horizon:</span> {profile?.timeHorizon || '-'}</div>
+              <div><span className="font-medium">Kennis:</span> {profile?.knowledgeLevel || '-'}</div>
+              <div><span className="font-medium">Startbedrag:</span> {profile?.startAmountRange || '-'}</div>
+            </div>
+          </div>
+
+          {/* Markt */}
+          <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+            <p className="font-semibold text-slate-700">Markt</p>
+            <div className="text-slate-600 space-y-0.5">
+              <div><span className="font-medium">Tempo:</span> {market?.volatility.label || '-'}</div>
+              <div><span className="font-medium">Niveau:</span> {market?.volatility.level || '-'}</div>
+              <div><span className="font-medium">BTC:</span> {market?.changes?.bitcoin}%</div>
+              <div><span className="font-medium">ETH:</span> {market?.changes?.ethereum}%</div>
+              <div><span className="font-medium">Stablecoins:</span> {market?.changes?.stablecoins}%</div>
+              <div><span className="font-medium">Altcoins:</span> {market?.changes?.altcoins}%</div>
+            </div>
+          </div>
+
+          {/* Exchanges */}
+          <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+            <p className="font-semibold text-slate-700">Exchanges</p>
+            <div className="text-slate-600">
+              {exchanges.length > 0 ? (
+                <div className="space-y-1">
+                  {exchanges.map((ex) => (
+                    <div key={ex} className="capitalize">✓ {ex}</div>
+                  ))}
+                </div>
+              ) : (
+                <div>Geen exchanges verbonden</div>
+              )}
+            </div>
+          </div>
+
+          {/* Balans & Allocatie */}
+          <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+            <p className="font-semibold text-slate-700">Balans & Allocatie</p>
+            <div className="text-slate-600 space-y-0.5">
+              <div><span className="font-medium">Saldo:</span> €{customBalance?.toFixed(2) || '0.00'}</div>
+              {allocation && allocation.length > 0 ? (
+                <div className="mt-1 space-y-0.5">
+                  {allocation.map((a) => (
+                    <div key={a.label}><span className="font-medium">{a.label}:</span> {a.pct}%</div>
+                  ))}
+                </div>
+              ) : (
+                <div>Geen allocatie</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* JSON View */}
+        <div className="rounded-lg bg-slate-900 text-slate-200 p-3 font-mono text-xs overflow-auto max-h-48">
+          <p className="text-slate-400 mb-2">Raw Context (voor AI):</p>
+          <pre>{JSON.stringify(
+            {
+              profile: {
+                displayName: profile?.displayName,
+                strategy: profile?.strategies?.[0],
+                primaryGoal: profile?.primaryGoal,
+                timeHorizon: profile?.timeHorizon,
+                knowledgeLevel: profile?.knowledgeLevel
+              },
+              market: {
+                volatilityLevel: market?.volatility.level,
+                volatilityLabel: market?.volatility.label,
+                changes: market?.changes
+              },
+              exchanges: exchanges,
+              allocation: allocation
+            },
+            null,
+            2
+          )}</pre>
+        </div>
+
+        <button
+          onClick={() => setIsExpanded(false)}
+          className="w-full text-xs text-slate-500 hover:text-slate-700 py-1 rounded border border-slate-300 hover:border-slate-400 transition"
+        >
+          Verbergen
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+
+function BalanceEditDialog({
   const [value, setValue] = useState(currentBalance.toString());
   
   if (!isOpen) return null;
@@ -638,6 +757,14 @@ export function Dashboard() {
         profile={profile}
         market={{ volatility, changes: scanChanges }}
         allocation={currentAllocation}
+      />
+
+      <DataOverviewPanel
+        profile={profile}
+        market={{ volatility, changes: scanChanges }}
+        exchanges={connectedExchanges}
+        allocation={currentAllocation}
+        customBalance={customBalance}
       />
 
       <AllocationCard
