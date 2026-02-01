@@ -399,15 +399,16 @@ class BitvavoConnector implements ExchangeConnector {
 
   private async makeRequest(method: string, endpoint: string, body?: Record<string, unknown>) {
     const timestamp = Date.now();
-    const nonce = crypto.randomUUID();
     
     let bodyStr = '';
     if (body) {
       bodyStr = JSON.stringify(body);
     }
 
-    // Bitvavo signing: HMAC-SHA256(apiSecret, method + endpoint + body + timestamp + nonce)
-    const message = method + endpoint + bodyStr + timestamp + nonce;
+    // Bitvavo signing: HMAC-SHA256(apiSecret, timestamp + method + path + body)
+    // Path includes /v2 prefix!
+    const path = `/v2${endpoint}`;
+    const message = timestamp + method + path + bodyStr;
     const signature = crypto
       .createHmac('sha256', this.apiSecret)
       .update(message)
@@ -419,17 +420,17 @@ class BitvavoConnector implements ExchangeConnector {
       timestamp,
       hasApiKey: !!this.apiKey,
       hasApiSecret: !!this.apiSecret,
-      bodyStr: bodyStr ? 'has body' : 'no body'
+      bodyStr: bodyStr ? 'has body' : 'no body',
+      message: message.substring(0, 100) + '...'
     });
 
     const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}${endpoint}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'BITVAVO-KEY': this.apiKey,
-        'BITVAVO-TIMESTAMP': timestamp.toString(),
-        'BITVAVO-NONCE': nonce,
-        'BITVAVO-SIGNATURE': signature
+        'Bitvavo-Access-Key': this.apiKey,
+        'Bitvavo-Access-Timestamp': timestamp.toString(),
+        'Bitvavo-Access-Signature': signature
       },
       body: bodyStr || undefined,
       signal: AbortSignal.timeout(10000)
