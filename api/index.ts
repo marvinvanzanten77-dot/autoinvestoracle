@@ -1004,6 +1004,7 @@ function sleep(ms: number) {
 
 async function withRetry<T>(fn: () => Promise<T>): Promise<T>;
 async function withRetry<T>(fn: () => Promise<T>, retries: number): Promise<T>;
+async function withRetry<T>(fn: () => Promise<T>, retries: number, delayMs: number): Promise<T>;
 async function withRetry<T>(fn: () => Promise<T>, retries?: number, delayMs?: number): Promise<T> {
   let attempt = 0;
   const maxRetries = retries ?? 2;
