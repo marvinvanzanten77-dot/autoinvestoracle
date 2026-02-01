@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { kv } from '@vercel/kv';
+import { createClient } from '@supabase/supabase-js';
 
 type ApiRequest = {
   method?: string;
@@ -97,6 +98,15 @@ async function fetchSupabaseUser(accessToken: string): Promise<SupabaseUserRespo
 
   const data = (await resp.json()) as SupabaseUserResponse;
   return data;
+}
+
+function getSupabaseClient() {
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('SUPABASE_URL of SUPABASE_ANON_KEY ontbreekt.');
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 type UserProfile = {
@@ -500,7 +510,8 @@ class BitvavoConnector implements ExchangeConnector {
           exchange: this.id,
           asset: bal.symbol,
           total: Number(bal.available) + Number(bal.held),
-          available: Number(bal.available)
+          available: Number(bal.available),
+          updatedAt: new Date().toISOString()
         }));
     } catch (err) {
       console.error('Bitvavo fetchBalances error:', err);
@@ -1024,11 +1035,11 @@ async function syncExchange(userId: string, exchange: ExchangeId): Promise<SyncR
   }
 
   try {
-    const accounts = await withRetry(() => connector.fetchAccounts());
-    const balances = await withRetry(() => connector.fetchBalances());
-    const positions = await withRetry(() => connector.fetchPositions());
-    const transactions = await withRetry(() => connector.fetchTransactions());
-    const orders = await withRetry(() => connector.fetchOrders());
+    const accounts = await withRetry(() => connector.fetchAccounts(), 2, 800);
+    const balances = await withRetry(() => connector.fetchBalances(), 2, 800);
+    const positions = await withRetry(() => connector.fetchPositions(), 2, 800);
+    const transactions = await withRetry(() => connector.fetchTransactions(), 2, 800);
+    const orders = await withRetry(() => connector.fetchOrders(), 2, 800);
 
     const accountsWithUserId = accounts.map((a) => ({ ...a, userId }));
     const balancesWithUserId = balances.map((b) => ({ ...b, userId }));
@@ -1634,8 +1645,9 @@ const routes: Record<string, Handler> = {
       return;
     }
     const header = req.headers?.authorization || '';
-    const token = header.startsWith('Bearer ')
-      ? header.slice(7)
+    const headerStr = typeof header === 'string' ? header : (Array.isArray(header) ? header[0] : '');
+    const token = headerStr.startsWith('Bearer ')
+      ? headerStr.slice(7)
       : (req.body as { accessToken?: string } | undefined)?.accessToken;
     if (!token) {
       res.status(400).json({ error: 'Access token ontbreekt.' });
@@ -1963,13 +1975,14 @@ const routes: Record<string, Handler> = {
       return;
     }
     try {
-      const { data: completed } = await supabaseClient
+      const client = getSupabaseClient();
+      const { data: completed } = await client
         .from('academy_module_progress')
         .select('module_id')
         .eq('user_id', userId)
         .not('completed_at', 'is', null);
 
-      const { data: badges } = await supabaseClient
+      const { data: badges } = await client
         .from('user_badges')
         .select('badge_id')
         .eq('user_id', userId);
@@ -2011,7 +2024,8 @@ const routes: Record<string, Handler> = {
         return;
       }
 
-      const { error: completeError } = await supabaseClient
+      const client = getSupabaseClient();
+      const { error: completeError } = await client
         .from('academy_module_progress')
         .upsert(
           {
@@ -2024,13 +2038,13 @@ const routes: Record<string, Handler> = {
 
       if (completeError) throw completeError;
 
-      const { data: completed } = await supabaseClient
+      const { data: completed } = await client
         .from('academy_module_progress')
         .select('module_id')
         .eq('user_id', userId)
         .not('completed_at', 'is', null);
 
-      const { data: badges } = await supabaseClient
+      const { data: badges } = await client
         .from('user_badges')
         .select('badge_id')
         .eq('user_id', userId);
