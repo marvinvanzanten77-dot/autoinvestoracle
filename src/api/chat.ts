@@ -25,6 +25,13 @@ export type ChatContext = {
       altcoins: number;
     };
   };
+  exchanges?: {
+    connected: string[];
+    balances?: Array<{
+      exchange: string;
+      total: number;
+    }>;
+  };
 };
 
 export type ChatResponse = {

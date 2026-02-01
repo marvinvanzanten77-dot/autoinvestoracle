@@ -1349,6 +1349,13 @@ type ChatContext = {
       altcoins: number;
     };
   };
+  exchanges?: {
+    connected: string[];
+    balances?: Array<{
+      exchange: string;
+      total: number;
+    }>;
+  };
 };
 
 type OpenAIChatResponse = {
@@ -1385,6 +1392,18 @@ function formatChatContext(context?: ChatContext) {
       lines.push('Marktcontext:', ...marketParts);
     }
   }
+  if (context.exchanges?.connected.length) {
+    const exchangeParts = [
+      `Gekoppelde exchanges: ${context.exchanges.connected.join(', ')}`
+    ];
+    if (context.exchanges.balances?.length) {
+      const balanceSummary = context.exchanges.balances
+        .map(b => `${b.exchange}: €${b.total.toFixed(2)}`)
+        .join(', ');
+      exchangeParts.push(`Saldi: ${balanceSummary}`);
+    }
+    lines.push('Exchange-gegevens:', ...exchangeParts);
+  }
   return lines.length > 0 ? lines.join('\n') : '';
 }
 
@@ -1394,6 +1413,7 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
   }
 
   const contextMessage = formatChatContext(context);
+  const hasExchangeAccess = context?.exchanges?.connected?.length ?? 0 > 0;
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -1408,7 +1428,9 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
         {
           role: 'system',
           content:
-            'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.'
+            hasExchangeAccess
+              ? 'Je bent een rustige crypto-assistent. Je hebt toegang tot de gekoppelde exchange-accounts van de gebruiker. Geef geen advies of besluiten, alleen uitleg en opties in mensentaal. Bevestig dat je hun accounts kunt zien als ze erover spreken.'
+              : 'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.'
         },
         ...(contextMessage
           ? [

@@ -438,8 +438,10 @@ export function Dashboard() {
   const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
   const [editingBalance, setEditingBalance] = useState(false);
   const [customBalance, setCustomBalance] = useState<number | null>(null);
+  const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
 
   useEffect(() => {
+    // Fetch profile
     fetch('/api/profile/get')
       .then(async (res) => {
         if (!res.ok) {
@@ -458,6 +460,21 @@ export function Dashboard() {
         }
       })
       .catch(() => setProfile(null));
+
+    // Fetch connected exchanges
+    fetch('/api/exchanges/status')
+      .then(async (res) => {
+        if (!res.ok) {
+          setConnectedExchanges([]);
+          return;
+        }
+        const data = (await res.json()) as { connections?: Array<{ exchange: string; status: string }> };
+        const connected = data.connections
+          ?.filter((c) => c.status === 'connected')
+          .map((c) => c.exchange) || [];
+        setConnectedExchanges(connected);
+      })
+      .catch(() => setConnectedExchanges([]));
 
     const cachedScan = localStorage.getItem('aio_market_scan_v1');
     if (cachedScan) {
@@ -533,6 +550,9 @@ export function Dashboard() {
           volatilityLevel: volatility.level,
           lastScan,
           changes: scanChanges || undefined
+        },
+        exchanges: {
+          connected: connectedExchanges
         }
       }
     : undefined;
