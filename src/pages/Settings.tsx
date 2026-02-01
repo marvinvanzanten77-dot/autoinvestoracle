@@ -157,6 +157,26 @@ export function Settings() {
 
   return (
     <div className="grid gap-4 md:gap-5">
+      <Card title="Voorkeur" subtitle="Weergave en gedrag">
+        <div className="space-y-4">
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thema</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Huidig: {theme === 'dark' ? '🌙 Donker' : '☀️ Licht'}
+              </p>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className="pill bg-primary text-white hover:bg-primary/90 px-4 py-2 font-medium transition"
+            >
+              {theme === 'dark' ? '☀️ Naar Licht' : '🌙 Naar Donker'}
+            </button>
+          </div>
+        </div>
+      </Card>
+
       <Card title="Profiel" subtitle="Persoonsgegevens en avatar">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
@@ -393,26 +413,6 @@ export function Settings() {
           <p className="text-xs text-slate-500 pt-1">
             Notificaties worden lokaal bewaard. Frequentie en tijdstip volgen later.
           </p>
-        </div>
-      </Card>
-
-      <Card title="Voorkeur" subtitle="Weergave en gedrag">
-        <div className="space-y-4">
-          {/* Theme Toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Thema</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Huidig: {theme === 'dark' ? '🌙 Donker' : '☀️ Licht'}
-              </p>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="pill bg-primary text-white hover:bg-primary/90 px-4 py-2 font-medium transition"
-            >
-              {theme === 'dark' ? '☀️ Naar Licht' : '🌙 Naar Donker'}
-            </button>
-          </div>
         </div>
       </Card>
 
