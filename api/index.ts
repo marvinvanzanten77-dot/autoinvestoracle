@@ -36,11 +36,13 @@ function createSessionId() {
 
 function buildSessionCookie(userId: string) {
   const secure = process.env.NODE_ENV === 'production';
+  const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
   return [
     `aio_uid=${encodeURIComponent(userId)}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
+    `Max-Age=${thirtyDaysInSeconds}`,
     secure ? 'Secure' : ''
   ]
     .filter(Boolean)

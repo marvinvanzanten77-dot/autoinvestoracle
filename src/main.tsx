@@ -19,15 +19,31 @@ import { supabase } from './lib/supabase/client';
 function OnboardingGate({ onboarded }: { onboarded: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [hasSession, setHasSession] = React.useState(false);
+
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setHasSession(!!data.session);
+    });
+  }, []);
 
   useEffect(() => {
+    // Als je niet geboarded bent:
+    // - En niet op /login of /onboarding
+    // - En je hebt geen sessie → Ga naar /login
+    // - En je hebt wel sessie → Ga naar /onboarding
     if (!onboarded && location.pathname !== '/onboarding' && location.pathname !== '/login') {
-      navigate('/onboarding', { replace: true });
+      if (hasSession) {
+        navigate('/onboarding', { replace: true });
+      } else {
+        navigate('/login', { replace: true });
+      }
     }
+    // Als je geboarded bent en je bent op login/onboarding → Ga naar Dashboard
     if (onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
       navigate('/', { replace: true });
     }
-  }, [location.pathname, navigate, onboarded]);
+  }, [location.pathname, navigate, onboarded, hasSession]);
 
   return null;
 }

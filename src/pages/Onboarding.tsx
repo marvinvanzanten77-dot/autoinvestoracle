@@ -107,8 +107,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile: data })
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) throw new Error('Kon profiel niet opslaan.');
+        // Wacht even zodat KV zich heeft geupdate
+        await new Promise(resolve => setTimeout(resolve, 100));
         onComplete();
       })
       .catch(() => {
