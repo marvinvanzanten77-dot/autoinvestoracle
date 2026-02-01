@@ -413,6 +413,15 @@ class BitvavoConnector implements ExchangeConnector {
       .update(message)
       .digest('hex');
 
+    console.log('[Bitvavo] Request:', {
+      endpoint,
+      method,
+      timestamp,
+      hasApiKey: !!this.apiKey,
+      hasApiSecret: !!this.apiSecret,
+      bodyStr: bodyStr ? 'has body' : 'no body'
+    });
+
     const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}${endpoint}`, {
       method,
       headers: {
@@ -428,6 +437,7 @@ class BitvavoConnector implements ExchangeConnector {
 
     if (!resp.ok) {
       const errText = await resp.text();
+      console.error('[Bitvavo] Error response:', { status: resp.status, body: errText });
       throw new Error(`Bitvavo API error ${resp.status}: ${errText}`);
     }
 
