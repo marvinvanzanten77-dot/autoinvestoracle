@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { AiTutorModal } from '../components/AiTutorModal';
 import { academyCurriculum, type AcademyLevel, type AcademyModule } from '../data/academyCurriculum';
 
 type TabType = 'beginner' | 'intermediate' | 'expert';
@@ -15,6 +16,7 @@ interface BadgeEarned {
 export function Academy() {
   const [activeTab, setActiveTab] = useState<TabType>('beginner');
   const [selectedModule, setSelectedModule] = useState<AcademyModule | null>(null);
+  const [isTutorOpen, setIsTutorOpen] = useState(false);
   const [progress, setProgress] = useState<ModuleProgress>({});
   const [badges, setBadges] = useState<BadgeEarned>({});
   const [loading, setLoading] = useState(true);
@@ -168,7 +170,10 @@ export function Academy() {
               <p className="text-xs text-blue-800 dark:text-blue-200">
                 Stel vragen over deze module. De AI helpt met uitleg en verdieping.
               </p>
-              <button className="mt-2 pill bg-blue-600 text-white hover:bg-blue-700 px-3 py-1">
+              <button
+                onClick={() => setIsTutorOpen(true)}
+                className="mt-2 pill bg-blue-600 text-white hover:bg-blue-700 px-3 py-1"
+              >
                 Start chat met AI Tutor
               </button>
             </div>
@@ -272,6 +277,15 @@ export function Academy() {
           })}
         </div>
       </Card>
+
+      {/* AI Tutor Modal */}
+      {selectedModule && (
+        <AiTutorModal
+          isOpen={isTutorOpen}
+          module={selectedModule}
+          onClose={() => setIsTutorOpen(false)}
+        />
+      )}
     </div>
   );
 }
