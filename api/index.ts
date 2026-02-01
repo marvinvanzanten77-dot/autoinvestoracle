@@ -471,7 +471,7 @@ class BitvavoConnector implements ExchangeConnector {
       return { ok: true, scopes: ['read'] };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Onbekende fout';
-      return { ok: false, message: `Bitvavo verbinding mislukt: ${msg}` };
+      return { ok: false, scopes: [], message: `Bitvavo verbinding mislukt: ${msg}` };
     }
   }
 
