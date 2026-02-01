@@ -18,7 +18,7 @@ import { Card } from '../components/ui/Card';
 import {
   getMarketUpdates,
   getMarketContext,
-  getLimitedEducation,
+
   getAutoLoadedDataCached,
   refreshAutoLoadedData,
   type AutoLoadedData,
@@ -191,7 +191,7 @@ export function Today() {
 
   const marketUpdates = getMarketUpdates();
   const marketContexts = getMarketContext();
-  const educationTips = getLimitedEducation(6);
+
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
@@ -383,31 +383,7 @@ export function Today() {
             ))}
           </div>
         </Card>
-
-        {/* Learning tips (consolidated) */}
-        <Card title="Tip van de dag" subtitle="Wat moet ik weten?">
-          <div className="space-y-3">
-            {educationTips.slice(0, 3).map((item) => (
-              <div key={item.id} className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                <p className="text-sm text-slate-700">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
-
-      {/* All education snippets (grid) */}
-      <Card title="Leren in kleine stappen" subtitle="Korte uitleg zonder jargon">
-        <div className="grid gap-3 md:grid-cols-3">
-          {educationTips.map((item) => (
-            <div key={item.id} className="rounded-xl border border-slate-200/70 bg-white/70 p-4">
-              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-              <p className="text-sm text-slate-700 mt-1">{item.detail}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }

@@ -24,7 +24,7 @@ function DashboardHeader({
       <div>
         <p className="text-label tracking-[0.04em] text-slate-500">Jouw dag in crypto</p>
         <div className="mt-1 flex items-center gap-3 text-sm text-slate-700">
-          <span>Rustig overzicht</span>
+          <span>{volatility.label}</span>
           <span className="text-slate-400">|</span>
           <span>Laatste check: {lastScan}</span>
         </div>
@@ -219,21 +219,6 @@ function UpdatesCard() {
     <Card title="Markt in mensentaal" subtitle="Korte observaties">
       <div className="space-y-3">
         {dashboardUpdates.map((item) => (
-          <div key={item.title} className="space-y-1">
-            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-            <p className="text-sm text-slate-700">{item.detail}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function EducationCard() {
-  return (
-    <Card title="Mini-uitleg" subtitle="Even snel begrijpen">
-      <div className="space-y-3">
-        {educationSnippets.slice(0, 3).map((item) => (
           <div key={item.title} className="space-y-1">
             <p className="text-sm font-semibold text-slate-900">{item.title}</p>
             <p className="text-sm text-slate-700">{item.detail}</p>
@@ -569,15 +554,12 @@ export function Dashboard() {
         <UpdatesCard />
       </div>
 
-      <div className="grid gap-4 md:gap-5 md:grid-cols-2">
-        <AllocationCard
-          amount={amount}
-          strategies={[...STRATEGIES]}
-          selectedStrategies={profile?.strategies ?? []}
-          onAllocate={handleAllocate}
-        />
-        <EducationCard />
-      </div>
+      <AllocationCard
+        amount={amount}
+        strategies={[...STRATEGIES]}
+        selectedStrategies={profile?.strategies ?? []}
+        onAllocate={handleAllocate}
+      />
     </div>
   );
 }

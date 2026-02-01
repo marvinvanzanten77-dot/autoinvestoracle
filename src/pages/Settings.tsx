@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { supabase } from '../lib/supabase/client';
 import type { UserProfile } from '../lib/profile/types';
-import { educationSnippets } from '../data/educationSnippets';
+import { getLimitedEducation } from '../lib/dataService';
 
 type RiskProfile = 'Voorzichtig' | 'Gebalanceerd' | 'Actief';
 
@@ -397,8 +397,8 @@ export function Settings() {
 
       <Card title="Basiskennis" subtitle="Rustig instappen">
         <div className="space-y-3 text-sm text-slate-700">
-          {educationSnippets.slice(0, 4).map((item) => (
-            <div key={item.title} className="space-y-1">
+          {getLimitedEducation(4).map((item) => (
+            <div key={item.id} className="space-y-1">
               <p className="text-sm font-semibold text-slate-900">{item.title}</p>
               <p className="text-sm text-slate-700">{item.detail}</p>
             </div>
