@@ -1824,12 +1824,6 @@ const routes: Record<string, Handler> = {
         return;
       }
       const connector = createConnector(exchange);
-      
-      // For connectors that need credentials set before testing
-      if ('setCredentials' in connector) {
-        (connector as any).setCredentials(credentials);
-      }
-      
       const result = await connector.connect(credentials);
       if (!result.ok) {
         res.status(400).json({ error: result.message || 'Kon niet verbinden.' });
