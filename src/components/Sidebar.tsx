@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 
 type NavItem = {
   label: string;
@@ -57,17 +57,33 @@ export function Sidebar({ userName, avatarUrl, badge }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="glass rounded-2xl p-3.5 border border-slate-200/70 mt-auto flex items-center gap-3">
-        <div className="h-12 w-12 rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center text-xs text-slate-500">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
-          ) : (
-            'AI'
-          )}
+      <div className="glass rounded-2xl p-3.5 border border-slate-200/70 mt-auto flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center text-xs text-slate-500">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
+            ) : (
+              'AI'
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{userName}</p>
+            <p className="text-xs text-slate-500">{badge}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{userName}</p>
-          <p className="text-xs text-slate-500">{badge}</p>
+        <div className="flex gap-2">
+          <Link
+            to="/login"
+            className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition border border-slate-200"
+          >
+            Login
+          </Link>
+          <Link
+            to="/onboarding"
+            className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition border border-primary/20"
+          >
+            Profiel
+          </Link>
         </div>
       </div>
     </aside>

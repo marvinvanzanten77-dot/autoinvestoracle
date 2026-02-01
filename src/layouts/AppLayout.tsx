@@ -4,10 +4,9 @@ import type { UserProfile } from '../lib/profile/types';
 
 type AppLayoutProps = {
   children: ReactNode;
-  onboarded?: boolean;
 };
 
-export function AppLayout({ children, onboarded = true }: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
   const [riskLabel, setRiskLabel] = useState<'Voorzichtig' | 'Gebalanceerd' | 'Actief'>('Gebalanceerd');
   const [profile, setProfile] = useState<UserProfile | null>(null);
 

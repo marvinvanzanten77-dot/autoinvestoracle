@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { AppLayout } from './layouts/AppLayout';
 import { ThemeProvider } from './lib/theme/ThemeContext';
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { Today } from './pages/Today';
 import { MonthOverview } from './pages/MonthOverview';
@@ -16,38 +16,9 @@ import { Exchanges } from './pages/Exchanges';
 import { Login } from './pages/Login';
 import { supabase } from './lib/supabase/client';
 
-function OnboardingGate({ onboarded }: { onboarded: boolean }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [hasSession, setHasSession] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setHasSession(!!data.session);
-    });
-  }, []);
-
-  useEffect(() => {
-    // Niet ingelogd + niet op login/onboarding → Ga naar login
-    if (!hasSession && location.pathname !== '/login' && location.pathname !== '/onboarding') {
-      navigate('/login', { replace: true });
-    }
-    // Ingelogd + geboarded + op login/onboarding → Ga naar Dashboard
-    if (hasSession && onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
-      navigate('/', { replace: true });
-    }
-    // Ingelogd + niet geboarded + op login → Ga naar onboarding
-    if (hasSession && !onboarded && location.pathname === '/login') {
-      navigate('/onboarding', { replace: true });
-    }
-  }, [location.pathname, navigate, onboarded, hasSession]);
-
-  return null;
-}
-
-function MainLayoutRoutes({ onboarded }: { onboarded: boolean }) {
+function MainLayoutRoutes() {
   return (
-    <AppLayout onboarded={onboarded}>
+    <AppLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/today" element={<Today />} />
@@ -63,21 +34,7 @@ function MainLayoutRoutes({ onboarded }: { onboarded: boolean }) {
 }
 
 function App() {
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
-
   useEffect(() => {
-    let active = true;
-
-    const syncProfile = async () => {
-      const res = await fetch('/api/profile/get');
-      if (!res.ok) {
-        if (active) setOnboarded(false);
-        return;
-      }
-      const data = (await res.json()) as { meta?: { onboardingComplete?: boolean } };
-      if (active) setOnboarded(Boolean(data?.meta?.onboardingComplete));
-    };
-
     const init = async () => {
       try {
         const { data } = await supabase.auth.getSession();
@@ -96,7 +53,6 @@ function App() {
       } catch {
         await fetch('/api/session/init');
       }
-      await syncProfile();
     };
 
     init();
@@ -104,7 +60,6 @@ function App() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         await fetch('/api/session/logout', { method: 'POST' });
-        if (active) setOnboarded(false);
         return;
       }
       if (session?.access_token) {
@@ -115,27 +70,20 @@ function App() {
         if (!authResp.ok) {
           await fetch('/api/session/init');
         }
-        await syncProfile();
       }
     });
 
     return () => {
-      active = false;
       authListener?.subscription.unsubscribe();
     };
   }, []);
 
-  if (onboarded === null) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-700">Laden...</div>;
-  }
-
   return (
     <BrowserRouter>
-      <OnboardingGate onboarded={onboarded} />
       <Routes>
-        <Route path="/onboarding" element={<Onboarding onComplete={() => setOnboarded(true)} />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/*" element={<MainLayoutRoutes onboarded={onboarded} />} />
+        <Route path="/onboarding" element={<Onboarding onComplete={() => window.location.href = '/'} />} />
+        <Route path="/*" element={<MainLayoutRoutes />} />
       </Routes>
     </BrowserRouter>
   );
