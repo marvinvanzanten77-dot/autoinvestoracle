@@ -28,19 +28,12 @@ function OnboardingGate({ onboarded }: { onboarded: boolean }) {
   }, []);
 
   useEffect(() => {
-    // Als je niet geboarded bent:
-    // - En niet op /login of /onboarding
-    // - En je hebt geen sessie → Ga naar /login
-    // - En je hebt wel sessie → Ga naar /onboarding
-    if (!onboarded && location.pathname !== '/onboarding' && location.pathname !== '/login') {
-      if (hasSession) {
-        navigate('/onboarding', { replace: true });
-      } else {
-        navigate('/login', { replace: true });
-      }
+    // Niet ingelogd + niet op login/onboarding → Ga naar login
+    if (!hasSession && location.pathname !== '/login' && location.pathname !== '/onboarding') {
+      navigate('/login', { replace: true });
     }
-    // Als je geboarded bent en je bent op login/onboarding → Ga naar Dashboard
-    if (onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
+    // Ingelogd + geboarded + op login/onboarding → Ga naar Dashboard
+    if (hasSession && onboarded && (location.pathname === '/onboarding' || location.pathname === '/login')) {
       navigate('/', { replace: true });
     }
   }, [location.pathname, navigate, onboarded, hasSession]);

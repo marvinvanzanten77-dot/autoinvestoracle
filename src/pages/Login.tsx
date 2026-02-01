@@ -3,8 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { supabase } from '../lib/supabase/client';
 
+type AuthMode = 'login' | 'register';
+
 export function Login() {
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -41,8 +46,54 @@ export function Login() {
     setLoading(false);
   };
 
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setStatus('Vul je e-mailadres en wachtwoord in.');
+      return;
+    }
+    setLoading(true);
+    setStatus(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password
+    });
+    if (error) {
+      setStatus(error.message || 'Inloggen mislukt. Controleer je gegevens.');
+    } else {
+      setStatus('Ingelogd! Je wordt doorgestuurd...');
+    }
+    setLoading(false);
+  };
+
+  const handleRegister = async () => {
+    if (!email.trim() || !password.trim() || !displayName.trim()) {
+      setStatus('Vul je e-mailadres, naam en wachtwoord in.');
+      return;
+    }
+    if (password.length < 6) {
+      setStatus('Wachtwoord moet minstens 6 karakters zijn.');
+      return;
+    }
+    setLoading(true);
+    setStatus(null);
+    const { error } = await supabase.auth.signUp({
+      email: email.toLowerCase(),
+      password,
+      options: {
+        data: { displayName }
+      }
+    });
+    if (error) {
+      setStatus(error.message || 'Registratie mislukt. Probeer het opnieuw.');
+    } else {
+      setStatus('Account gemaakt! Ga naar onboarding...');
+      setTimeout(() => navigate('/onboarding'), 1000);
+    }
+    setLoading(false);
+  };
+
   const handleContinue = () => {
-    navigate('/onboarding');
+    navigate('/dashboard');
   };
 
   return (
@@ -52,41 +103,139 @@ export function Login() {
           <p className="text-label tracking-[0.04em] text-slate-500">Inloggen / registreren</p>
           <p className="text-title text-slate-900 font-serif">Welkom terug</p>
           <p className="text-sm text-slate-700">
-            Log in met een magic link. Geen wachtwoorden nodig.
+            Kies je voorkeur: magic link, wachtwoord, of nieuw account.
           </p>
         </div>
 
-        <Card title="Magic link" subtitle="We sturen je een veilige login-link">
-          <div className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value.toLowerCase())}
-              placeholder="E-mailadres"
-              className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-            {status && <p className="text-sm text-slate-600">{status}</p>}
-            <button
-              type="button"
-              onClick={handleMagicLink}
-              disabled={loading}
-              className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Versturen...' : 'Stuur magic link'}
-            </button>
-          </div>
-        </Card>
+        {!sessionEmail && (
+          <>
+            {/* Mode Tabs */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setMode('login'); setStatus(null); }}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${
+                  mode === 'login'
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Inloggen
+              </button>
+              <button
+                onClick={() => { setMode('register'); setStatus(null); }}
+                className={`flex-1 py-2 rounded-lg font-medium transition ${
+                  mode === 'register'
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Nieuw account
+              </button>
+            </div>
+
+            {/* Magic Link Tab (shared) */}
+            <Card title="Magic link" subtitle="Veilige login-link via email">
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value.toLowerCase())}
+                  placeholder="E-mailadres"
+                  className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {status && <p className="text-sm text-slate-600">{status}</p>}
+                <button
+                  type="button"
+                  onClick={handleMagicLink}
+                  disabled={loading}
+                  className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed w-full"
+                >
+                  {loading ? 'Versturen...' : 'Stuur magic link'}
+                </button>
+              </div>
+            </Card>
+
+            {mode === 'login' && (
+              /* Login with Password */
+              <Card title="Wachtwoord" subtitle="Log in met je gegevens">
+                <div className="space-y-3">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value.toLowerCase())}
+                    placeholder="E-mailadres"
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Wachtwoord"
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  {status && <p className="text-sm text-slate-600">{status}</p>}
+                  <button
+                    type="button"
+                    onClick={handleLogin}
+                    disabled={loading}
+                    className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed w-full"
+                  >
+                    {loading ? 'Inloggen...' : 'Inloggen'}
+                  </button>
+                </div>
+              </Card>
+            )}
+
+            {mode === 'register' && (
+              /* Register */
+              <Card title="Nieuw account" subtitle="Maak een account aan">
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="Volledige naam"
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value.toLowerCase())}
+                    placeholder="E-mailadres"
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Wachtwoord (min. 6 karakters)"
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  {status && <p className="text-sm text-slate-600">{status}</p>}
+                  <button
+                    type="button"
+                    onClick={handleRegister}
+                    disabled={loading}
+                    className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed w-full"
+                  >
+                    {loading ? 'Account aanmaken...' : 'Account aanmaken'}
+                  </button>
+                </div>
+              </Card>
+            )}
+          </>
+        )}
 
         {sessionEmail && (
-          <Card title="Ingelogd" subtitle="Ga verder met je profiel">
+          <Card title="Ingelogd" subtitle="Ga verder met je dashboard">
             <div className="space-y-3 text-sm text-slate-700">
               <p>Je bent ingelogd als {sessionEmail}.</p>
               <button
                 type="button"
                 onClick={handleContinue}
-                className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition"
+                className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition w-full"
               >
-                Verder naar onboarding
+                Naar dashboard
               </button>
             </div>
           </Card>
