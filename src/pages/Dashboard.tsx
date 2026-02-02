@@ -5,6 +5,7 @@ import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { fetchInsights, type InsightInput } from '../api/chat';
+import { fetchBalances, type Balance } from '../api/exchanges';
 import { STRATEGIES } from '../data/strategies';
 import { sendChatMessage, type ChatContext, type ChatMessage } from '../api/chat';
 import type { UserProfile } from '../lib/profile/types';
@@ -286,6 +287,73 @@ function InsightsCard({
       {!insights && !loading && !error && (
         <p className="text-sm text-slate-500">Nog geen inzichten beschikbaar.</p>
       )}
+    </Card>
+  );
+}
+
+function PortfolioCard({ balances }: { balances: Balance[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!balances || balances.length === 0) {
+    return null;
+  }
+
+  const groupedByExchange = balances.reduce(
+    (acc, bal) => {
+      if (!acc[bal.exchange]) {
+        acc[bal.exchange] = [];
+      }
+      acc[bal.exchange].push(bal);
+      return acc;
+    },
+    {} as Record<string, Balance[]>
+  );
+
+  const totalValue = balances.reduce((sum, bal) => sum + bal.total, 0);
+
+  return (
+    <Card title="Jouw Portfolio" subtitle={`${balances.length} assets | Total: €${totalValue.toFixed(2)}`}>
+      <div className="space-y-4">
+        {Object.entries(groupedByExchange).map(([exchange, assets]) => (
+          <div key={exchange} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-700 capitalize">{exchange}</p>
+              <p className="text-xs text-slate-500">{assets.length} assets</p>
+            </div>
+            <div className="space-y-1.5">
+              {assets.map((bal) => (
+                <div key={bal.id} className="rounded-lg border border-slate-200 bg-white/50 p-2.5 flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-800">{bal.asset.toUpperCase()}</p>
+                    <p className="text-xs text-slate-500">
+                      {bal.total.toFixed(8)} {bal.asset.toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-slate-800">€{bal.total.toFixed(2)}</p>
+                    <p className="text-xs text-emerald-600">✓ Beschikbaar</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        
+        {expanded && (
+          <div className="rounded-lg bg-slate-50 p-3 text-xs space-y-1 text-slate-600 border border-slate-200">
+            <p><strong>Total Balance:</strong> €{totalValue.toFixed(2)}</p>
+            <p><strong>Exchanges:</strong> {Object.keys(groupedByExchange).join(', ')}</p>
+            <p><strong>Last Updated:</strong> {new Date().toLocaleTimeString('nl-NL')}</p>
+          </div>
+        )}
+        
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-xs text-slate-500 hover:text-slate-700 py-1 rounded border border-slate-300 hover:border-slate-400 transition"
+        >
+          {expanded ? '▼ Details' : '▶ Toon details'}
+        </button>
+      </div>
     </Card>
   );
 }
@@ -627,6 +695,7 @@ export function Dashboard() {
   const [customBalance, setCustomBalance] = useState<number | null>(null);
   const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
   const [currentAllocation, setCurrentAllocation] = useState<Array<{ label: string; pct: number }>>();
+  const [balances, setBalances] = useState<Balance[]>([]);
 
   useEffect(() => {
     // Fetch profile
@@ -663,6 +732,20 @@ export function Dashboard() {
         setConnectedExchanges(connected);
       })
       .catch(() => setConnectedExchanges([]));
+
+    // Fetch balances from connected exchanges
+    fetchBalances()
+      .then((bals) => {
+        setBalances(bals);
+        // Auto-set custom balance to total from exchanges if available
+        if (bals.length > 0) {
+          const total = bals.reduce((sum, bal) => sum + bal.total, 0);
+          if (total > 0 && !localStorage.getItem('aio_custom_balance')) {
+            setCustomBalance(total);
+          }
+        }
+      })
+      .catch(() => setBalances([]));
 
     const cachedScan = localStorage.getItem('aio_market_scan_v1');
     if (cachedScan) {
@@ -768,6 +851,8 @@ export function Dashboard() {
         market={{ volatility, changes: scanChanges }}
         allocation={currentAllocation}
       />
+
+      <PortfolioCard balances={balances} />
 
       <DataOverviewPanel
         profile={profile}

@@ -2101,6 +2101,50 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon status niet ophalen.' });
     }
   },
+  'exchanges/balances': async (req, res) => {
+    if (req.method && req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = (req.query?.userId as string) || getSessionUserId(req);
+      if (!userId) {
+        res.status(400).json({ error: 'userId is verplicht.' });
+        return;
+      }
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      
+      const allBalances: Array<Balance & { exchange: string }> = [];
+      const totalValue = { btc: 0, eur: 0 };
+
+      for (const connection of connections) {
+        if (connection.status !== 'connected') continue;
+        
+        try {
+          const connector = createConnector(connection.exchange);
+          const creds = decryptSecrets(connection.encryptedSecrets);
+          connector.setCredentials(creds);
+          
+          const balances = await connector.fetchBalances();
+          allBalances.push(
+            ...balances.map((b) => ({
+              ...b,
+              userId,
+              exchange: connection.exchange
+            }))
+          );
+        } catch (err) {
+          console.error(`[exchanges/balances] Error fetching ${connection.exchange}:`, err);
+        }
+      }
+
+      res.status(200).json({ balances: allBalances });
+    } catch (err) {
+      console.error('[exchanges/balances] Error:', err);
+      res.status(500).json({ error: 'Kon balances niet ophalen.' });
+    }
+  },
   'exchanges/sync': async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
