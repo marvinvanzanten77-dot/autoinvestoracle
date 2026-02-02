@@ -368,7 +368,7 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
         
         {expanded && (
           <div className="rounded-lg bg-slate-50 p-3 text-xs space-y-1 text-slate-600 border border-slate-200">
-            <p><strong>Total Balance:</strong> €{totalValue.toFixed(2)}</p>
+            <p><strong>Total Balance:</strong> €{(totalValue ?? 0).toFixed(2)}</p>
             <p><strong>Exchanges:</strong> {Object.keys(groupedByExchange).join(', ')}</p>
             <p><strong>Last Updated:</strong> {new Date().toLocaleTimeString('nl-NL')}</p>
           </div>
