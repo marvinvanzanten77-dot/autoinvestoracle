@@ -323,10 +323,10 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
     {} as Record<string, Balance[]>
   );
 
-  const totalValue = balances.reduce((sum, bal) => sum + bal.total, 0);
+  const totalValue = balances.reduce((sum, bal) => sum + (bal.total ?? 0), 0);
 
   return (
-    <Card title="Jouw Portfolio" subtitle={`${balances.length} assets | Total: €${totalValue.toFixed(2)}`}>
+    <Card title="Jouw Portfolio" subtitle={`${balances.length} assets | Total: €${(totalValue ?? 0).toFixed(2)}`}>
       <div className="space-y-4">
         {Object.entries(groupedByExchange).map(([exchange, assets]) => (
           <div key={exchange} className="space-y-2">
@@ -346,14 +346,14 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-slate-800">{bal.asset.toUpperCase()}</p>
                       <p className="text-xs text-slate-500">
-                        {bal.total.toFixed(8)} {bal.asset.toUpperCase()}
+                        {(bal.total ?? 0).toFixed(8)} {bal.asset.toUpperCase()}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-800">€{bal.total.toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-slate-800">€{(bal.total ?? 0).toFixed(2)}</p>
                       {hasChange ? (
                         <p className={`text-xs font-medium ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {isPositive ? '📈' : '📉'} {Math.abs(changePercent).toFixed(2)}%
+                          {isPositive ? '📈' : '📉'} {Math.abs(changePercent ?? 0).toFixed(2)}%
                         </p>
                       ) : (
                         <p className="text-xs text-emerald-600">✓ Beschikbaar</p>
