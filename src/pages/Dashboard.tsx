@@ -857,6 +857,19 @@ export function Dashboard() {
   const eurBalance = activeBalances.find(b => b.asset === 'EUR' || b.asset === 'USDT' || b.asset === 'USDC');
   const cashSaldo = eurBalance?.available ?? 0;
   
+  // Debug logging
+  useEffect(() => {
+    console.log('[Dashboard] State summary:', {
+      activePlatform,
+      connectedExchanges,
+      totalBalances: balances.length,
+      activeBalances: activeBalances.length,
+      activeAssets: activeBalances.map(b => `${b.asset}:${b.available}`),
+      eurBalance: eurBalance ? `${eurBalance.asset}:${eurBalance.available}` : 'NOT FOUND',
+      cashSaldo
+    });
+  }, [activePlatform, balances, activeBalances, eurBalance, cashSaldo]);
+  
   const chatContext: ChatContext | undefined = profile
     ? {
         profile: {

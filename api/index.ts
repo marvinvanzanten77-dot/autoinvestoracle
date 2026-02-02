@@ -1415,6 +1415,15 @@ function formatChatContext(context?: ChatContext) {
     const exchangeParts = [
       `Gekoppelde exchanges: ${context.exchanges.connected.join(', ')}`
     ];
+    if (context.exchanges.activePlatform) {
+      exchangeParts.push(`Actief platform: ${context.exchanges.activePlatform}`);
+    }
+    if (context.exchanges.cashSaldo !== undefined) {
+      exchangeParts.push(`Beschikbare EUR/cash saldo: €${context.exchanges.cashSaldo.toFixed(2)}`);
+    }
+    if (context.exchanges.availableAssets?.length) {
+      exchangeParts.push(`Beschikbare munten op ${context.exchanges.activePlatform || 'dit platform'}: ${context.exchanges.availableAssets.join(', ')}`);
+    }
     if (context.exchanges.balances?.length) {
       const balanceSummary = context.exchanges.balances
         .map(b => `${b.exchange}: €${b.total.toFixed(2)}`)
@@ -2146,15 +2155,25 @@ const routes: Record<string, Handler> = {
       const allBalances: Array<Balance & { exchange: string }> = [];
       const totalValue = { btc: 0, eur: 0 };
 
+      console.log('[exchanges/balances] Fetching for user:', userId, 'connections:', connections.length);
+
       for (const connection of connections) {
-        if (connection.status !== 'connected') continue;
+        if (connection.status !== 'connected') {
+          console.log(`[exchanges/balances] Skipping ${connection.exchange}: status=${connection.status}`);
+          continue;
+        }
         
         try {
+          console.log(`[exchanges/balances] Fetching from ${connection.exchange}...`);
           const connector = createConnector(connection.exchange);
           const creds = decryptSecrets(connection.encryptedSecrets);
           connector.setCredentials(creds);
           
           const balances = await connector.fetchBalances();
+          console.log(`[exchanges/balances] Got ${balances.length} balances from ${connection.exchange}:`, {
+            assets: balances.map(b => `${b.asset}:${b.available}`)
+          });
+          
           allBalances.push(
             ...balances.map((b) => ({
               ...b,
@@ -2166,6 +2185,13 @@ const routes: Record<string, Handler> = {
           console.error(`[exchanges/balances] Error fetching ${connection.exchange}:`, err);
         }
       }
+
+      console.log('[exchanges/balances] Returning total', allBalances.length, 'balances:', {
+        byExchange: allBalances.reduce((acc, b) => {
+          acc[b.exchange] = (acc[b.exchange] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      });
 
       res.status(200).json({ balances: allBalances });
     } catch (err) {
@@ -2265,10 +2291,16 @@ const routes: Record<string, Handler> = {
       const assetsByExchange: Record<string, Array<{ symbol: string; name?: string }>> = {};
       const assetSummary: Record<string, { count: number; platforms: string[] }> = {};
 
+      console.log('[exchanges/assets] Fetching available assets for user:', userId);
+
       for (const connection of connections) {
-        if (connection.status !== 'connected') continue;
+        if (connection.status !== 'connected') {
+          console.log(`[exchanges/assets] Skipping ${connection.exchange}: status=${connection.status}`);
+          continue;
+        }
         
         try {
+          console.log(`[exchanges/assets] Fetching from ${connection.exchange}...`);
           const connector = createConnector(connection.exchange);
           const assets = await connector.fetchAvailableAssets();
           assetsByExchange[connection.exchange] = assets;
@@ -2283,13 +2315,19 @@ const routes: Record<string, Handler> = {
           });
           
           console.log(`[exchanges/assets] ${connection.exchange}: Found ${assets.length} assets`, {
-            sample: assets.slice(0, 5).map(a => a.symbol)
+            all: assets.map(a => a.symbol)
           });
         } catch (err) {
           console.error(`[exchanges/assets] Error fetching ${connection.exchange}:`, err);
           assetsByExchange[connection.exchange] = [];
         }
       }
+
+      console.log('[exchanges/assets] Final summary:', {
+        platforms: Object.keys(assetsByExchange),
+        totalUniqueAssets: Object.keys(assetSummary).length,
+        sample: Object.keys(assetSummary).slice(0, 10)
+      });
 
       res.status(200).json({ 
         assetsByExchange,

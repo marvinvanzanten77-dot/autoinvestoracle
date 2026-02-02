@@ -114,18 +114,42 @@ export class BitvavoConnector implements ExchangeConnector {
     try {
       const data = await this.makeRequest('GET', '/balance');
       if (!Array.isArray(data)) {
+        console.log('[Bitvavo] fetchBalances: /balance endpoint returned non-array:', typeof data);
         return [];
       }
-      const balances = data.map((bal: any) => ({
-        id: crypto.randomUUID(),
-        userId: '', // Will be set by caller
-        exchange: this.id,
-        asset: bal.symbol,
-        total: Number(bal.available) + Number(bal.held),
-        available: Number(bal.available)
-      }));
-      console.log(`[Bitvavo] fetchBalances: Found ${balances.length} assets with balance`, {
-        assets: balances.map(b => `${b.asset}:${b.total}`)
+      
+      console.log('[Bitvavo] fetchBalances: Raw API response:', {
+        count: data.length,
+        sample: data.slice(0, 3).map(b => ({
+          symbol: b.symbol,
+          available: b.available,
+          held: b.held,
+          inOrder: b.inOrder
+        }))
+      });
+      
+      // Filter balances: include only those with available > 0 OR held > 0
+      const balances = data
+        .filter((bal: any) => {
+          const available = Number(bal.available ?? 0);
+          const held = Number(bal.held ?? 0);
+          return available > 0 || held > 0;
+        })
+        .map((bal: any) => {
+          const available = Number(bal.available ?? 0);
+          const held = Number(bal.held ?? 0);
+          return {
+            id: crypto.randomUUID(),
+            userId: '', // Will be set by caller
+            exchange: this.id,
+            asset: bal.symbol,
+            total: available + held,
+            available: available
+          };
+        });
+      
+      console.log(`[Bitvavo] fetchBalances: Filtered to ${balances.length} assets with balance`, {
+        assets: balances.map(b => `${b.asset}:${b.available}/${b.total}`)
       });
       return balances;
     } catch (err) {
