@@ -308,11 +308,15 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
       .catch(() => setPerformance({}));
   }, [balances]);
 
-  if (!balances || balances.length === 0) {
+  // Filter out stablecoins/EUR from display (they're shown as cash saldo)
+  const cryptoBalances = balances.filter(b => !['EUR', 'USDT', 'USDC', 'EURC'].includes(b.asset));
+  const cashBalances = balances.filter(b => ['EUR', 'USDT', 'USDC', 'EURC'].includes(b.asset));
+  
+  if (!cryptoBalances || cryptoBalances.length === 0) {
     return null;
   }
 
-  const groupedByExchange = balances.reduce(
+  const groupedByExchange = cryptoBalances.reduce(
     (acc, bal) => {
       if (!acc[bal.exchange]) {
         acc[bal.exchange] = [];
@@ -323,10 +327,10 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
     {} as Record<string, Balance[]>
   );
 
-  const totalValue = balances.reduce((sum, bal) => sum + (bal.total ?? 0), 0);
+  const totalValue = cryptoBalances.reduce((sum, bal) => sum + (bal.total ?? 0), 0);
 
   return (
-    <Card title="Jouw Portfolio" subtitle={`${balances.length} assets | Total: €${(totalValue ?? 0).toFixed(2)}`}>
+    <Card title="Jouw Portfolio" subtitle={`${cryptoBalances.length} crypto assets | Total: €${(totalValue ?? 0).toFixed(2)}`}>
       <div className="space-y-4">
         {Object.entries(groupedByExchange).map(([exchange, assets]) => (
           <div key={exchange} className="space-y-2">
