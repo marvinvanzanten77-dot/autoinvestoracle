@@ -417,7 +417,17 @@ function DataOverviewPanel({
 }
 
 
-function BalanceEditDialog({
+function BalanceEditDialog({ 
+  isOpen, 
+  currentBalance, 
+  onSave, 
+  onCancel 
+}: { 
+  isOpen: boolean; 
+  currentBalance: number; 
+  onSave: (balance: number) => void; 
+  onCancel: () => void;
+}) {
   const [value, setValue] = useState(currentBalance.toString());
   
   if (!isOpen) return null;
