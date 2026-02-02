@@ -2212,7 +2212,28 @@ const routes: Record<string, Handler> = {
       }
 
       const storage = getStorageAdapter();
-      const balances = await storage.getBalances(userId);
+      const connections = await storage.listConnections(userId);
+      
+      // Fetch balances from all connected exchanges
+      const allBalances: Balance[] = [];
+      for (const connection of connections) {
+        if (connection.status !== 'connected') continue;
+        try {
+          const connector = createConnector(connection.exchange);
+          const creds = decryptSecrets(connection.encryptedSecrets);
+          connector.setCredentials(creds);
+          const balances = await connector.fetchBalances();
+          allBalances.push(
+            ...balances.map((b) => ({
+              ...b,
+              userId,
+              exchange: connection.exchange
+            }))
+          );
+        } catch (err) {
+          console.error(`[exchanges/performance] Error fetching from ${connection.exchange}:`, err);
+        }
+      }
       
       // Get snapshots from localStorage key pattern
       const allSnapshots: Array<PriceSnapshot & { change24h?: number }> = [];
@@ -2220,7 +2241,7 @@ const routes: Record<string, Handler> = {
       // Calculate performance per asset
       const performanceMap = new Map<string, PerformanceMetrics>();
       
-      for (const balance of balances) {
+      for (const balance of allBalances) {
         const key = `${balance.exchange}:${balance.asset}`;
         
         // Get previous snapshot (24h ago)
