@@ -721,6 +721,9 @@ export function Dashboard() {
   const [editingBalance, setEditingBalance] = useState(false);
   const [customBalance, setCustomBalance] = useState<number | null>(null);
   const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
+  const [activePlatform, setActivePlatform] = useState<string>(() => {
+    return localStorage.getItem('aio_active_platform') || '';
+  });
   const [currentAllocation, setCurrentAllocation] = useState<Array<{ label: string; pct: number }>>();
   const [balances, setBalances] = useState<Balance[]>([]);
 
@@ -757,6 +760,16 @@ export function Dashboard() {
           ?.filter((c) => c.status === 'connected')
           .map((c) => c.exchange) || [];
         setConnectedExchanges(connected);
+        
+        // Auto-set active platform if not set or if stored platform is no longer connected
+        setActivePlatform((current) => {
+          if (!current || !connected.includes(current)) {
+            const next = connected[0] || '';
+            if (next) localStorage.setItem('aio_active_platform', next);
+            return next;
+          }
+          return current;
+        });
       })
       .catch(() => setConnectedExchanges([]));
 
@@ -834,6 +847,16 @@ export function Dashboard() {
   };
 
   const amount = customBalance ?? mapRangeToAmount(profile?.startAmountRange);
+  
+  // Filter balances by active platform
+  const activeBalances = activePlatform 
+    ? balances.filter(b => b.exchange === activePlatform)
+    : balances;
+  
+  // Get EUR/cash saldo (available balance for investment)
+  const eurBalance = activeBalances.find(b => b.asset === 'EUR' || b.asset === 'USDT' || b.asset === 'USDC');
+  const cashSaldo = eurBalance?.available ?? 0;
+  
   const chatContext: ChatContext | undefined = profile
     ? {
         profile: {
@@ -851,7 +874,10 @@ export function Dashboard() {
           changes: scanChanges || undefined
         },
         exchanges: {
-          connected: connectedExchanges
+          connected: connectedExchanges,
+          activePlatform: activePlatform,
+          availableAssets: activeBalances.map(b => b.asset),
+          cashSaldo: cashSaldo
         }
       }
     : undefined;
@@ -867,6 +893,35 @@ export function Dashboard() {
 
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
+      {/* Platform Selector */}
+      {connectedExchanges.length > 1 && (
+        <div className="glass rounded-2xl p-4 flex items-center gap-3 md:gap-4">
+          <p className="text-sm font-medium text-slate-700 whitespace-nowrap">Actief platform:</p>
+          <div className="flex gap-2 flex-wrap">
+            {connectedExchanges.map((exchange) => (
+              <button
+                key={exchange}
+                onClick={() => {
+                  setActivePlatform(exchange);
+                  localStorage.setItem('aio_active_platform', exchange);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                  activePlatform === exchange
+                    ? 'bg-primary text-white shadow-lg'
+                    : 'bg-white/50 text-slate-700 border border-slate-200 hover:bg-white/80'
+                }`}
+              >
+                {exchange.charAt(0).toUpperCase() + exchange.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-xs text-slate-500">Beschikbaar</p>
+            <p className="text-lg font-semibold text-emerald-600">€{cashSaldo.toFixed(2)}</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ChatCard context={chatContext} />
         <WalletCard amount={amount} onEdit={() => setEditingBalance(true)} />
@@ -879,7 +934,7 @@ export function Dashboard() {
         allocation={currentAllocation}
       />
 
-      <PortfolioCard balances={balances} />
+      <PortfolioCard balances={activeBalances} />
 
       <DataOverviewPanel
         profile={profile}

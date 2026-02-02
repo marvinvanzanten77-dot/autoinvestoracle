@@ -51,6 +51,9 @@ export type ChatContext = {
   };
   exchanges?: {
     connected: string[];
+    activePlatform?: string;
+    availableAssets?: string[];
+    cashSaldo?: number;
     balances?: Array<{
       exchange: string;
       total: number;

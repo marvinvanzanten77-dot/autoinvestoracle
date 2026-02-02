@@ -1433,10 +1433,22 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
 
   const contextMessage = formatChatContext(context);
   const hasExchangeAccess = context?.exchanges?.connected?.length ?? 0 > 0;
+  const activePlatform = context?.exchanges?.activePlatform;
+  const availableAssets = context?.exchanges?.availableAssets ?? [];
 
   console.log('[generateChatReply] Context message length:', contextMessage.length);
   console.log('[generateChatReply] Has exchange access:', hasExchangeAccess);
-  console.log('[generateChatReply] System prompt:', hasExchangeAccess ? 'WITH exchange access' : 'WITHOUT exchange access');
+  console.log('[generateChatReply] Active platform:', activePlatform);
+  console.log('[generateChatReply] Available assets:', availableAssets.join(', '));
+
+  const systemPrompt = hasExchangeAccess && activePlatform
+    ? `Je bent een rustige crypto-assistent. Je hebt toegang tot het gekoppelde account van de gebruiker op ${activePlatform}. 
+BELANGRIJK: Je mag ALLEEN advies geven over munten die beschikbaar zijn op ${activePlatform}. 
+Beschikbare assets: ${availableAssets.join(', ')}.
+Geef geen advies of besluiten, alleen uitleg en opties in mensentaal. 
+Bevestig dat je hun account op ${activePlatform} kunt zien als ze erover spreken.
+Als de gebruiker vragen stelt over munten die niet beschikbaar zijn op ${activePlatform}, wijs hen daarop.`
+    : 'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.';
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -1450,10 +1462,7 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
       messages: [
         {
           role: 'system',
-          content:
-            hasExchangeAccess
-              ? 'Je bent een rustige crypto-assistent. Je hebt toegang tot de gekoppelde exchange-accounts van de gebruiker. Geef geen advies of besluiten, alleen uitleg en opties in mensentaal. Bevestig dat je hun accounts kunt zien als ze erover spreken.'
-              : 'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.'
+          content: systemPrompt
         },
         ...(contextMessage
           ? [
