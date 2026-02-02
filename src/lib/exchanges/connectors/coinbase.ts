@@ -42,6 +42,11 @@ export class CoinbaseConnector implements ExchangeConnector {
     return [];
   }
 
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    // TODO: Coinbase products endpoint
+    return [];
+  }
+
   async fetchPositions(): Promise<Position[]> {
     return [];
   }

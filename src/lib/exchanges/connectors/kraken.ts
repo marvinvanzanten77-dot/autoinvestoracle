@@ -42,6 +42,11 @@ export class KrakenConnector implements ExchangeConnector {
     return [];
   }
 
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    // TODO: Kraken markets endpoint
+    return [];
+  }
+
   async fetchPositions(): Promise<Position[]> {
     // TODO: Kraken positions endpoint + signing.
     return [];

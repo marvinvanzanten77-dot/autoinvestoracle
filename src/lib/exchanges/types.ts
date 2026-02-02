@@ -134,6 +134,7 @@ export interface ExchangeConnector {
   connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult>;
   fetchAccounts(userId: string, credentials: ExchangeCredentials): Promise<Account[]>;
   fetchBalances(userId: string, credentials: ExchangeCredentials): Promise<Balance[]>;
+  fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>>;
   fetchPositions(userId: string, credentials: ExchangeCredentials): Promise<Position[]>;
   fetchTransactions(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Transaction[]>;
   fetchOrders(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Order[]>;

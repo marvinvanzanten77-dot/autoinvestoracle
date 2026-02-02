@@ -116,18 +116,47 @@ export class BitvavoConnector implements ExchangeConnector {
       if (!Array.isArray(data)) {
         return [];
       }
-      return data
-        .filter((bal: any) => Number(bal.available) > 0 || Number(bal.held) > 0)
-        .map((bal: any) => ({
-          id: crypto.randomUUID(),
-          userId: '', // Will be set by caller
-          exchange: this.id,
-          asset: bal.symbol,
-          total: Number(bal.available) + Number(bal.held),
-          available: Number(bal.available)
-        }));
+      const balances = data.map((bal: any) => ({
+        id: crypto.randomUUID(),
+        userId: '', // Will be set by caller
+        exchange: this.id,
+        asset: bal.symbol,
+        total: Number(bal.available) + Number(bal.held),
+        available: Number(bal.available)
+      }));
+      console.log(`[Bitvavo] fetchBalances: Found ${balances.length} assets with balance`, {
+        assets: balances.map(b => `${b.asset}:${b.total}`)
+      });
+      return balances;
     } catch (err) {
       console.error('Bitvavo fetchBalances error:', err);
+      return [];
+    }
+  }
+
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    try {
+      // Bitvavo markets endpoint returns all available trading pairs
+      const data = await this.makeRequest('GET', '/markets');
+      if (!Array.isArray(data)) {
+        return [];
+      }
+      // Extract unique base assets (e.g., from BTC-EUR, ETH-EUR get BTC, ETH)
+      const assets = new Map<string, { symbol: string; name?: string }>();
+      data.forEach((market: any) => {
+        // Format is like "BTC-EUR", we want just "BTC"
+        const [baseAsset] = market.market?.split('-') || [];
+        if (baseAsset && !assets.has(baseAsset)) {
+          assets.set(baseAsset, { symbol: baseAsset, name: market.name });
+        }
+      });
+      const result = Array.from(assets.values());
+      console.log(`[Bitvavo] fetchAvailableAssets: Found ${result.length} unique assets`, {
+        assets: result.map(a => a.symbol).slice(0, 20) + (result.length > 20 ? '...' : '')
+      });
+      return result;
+    } catch (err) {
+      console.error('Bitvavo fetchAvailableAssets error:', err);
       return [];
     }
   }

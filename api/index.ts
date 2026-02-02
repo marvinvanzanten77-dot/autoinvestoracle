@@ -2239,6 +2239,64 @@ const routes: Record<string, Handler> = {
       res.status(200).json({ snapshots: [], performance: [] });
     }
   },
+  'exchanges/assets': async (req, res) => {
+    if (req.method && req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = (req.query?.userId as string) || getSessionUserId(req);
+      if (!userId) {
+        res.status(400).json({ error: 'userId is verplicht.' });
+        return;
+      }
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      
+      const assetsByExchange: Record<string, Array<{ symbol: string; name?: string }>> = {};
+      const assetSummary: Record<string, { count: number; platforms: string[] }> = {};
+
+      for (const connection of connections) {
+        if (connection.status !== 'connected') continue;
+        
+        try {
+          const connector = createConnector(connection.exchange);
+          const assets = await connector.fetchAvailableAssets();
+          assetsByExchange[connection.exchange] = assets;
+          
+          // Track which platforms support each asset
+          assets.forEach((asset) => {
+            if (!assetSummary[asset.symbol]) {
+              assetSummary[asset.symbol] = { count: 0, platforms: [] };
+            }
+            assetSummary[asset.symbol].count += 1;
+            assetSummary[asset.symbol].platforms.push(connection.exchange);
+          });
+          
+          console.log(`[exchanges/assets] ${connection.exchange}: Found ${assets.length} assets`, {
+            sample: assets.slice(0, 5).map(a => a.symbol)
+          });
+        } catch (err) {
+          console.error(`[exchanges/assets] Error fetching ${connection.exchange}:`, err);
+          assetsByExchange[connection.exchange] = [];
+        }
+      }
+
+      res.status(200).json({ 
+        assetsByExchange,
+        assetSummary: Object.entries(assetSummary)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 100)
+          .reduce((acc, [symbol, data]) => {
+            acc[symbol] = data;
+            return acc;
+          }, {} as Record<string, { count: number; platforms: string[] }>)
+      });
+    } catch (err) {
+      console.error('[exchanges/assets] Error:', err);
+      res.status(500).json({ error: 'Kon assets niet ophalen.' });
+    }
+  },
   'exchanges/sync': async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });

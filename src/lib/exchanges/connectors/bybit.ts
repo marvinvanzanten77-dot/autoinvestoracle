@@ -42,6 +42,11 @@ export class BybitConnector implements ExchangeConnector {
     return [];
   }
 
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    // TODO: Bybit instruments endpoint
+    return [];
+  }
+
   async fetchPositions(): Promise<Position[]> {
     // TODO: Bybit positions endpoint + signing.
     return [];
