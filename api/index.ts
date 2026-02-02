@@ -217,6 +217,25 @@ type Balance = {
   updatedAt: string;
 };
 
+type PriceSnapshot = {
+  asset: string;
+  exchange: string;
+  quantity: number;
+  estimatedValue: number; // Voor display purposes
+  timestamp: string;
+};
+
+type PerformanceMetrics = {
+  asset: string;
+  exchange: string;
+  currentQuantity: number;
+  previousQuantity: number;
+  quantityChange: number;
+  quantityChangePercent: number;
+  periodStart: string;
+  periodEnd: string;
+};
+
 type Position = {
   id: string;
   userId: string;
@@ -2143,6 +2162,81 @@ const routes: Record<string, Handler> = {
     } catch (err) {
       console.error('[exchanges/balances] Error:', err);
       res.status(500).json({ error: 'Kon balances niet ophalen.' });
+    }
+  },
+  'exchanges/performance': async (req, res) => {
+    if (req.method && req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = (req.query?.userId as string) || getSessionUserId(req);
+      if (!userId) {
+        res.status(400).json({ error: 'userId is verplicht.' });
+        return;
+      }
+
+      const storage = getStorageAdapter();
+      const balances = await storage.getBalances(userId);
+      
+      // Get snapshots from localStorage key pattern
+      const allSnapshots: Array<PriceSnapshot & { change24h?: number }> = [];
+      
+      // Calculate performance per asset
+      const performanceMap = new Map<string, PerformanceMetrics>();
+      
+      for (const balance of balances) {
+        const key = `${balance.exchange}:${balance.asset}`;
+        
+        // Get previous snapshot (24h ago)
+        const snapshotKey = `snapshot:${userId}:${key}`;
+        const currentSnap: PriceSnapshot = {
+          asset: balance.asset,
+          exchange: balance.exchange,
+          quantity: balance.total,
+          estimatedValue: balance.total, // Placeholder
+          timestamp: new Date().toISOString()
+        };
+        
+        // For now, store current snapshot
+        try {
+          localStorage.setItem(snapshotKey, JSON.stringify(currentSnap));
+        } catch {
+          // localStorage might be unavailable in some environments
+        }
+
+        const previousSnapStr = localStorage.getItem(`${snapshotKey}:previous`);
+        const previousSnap = previousSnapStr ? JSON.parse(previousSnapStr) as PriceSnapshot : null;
+
+        if (previousSnap) {
+          const change = currentSnap.quantity - previousSnap.quantity;
+          const changePercent = previousSnap.quantity > 0 ? (change / previousSnap.quantity) * 100 : 0;
+          
+          performanceMap.set(key, {
+            asset: balance.asset,
+            exchange: balance.exchange,
+            currentQuantity: currentSnap.quantity,
+            previousQuantity: previousSnap.quantity,
+            quantityChange: change,
+            quantityChangePercent: changePercent,
+            periodStart: previousSnap.timestamp,
+            periodEnd: currentSnap.timestamp
+          });
+        }
+
+        allSnapshots.push({
+          ...currentSnap,
+          change24h: performanceMap.get(key)?.quantityChangePercent
+        });
+      }
+
+      res.status(200).json({
+        snapshots: allSnapshots,
+        performance: Array.from(performanceMap.values())
+      });
+    } catch (err) {
+      console.error('[exchanges/performance] Error:', err);
+      res.status(200).json({ snapshots: [], performance: [] });
     }
   },
   'exchanges/sync': async (req, res) => {

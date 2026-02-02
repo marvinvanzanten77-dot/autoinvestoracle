@@ -5,7 +5,7 @@ import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { fetchInsights, type InsightInput } from '../api/chat';
-import { fetchBalances, type Balance } from '../api/exchanges';
+import { fetchBalances, fetchPerformance, type Balance } from '../api/exchanges';
 import { STRATEGIES } from '../data/strategies';
 import { sendChatMessage, type ChatContext, type ChatMessage } from '../api/chat';
 import type { UserProfile } from '../lib/profile/types';
@@ -293,6 +293,20 @@ function InsightsCard({
 
 function PortfolioCard({ balances }: { balances: Balance[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [performance, setPerformance] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (balances.length === 0) return;
+    fetchPerformance()
+      .then((perf) => {
+        const perfMap: Record<string, number> = {};
+        perf.performance.forEach((p) => {
+          perfMap[`${p.exchange}:${p.asset}`] = p.quantityChangePercent;
+        });
+        setPerformance(perfMap);
+      })
+      .catch(() => setPerformance({}));
+  }, [balances]);
 
   if (!balances || balances.length === 0) {
     return null;
@@ -321,20 +335,33 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
               <p className="text-xs text-slate-500">{assets.length} assets</p>
             </div>
             <div className="space-y-1.5">
-              {assets.map((bal) => (
-                <div key={bal.id} className="rounded-lg border border-slate-200 bg-white/50 p-2.5 flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">{bal.asset.toUpperCase()}</p>
-                    <p className="text-xs text-slate-500">
-                      {bal.total.toFixed(8)} {bal.asset.toUpperCase()}
-                    </p>
+              {assets.map((bal) => {
+                const perfKey = `${bal.exchange}:${bal.asset}`;
+                const changePercent = performance[perfKey];
+                const hasChange = changePercent !== undefined && changePercent !== 0;
+                const isPositive = changePercent && changePercent > 0;
+                
+                return (
+                  <div key={bal.id} className="rounded-lg border border-slate-200 bg-white/50 p-2.5 flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-800">{bal.asset.toUpperCase()}</p>
+                      <p className="text-xs text-slate-500">
+                        {bal.total.toFixed(8)} {bal.asset.toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-800">€{bal.total.toFixed(2)}</p>
+                      {hasChange ? (
+                        <p className={`text-xs font-medium ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {isPositive ? '📈' : '📉'} {Math.abs(changePercent).toFixed(2)}%
+                        </p>
+                      ) : (
+                        <p className="text-xs text-emerald-600">✓ Beschikbaar</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-800">€{bal.total.toFixed(2)}</p>
-                    <p className="text-xs text-emerald-600">✓ Beschikbaar</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
