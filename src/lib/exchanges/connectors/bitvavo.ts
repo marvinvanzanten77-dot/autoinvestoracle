@@ -118,13 +118,14 @@ export class BitvavoConnector implements ExchangeConnector {
         return [];
       }
       
-      console.log('[Bitvavo] fetchBalances: Raw API response:', {
+      console.log('[Bitvavo] fetchBalances: Raw API response - FULL DATA:', {
         count: data.length,
-        sample: data.slice(0, 3).map(b => ({
+        all: data.map(b => ({
           symbol: b.symbol,
           available: b.available,
           held: b.held,
-          inOrder: b.inOrder
+          inOrder: b.inOrder,
+          all_fields: Object.keys(b)
         }))
       });
       
@@ -133,22 +134,27 @@ export class BitvavoConnector implements ExchangeConnector {
         .filter((bal: any) => {
           const available = Number(bal.available ?? 0);
           const held = Number(bal.held ?? 0);
-          return available > 0 || held > 0;
+          const hasBalance = available > 0 || held > 0;
+          console.log(`[Bitvavo] ${bal.symbol}: available=${available}, held=${held}, included=${hasBalance}`);
+          return hasBalance;
         })
         .map((bal: any) => {
           const available = Number(bal.available ?? 0);
           const held = Number(bal.held ?? 0);
+          const total = available + held;
+          console.log(`[Bitvavo] Mapped ${bal.symbol}: total=${total}, available=${available}`);
           return {
             id: crypto.randomUUID(),
             userId: '', // Will be set by caller
             exchange: this.id,
             asset: bal.symbol,
-            total: available + held,
-            available: available
+            total: total,
+            available: available,
+            updatedAt: new Date().toISOString()
           };
         });
       
-      console.log(`[Bitvavo] fetchBalances: Filtered to ${balances.length} assets with balance`, {
+      console.log(`[Bitvavo] fetchBalances: Final result - ${balances.length} assets with balance`, {
         assets: balances.map(b => `${b.asset}:${b.available}/${b.total}`)
       });
       return balances;
@@ -163,8 +169,20 @@ export class BitvavoConnector implements ExchangeConnector {
       // Bitvavo markets endpoint returns all available trading pairs
       const data = await this.makeRequest('GET', '/markets');
       if (!Array.isArray(data)) {
+        console.log('[Bitvavo] fetchAvailableAssets: /markets returned non-array:', typeof data);
         return [];
       }
+      
+      console.log('[Bitvavo] fetchAvailableAssets: Raw /markets response:', {
+        count: data.length,
+        sample: data.slice(0, 5).map(m => ({
+          market: m.market,
+          name: m.name,
+          status: m.status,
+          all_fields: Object.keys(m)
+        }))
+      });
+      
       // Extract unique base assets (e.g., from BTC-EUR, ETH-EUR get BTC, ETH)
       const assets = new Map<string, { symbol: string; name?: string }>();
       data.forEach((market: any) => {
@@ -175,8 +193,8 @@ export class BitvavoConnector implements ExchangeConnector {
         }
       });
       const result = Array.from(assets.values());
-      console.log(`[Bitvavo] fetchAvailableAssets: Found ${result.length} unique assets`, {
-        assets: result.map(a => a.symbol).slice(0, 20) + (result.length > 20 ? '...' : '')
+      console.log(`[Bitvavo] fetchAvailableAssets: Extracted ${result.length} unique assets`, {
+        all_assets: result.map(a => a.symbol)
       });
       return result;
     } catch (err) {
