@@ -33,32 +33,61 @@ export class BybitConnector implements ExchangeConnector {
   }
 
   async fetchAccounts(): Promise<Account[]> {
-    // TODO: Bybit account endpoint + signing.
+    // Bybit account endpoint: GET /v5/account/wallet-balance
+    // Requires: API key signing (HMAC-SHA256)
+    // Returns: wallet balance with multiple accounts (SPOT, FUTURES, etc.)
+    console.log('[Bybit] fetchAccounts - implement with API key signing');
     return [];
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    // TODO: Bybit balance endpoint + signing.
+    // Bybit balance endpoint: GET /v5/account/wallet-balance
+    // Requires: API key signing
+    // Returns: coin balances with total/available/locked
+    console.log('[Bybit] fetchBalances - implement with API key signing');
     return [];
   }
 
   async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
-    // TODO: Bybit instruments endpoint
-    return [];
+    // Bybit instruments endpoint: GET /v5/market/instruments-info?category=spot
+    // Public endpoint, no signing needed
+    // Returns: BTCUSDT, ETHUSDT, etc.
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.bybit.baseUrl}/market/instruments-info?category=spot`);
+      if (!resp.ok) return [];
+      const payload = (await resp.json()) as { result?: { list?: Array<any> } };
+      const instruments = payload.result?.list || [];
+      return instruments.map(inst => ({
+        symbol: inst.symbol,
+        name: inst.baseCoin + '/' + inst.quoteCoin
+      }));
+    } catch (err) {
+      console.error('[Bybit] fetchAvailableAssets error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
-    // TODO: Bybit positions endpoint + signing.
+    // Bybit positions endpoint: GET /v5/position/list
+    // Requires: API key signing
+    // Note: Only for FUTURES/PERPS, not SPOT
+    console.log('[Bybit] fetchPositions - implement with API key signing (FUTURES only)');
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
-    // TODO: Bybit transactions endpoint + signing.
+    // Bybit transactions endpoint: GET /v5/account/transaction-log
+    // Requires: API key signing
+    // Returns: deposits/withdrawals/trades/fees
+    console.log('[Bybit] fetchTransactions - implement with API key signing');
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
-    // TODO: Bybit orders endpoint + signing.
+    // Bybit orders endpoint: GET /v5/order/history
+    // Requires: API key signing
+    // Returns: open and closed orders
+    console.log('[Bybit] fetchOrders - implement with API key signing');
     return [];
   }
 

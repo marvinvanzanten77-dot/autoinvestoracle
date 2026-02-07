@@ -152,7 +152,8 @@ function WalletCard({ amount, onEdit }: { amount: number; onEdit?: () => void })
           </button>
         )}
         <p className="text-xs text-slate-500">
-          Dit is je startbedrag. Je kunt dit later aanpassen in de instellingen.
+          Je kunt dit real-time updaten door een koppeling naar je platform(en) te maken. Tot die tijd kun je het hier
+          handmatig bijhouden.
         </p>
       </div>
     </Card>

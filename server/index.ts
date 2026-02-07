@@ -12,6 +12,27 @@ import {
   handleGetComparison,
   handleGetSourcesHealth,
 } from '../src/server/handlers/marketData';
+import {
+  handleTradingAnalyze,
+  handleTradingExecute,
+  handleTradingAudit,
+  handleTradingSignals,
+  handleGetPolicy,
+  handleCreatePolicy,
+  handleActivatePolicy,
+  handleListPolicies,
+  handleCreatePolicyFromPreset,
+  handleListProposals,
+  handleAcceptProposal,
+  handleModifyProposal,
+  handleDeclineProposal,
+  handleTradingEnabled,
+  handlePauseScan,
+  handleResumeScan,
+  handleForceScan,
+  handleSchedulerTick,
+  handleTradingExecuteUpdated
+} from '../src/server/handlers/trading';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -281,6 +302,77 @@ app.get('/api/market/comparison', handleGetComparison);
 
 // Manual-request: Data source health (diagnostics)
 app.get('/api/market/sources-health', handleGetSourcesHealth);
+
+// ============================================================================
+// TRADING AGENT ENDPOINTS
+// ============================================================================
+
+// POLICY ENDPOINTS
+// GET /api/trading/policy — Get active policy
+app.get('/api/trading/policy', handleGetPolicy);
+
+// POST /api/trading/policy — Create new policy
+app.post('/api/trading/policy', handleCreatePolicy);
+
+// POST /api/trading/policy/activate — Activate a policy
+app.post('/api/trading/policy/activate', handleActivatePolicy);
+
+// GET /api/trading/policies — List all user policies
+app.get('/api/trading/policies', handleListPolicies);
+
+// POST /api/trading/policies/presets/:preset — Create policy from preset (OBSERVER, HUNTER, SEMI_AUTO)
+app.post('/api/trading/policies/presets/:preset', handleCreatePolicyFromPreset);
+
+// PROPOSAL ENDPOINTS
+// GET /api/trading/proposals?status=PROPOSED — List proposals with optional status filter
+app.get('/api/trading/proposals', handleListProposals);
+
+// POST /api/trading/proposals/:id/accept — Accept a proposal
+app.post('/api/trading/proposals/:id/accept', handleAcceptProposal);
+
+// POST /api/trading/proposals/:id/modify — Modify and approve a proposal
+app.post('/api/trading/proposals/:id/modify', handleModifyProposal);
+
+// POST /api/trading/proposals/:id/decline — Decline a proposal
+app.post('/api/trading/proposals/:id/decline', handleDeclineProposal);
+
+// SCANNING ENDPOINTS
+// POST /api/trading/scans/pause — Pause automated scans
+app.post('/api/trading/scans/pause', handlePauseScan);
+
+// POST /api/trading/scans/resume — Resume automated scans
+app.post('/api/trading/scans/resume', handleResumeScan);
+
+// POST /api/trading/scan/now — Force immediate scan
+app.post('/api/trading/scan/now', handleForceScan);
+
+// EXECUTION CONTROL ENDPOINTS
+// GET/POST /api/trading/trading-enabled — Get or set trading enabled flag
+app.get('/api/trading/trading-enabled', handleTradingEnabled);
+app.post('/api/trading/trading-enabled', handleTradingEnabled);
+
+// SCHEDULER ENDPOINT (INTERNAL)
+// POST /api/trading/scheduler/tick — Internal: Run scheduled scans (requires SERVER_SECRET header)
+app.post('/api/trading/scheduler/tick', handleSchedulerTick);
+
+// ORIGINAL ENDPOINTS (BACKWARD COMPATIBLE)
+// POST /api/trading/analyze
+// Request: { context: AgentContext }
+// Response: { success, signals[], count, timestamp }
+app.post('/api/trading/analyze', handleTradingAnalyze);
+
+// POST /api/trading/execute (UPDATED: now checks for APPROVED status)
+// Request: { proposalId: string }
+// Response: { success, orderId, message }
+app.post('/api/trading/execute', handleTradingExecuteUpdated);
+
+// GET /api/trading/audit?userId=...&limit=50&offset=0
+// Response: { success, executions[], count, limit, offset }
+app.get('/api/trading/audit', handleTradingAudit);
+
+// GET /api/trading/signals?userId=...&hoursBack=24
+// Response: { success, signals[], count, hoursBack }
+app.get('/api/trading/signals', handleTradingSignals);
 
 // ============================================================================
 // LEGACY ENDPOINTS (Keep for backward compatibility)

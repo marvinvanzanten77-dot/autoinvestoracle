@@ -33,32 +33,65 @@ export class KrakenConnector implements ExchangeConnector {
   }
 
   async fetchAccounts(): Promise<Account[]> {
-    // TODO: Kraken account endpoint + signing.
-    return [];
+    // Kraken account endpoint: GET /0/private/QueryOrders
+    // Note: Kraken doesn't have traditional "accounts", using stub with default account
+    console.log('[Kraken] fetchAccounts - Kraken does not support multiple accounts');
+    return [{
+      id: 'kraken-main',
+      userId: '',
+      exchange: this.id,
+      accountId: 'main',
+      name: 'Main Account',
+      type: 'spot',
+      currency: 'EUR'
+    }];
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    // TODO: Kraken balance endpoint + signing.
+    // Kraken balance endpoint: GET /0/private/Balance
+    // Requires: API key, API secret, nonce
+    // Example response: { "XXRP": "1000.0", "ZCAD": "500.0", ... }
+    console.log('[Kraken] fetchBalances - implement with API key signing');
     return [];
   }
 
   async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
-    // TODO: Kraken markets endpoint
-    return [];
+    // Kraken public markets endpoint: GET /0/public/AssetPairs
+    // Public endpoint, no signing needed
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.kraken.baseUrl}/public/AssetPairs`);
+      if (!resp.ok) return [];
+      const data = (await resp.json()) as { result?: Record<string, any> };
+      const pairs = data.result || {};
+      return Object.keys(pairs).map(symbol => ({
+        symbol,
+        name: pairs[symbol]?.altname || symbol
+      }));
+    } catch (err) {
+      console.error('[Kraken] fetchAvailableAssets error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
-    // TODO: Kraken positions endpoint + signing.
+    // Kraken positions endpoint: GET /0/private/OpenOrders (or /0/private/ClosedOrders)
+    // Note: Kraken spot doesn't support margin positions, only for futures
+    console.log('[Kraken] fetchPositions - Kraken spot does not support positions');
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
-    // TODO: Kraken ledger endpoint + signing.
+    // Kraken ledger endpoint: GET /0/private/Ledger
+    // Requires: API key, API secret, nonce
+    // Returns: deposit/withdrawal/trade/fee transactions
+    console.log('[Kraken] fetchTransactions - implement with API key signing');
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
-    // TODO: Kraken orders endpoint + signing.
+    // Kraken orders endpoint: GET /0/private/OpenOrders or /0/private/ClosedOrders
+    // Requires: API key, API secret, nonce
+    console.log('[Kraken] fetchOrders - implement with API key signing');
     return [];
   }
 

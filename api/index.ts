@@ -544,12 +544,23 @@ class BitvavoConnector implements ExchangeConnector {
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
-    // TODO: Implement deposits/withdrawals
+    // Deposits/withdrawals endpoint: GET /v2/deposits or /v2/withdrawals
+    // Requires: API key signing
+    // IMPLEMENTATION NEEDED:
+    // - Fetch deposits with makeRequest('GET', '/deposits')
+    // - Fetch withdrawals with makeRequest('GET', '/withdrawals')
+    // - Combine and map to Transaction[] format
+    console.log('[Bitvavo] fetchTransactions - implement deposits/withdrawals API calls');
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
-    // TODO: Implement orders
+    // Orders endpoint: GET /v2/orders
+    // Requires: API key signing
+    // IMPLEMENTATION NEEDED:
+    // - Fetch orders with makeRequest('GET', '/orders')
+    // - Map response to Order[] format with buy/sell sides
+    console.log('[Bitvavo] fetchOrders - implement orders API call');
     return [];
   }
 

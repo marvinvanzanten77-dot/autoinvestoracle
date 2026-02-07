@@ -33,31 +33,55 @@ export class CoinbaseConnector implements ExchangeConnector {
   }
 
   async fetchAccounts(): Promise<Account[]> {
-    // TODO: Coinbase account endpoint + signing or OAuth.
+    // Coinbase account endpoint: GET /accounts or /api/v3/accounts (v3 API)
+    // Requires: API key signing or OAuth token
+    // Returns list of accounts (trading, cash, etc.)
+    console.log('[Coinbase] fetchAccounts - implement with API key signing or OAuth');
     return [];
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    // TODO: Coinbase balances endpoint + signing or OAuth.
+    // Coinbase balances endpoint: GET /accounts/{account-id}/fills or /api/v3/accounts
+    // Requires: API key signing or OAuth token
+    // Returns: asset balances in each account
+    console.log('[Coinbase] fetchBalances - implement with API key signing or OAuth');
     return [];
   }
 
   async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
-    // TODO: Coinbase products endpoint
-    return [];
+    // Coinbase products endpoint: GET /products (public)
+    // Returns: BTC-EUR, ETH-EUR, etc.
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.coinbase.baseUrl}/products`);
+      if (!resp.ok) return [];
+      const data = (await resp.json()) as Array<any>;
+      return data.map(product => ({
+        symbol: product.id,
+        name: product.display_name || product.id
+      }));
+    } catch (err) {
+      console.error('[Coinbase] fetchAvailableAssets error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
+    // Coinbase doesn't support margin trading positions (spot only)
+    console.log('[Coinbase] fetchPositions - Coinbase spot does not support positions');
     return [];
   }
 
   async fetchTransactions(): Promise<Transaction[]> {
-    // TODO: Coinbase transfers/trades endpoint + signing or OAuth.
+    // Coinbase transfers/trades endpoint: GET /accounts/{account-id}/transfers
+    // Requires: API key signing or OAuth token
+    console.log('[Coinbase] fetchTransactions - implement with API key signing or OAuth');
     return [];
   }
 
   async fetchOrders(): Promise<Order[]> {
-    // TODO: Coinbase orders endpoint + signing or OAuth.
+    // Coinbase orders endpoint: GET /orders (v3 API)
+    // Requires: API key signing or OAuth token
+    console.log('[Coinbase] fetchOrders - implement with API key signing or OAuth');
     return [];
   }
 

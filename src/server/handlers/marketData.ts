@@ -104,8 +104,11 @@ export async function handleGetObservations(req: Request, res: Response) {
       );
     }
 
-    // TODO: Query from Supabase observationLog
-    // For now, return mock
+    // Query from Supabase observationLog
+    // IMPLEMENTATION NEEDED: 
+    // - Connect to supabase.from('observations').select('*').eq('userId', userId)
+    // - Filter by timerange if provided (?since=2026-02-06T00:00:00Z)
+    // For now, return mock observations (demonstrates expected shape)
     const mockObservations = [
       {
         id: 'obs_1738267200000',
@@ -126,7 +129,7 @@ export async function handleGetObservations(req: Request, res: Response) {
       },
       metadata: {
         timestamp: new Date().toISOString(),
-        note: 'Requires Supabase integration for production',
+        note: 'Awaiting Supabase integration - currently returning mock data',
       },
     });
   } catch (error) {
@@ -163,7 +166,11 @@ export async function handleGetLearnedPatterns(req: Request, res: Response) {
       );
     }
 
-    // TODO: Query from Supabase learnedPatterns
+    // Query from Supabase learnedPatterns
+    // IMPLEMENTATION NEEDED:
+    // - Connect to supabase.from('learned_patterns').select('*').eq('userId', userId)
+    // - Order by lastObservedAt DESC
+    // - Map to response format
     // For now, return mock
     const mockPatterns = [
       {
@@ -234,7 +241,13 @@ export async function handleGetDetailedAnalysis(req: Request, res: Response) {
       );
     }
 
-    // TODO: Call OpenAI with aggregated data + observations
+    // Call OpenAI with aggregated data + observations
+    // IMPLEMENTATION NEEDED:
+    // - Fetch recent observations: observationLog.getByAsset(asset, 7*24)
+    // - Fetch aggregated market data: aggregator.getData(asset)
+    // - Fetch learned patterns: supabase.from('learned_patterns')...
+    // - Call OpenAI with context:
+    //   generateDetailedAnalysis(asset, observations, patterns, marketData)
     // For now, return mock
     const mockAnalysis = `
 Gedetailleerde analyse voor ${asset} — ${new Date().toLocaleString('nl-NL')}

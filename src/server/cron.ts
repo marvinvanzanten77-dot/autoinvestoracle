@@ -62,12 +62,17 @@ export async function jobAnalyzePatterns(): Promise<void> {
   console.log('🔄 [CRON] Running: Analyze Patterns');
 
   try {
-    // TODO: Implement pattern analysis
-    // 1. Query observations table met outcomes
-    // 2. Group by (assetCategory, marketContext)
-    // 3. Calculate successRate
-    // 4. INSERT into learned_patterns
-    // 5. Update confidence scores
+    // IMPLEMENTATION NEEDED:
+    // 1. Query supabase: observations met outcomes van vorige 7 dagen
+    // 2. Group by (assetCategory, marketContext, observedBehavior)
+    // 3. Calculate successRate = count(outcome.was_significant) / total
+    // 4. INSERT/UPDATE into learned_patterns table
+    // 5. Update confidence scores based on recency
+    // Example:
+    //   const data = await supabase.from('observations')
+    //     .select('*')
+    //     .not('outcome', 'is', null)
+    //     .gte('timestamp', sevenDaysAgo);
 
     console.log('  → Pattern analysis placeholder');
   } catch (err) {
@@ -87,10 +92,14 @@ export async function jobRefreshMarketScans(): Promise<void> {
   console.log('🔄 [CRON] Running: Refresh Market Scans');
 
   try {
-    // TODO: Implement auto-refresh
-    // 1. Call /api/market-scan internally
-    // 2. Trigger observation logging
-    // 3. Update dashboard cache
+    // IMPLEMENTATION NEEDED:
+    // 1. Call /api/market-scan internally via server-to-server fetch
+    // 2. Trigger observation logging with market snapshot
+    // 3. Update dashboard cache (Redis/memory)
+    // Example:
+    //   const scanResult = await handleAutoLoadMarketData()
+    //   await logObservation(scanResult)
+    //   cache.set('market_scan_latest', scanResult)
 
     console.log('  → Market scan refresh placeholder');
   } catch (err) {
@@ -110,11 +119,18 @@ export async function jobGenerateDigestEmail(): Promise<void> {
   console.log('🔄 [CRON] Running: Generate Digest Email');
 
   try {
-    // TODO: Implement email generation
-    // 1. Query observations & outcomes van vorige dag
-    // 2. Build HTML email
-    // 3. Send via SendGrid/Resend
-    // 4. Log send status
+    // IMPLEMENTATION NEEDED:
+    // 1. Query supabase: observations & outcomes van vorige dag
+    // 2. Fetch user preferences (email, language)
+    // 3. Build HTML email with templates
+    // 4. Send via SendGrid/Resend:
+    //    await sendEmail({ to, subject, html })
+    // 5. Log send status to notifications table
+    // Example:
+    //   const observations = await supabase.from('observations')
+    //     .select('*')
+    //     .gte('timestamp', yesterday)
+    //     .eq('userId', userId);
 
     console.log('  → Digest email placeholder');
   } catch (err) {
@@ -133,10 +149,17 @@ export async function jobCleanupExpired(): Promise<void> {
   console.log('🔄 [CRON] Running: Cleanup Expired');
 
   try {
-    // TODO: Implement cleanup
-    // 1. DELETE from tickets WHERE valid_until < now()
-    // 2. Archive old observations
-    // 3. Log cleanup stats
+    // IMPLEMENTATION NEEDED:
+    // 1. DELETE from supabase tickets WHERE valid_until < now()
+    // 2. Archive observations older than 90 days:
+    //    - Move to observations_archive table
+    //    - Or soft-delete (set archived_at)
+    // 3. Log cleanup stats to console/monitoring
+    // Example:
+    //   const expired = await supabase.from('tickets')
+    //     .delete()
+    //     .lt('valid_until', now);
+    //   console.log(`Deleted ${expired.count} expired tickets`);
 
     console.log('  → Cleanup placeholder');
   } catch (err) {
