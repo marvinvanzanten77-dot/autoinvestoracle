@@ -13,6 +13,7 @@ import { Settings } from './pages/Settings';
 import { Academy } from './pages/Academy';
 import { Onboarding } from './pages/Onboarding';
 import { Exchanges } from './pages/Exchanges';
+import { Agent } from './pages/Agent';
 import { Login } from './pages/Login';
 import { supabase } from './lib/supabase/client';
 
@@ -26,6 +27,7 @@ function MainLayoutRoutes() {
         <Route path="/year" element={<YearView />} />
         <Route path="/charts" element={<Charts />} />
         <Route path="/academy" element={<Academy />} />
+        <Route path="/agent" element={<Agent />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/exchanges" element={<Exchanges />} />
       </Routes>
