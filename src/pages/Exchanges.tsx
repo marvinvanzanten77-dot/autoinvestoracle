@@ -56,6 +56,7 @@ export function Exchanges() {
   const [passphrase, setPassphrase] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiMode, setApiMode] = useState<'readonly' | 'trading' | null>(null);
 
   const [userId, setUserId] = useState<string>('');
 
@@ -88,13 +89,14 @@ export function Exchanges() {
   }, [userId]);
 
   const handleConnect = async () => {
-    if (!activeExchange) return;
+    if (!activeExchange || !apiMode) return;
     setLoading(true);
     setError(null);
     try {
       const payload = {
         exchange: activeExchange.id,
         method: 'apiKey',
+        apiMode: apiMode,
         credentials: {
           apiKey,
           apiSecret,
@@ -110,6 +112,7 @@ export function Exchanges() {
         throw new Error('Kon niet verbinden.');
       }
       setActiveExchange(null);
+      setApiMode(null);
       setApiKey('');
       setApiSecret('');
       setPassphrase('');
@@ -144,7 +147,7 @@ export function Exchanges() {
     <div className="flex flex-col gap-5 md:gap-6">
       <Card title="Exchange koppelingen" subtitle="Koppel je accounts veilig">
         <p className="text-xs text-slate-500 mb-4">
-          We gebruiken alleen leesrechten. Je sleutels worden versleuteld opgeslagen en je kunt altijd verbreken.
+          Kies of je alleen wilt observeren (lezen) of Oracle volledige handelsrechten wilt geven. Je sleutels worden versleuteld opgeslagen.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
           {EXCHANGES.map((exchange) => {
@@ -200,7 +203,7 @@ export function Exchanges() {
         </div>
       </Card>
 
-      {activeExchange && (
+      {activeExchange && !apiMode && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true">
             <div className="flex items-start justify-between">
@@ -208,9 +211,49 @@ export function Exchanges() {
                 <p className="text-subtitle text-slate-900 font-serif">
                   {activeExchange.name} koppelen
                 </p>
-                <p className="text-sm text-slate-600">Alleen lezen, geen handelsrechten nodig.</p>
+                <p className="text-sm text-slate-600">Kies je verbindingsmodus</p>
               </div>
               <button type="button" onClick={() => setActiveExchange(null)} className="text-slate-500">
+                Sluiten
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => setApiMode('readonly')}
+                className="w-full rounded-xl border-2 border-slate-200 bg-white/70 p-4 text-left hover:bg-slate-50 hover:border-primary/40 transition"
+              >
+                <p className="text-subtitle text-slate-900 font-serif">👁️ Alleen observatie</p>
+                <p className="text-xs text-slate-600 mt-1">Alleen data inzien, geen handelsbevoegdheden</p>
+                <p className="text-xs text-slate-500 mt-2">Geschikt voor uitsluitend monitoring</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setApiMode('trading')}
+                className="w-full rounded-xl border-2 border-slate-200 bg-white/70 p-4 text-left hover:bg-slate-50 hover:border-primary/40 transition"
+              >
+                <p className="text-subtitle text-slate-900 font-serif">🤖 Volledige rechten</p>
+                <p className="text-xs text-slate-600 mt-1">Oracle kan automatisch handelen</p>
+                <p className="text-xs text-slate-500 mt-2">Vereist volledige API-toegang en persmissies</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeExchange && apiMode && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-subtitle text-slate-900 font-serif">
+                  {activeExchange.name} koppelen
+                </p>
+                <p className="text-sm text-slate-600">
+                  {apiMode === 'readonly' ? 'Modus: Alleen observatie' : 'Modus: Volledige rechten'}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setActiveExchange(null); setApiMode(null); }} className="text-slate-500">
                 Sluiten
               </button>
             </div>
@@ -238,18 +281,36 @@ export function Exchanges() {
                   className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm"
                 />
               )}
-              <p className="text-xs text-slate-500">
-                Tip: kies alleen leesrechten bij het aanmaken van je sleutel.
-              </p>
+              {apiMode === 'readonly' && (
+                <p className="text-xs text-slate-500">
+                  💡 Tip: Bij {activeExchange.name} kun je een API-sleutel met alleen leesrechten aanmaken. Dit is veiliger.
+                </p>
+              )}
+              {apiMode === 'trading' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <p className="text-xs text-amber-800">
+                    ⚠️ Je geeft Oracle toestemming om automatisch te handelen. Zorg dat je limiten hebt ingesteld op je exchange account.
+                  </p>
+                </div>
+              )}
               {error && <p className="text-sm text-amber-700">{error}</p>}
-              <button
-                type="button"
-                onClick={handleConnect}
-                disabled={loading}
-                className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Verbinden...' : 'Verbinding testen en opslaan'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setApiMode(null)}
+                  className="flex-1 pill border border-slate-200 bg-white/70 text-slate-600 hover:bg-white transition"
+                >
+                  Terug
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConnect}
+                  disabled={loading}
+                  className="flex-1 pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Verbinden...' : 'Verbinding testen en opslaan'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
