@@ -39,6 +39,7 @@ export function Agent() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const initSession = async () => {
     const resp = await fetch('/api/session/init');
@@ -48,24 +49,66 @@ export function Agent() {
   };
 
   const loadConnections = async (id: string) => {
-    const resp = await fetch(`/api/exchanges/status?userId=${id}`);
-    if (!resp.ok) return;
-    const data = (await resp.json()) as { connections: ExchangeConnection[] };
-    setConnections(data.connections?.filter((c) => c.status === 'connected') || []);
+    setLoading(true);
+    try {
+      const resp = await fetch(`/api/exchanges/status?userId=${id}`);
+      if (!resp.ok) {
+        setConnections([]);
+        return;
+      }
+      const data = (await resp.json()) as { connections: ExchangeConnection[] };
+      const connected = data.connections?.filter((c) => c.status === 'connected') || [];
+      setConnections(connected);
+    } catch (err) {
+      console.error('Error loading connections:', err);
+      setConnections([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDefaultSettings = (exchange: ExchangeId, apiMode: AgentMode): AgentSettings => {
+    return {
+      exchange,
+      apiMode,
+      enabled: true,
+      // Observing agent defaults
+      monitoringInterval: 5,
+      alertOnVolatility: false,
+      volatilityThreshold: 5,
+      analysisDepth: 'basic',
+      // Trading agent defaults
+      autoTrade: false,
+      riskPerTrade: 2,
+      maxDailyLoss: 5,
+      confidenceThreshold: 70,
+      orderLimit: 100,
+      tradingStrategy: 'balanced',
+      enableStopLoss: false,
+      stopLossPercent: 5
+    };
   };
 
   const loadAgentSettings = async (exchange: ExchangeId) => {
+    const connection = connections.find((c) => c.exchange === exchange);
+    if (!connection) {
+      setAgentSettings(null);
+      return;
+    }
+
     try {
       const resp = await fetch(`/api/agent/settings?exchange=${exchange}`);
-      if (!resp.ok) {
-        setAgentSettings(null);
+      if (resp.ok) {
+        const data = (await resp.json()) as { settings: AgentSettings };
+        setAgentSettings(data.settings);
         return;
       }
-      const data = (await resp.json()) as { settings: AgentSettings };
-      setAgentSettings(data.settings);
     } catch {
-      setAgentSettings(null);
+      // Fall through to defaults
     }
+
+    // If API call fails or returns nothing, use defaults
+    setAgentSettings(getDefaultSettings(exchange, connection.apiMode || 'readonly'));
   };
 
   useEffect(() => {
@@ -79,10 +122,10 @@ export function Agent() {
   }, [userId]);
 
   useEffect(() => {
-    if (selectedExchange) {
+    if (selectedExchange && connections.length > 0) {
       loadAgentSettings(selectedExchange);
     }
-  }, [selectedExchange]);
+  }, [selectedExchange, connections]);
 
   const handleSaveSettings = async () => {
     if (!agentSettings) return;
@@ -115,7 +158,11 @@ export function Agent() {
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       <Card title="Agent instellingen" subtitle="Configureer agentgedrag per exchange">
-        {connections.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-8">
+            <p className="text-slate-500 text-sm">Exchanges laden...</p>
+          </div>
+        ) : connections.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-slate-500 text-sm">
               Geen gekoppelde exchanges gevonden. Verbind eerst een exchange op het tabblad "Exchanges".
