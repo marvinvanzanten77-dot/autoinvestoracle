@@ -2279,11 +2279,24 @@ const routes: Record<string, Handler> = {
               
               if (!response.ok) {
                 const errText = await response.text();
-                console.error('[trading/proposals] Bitvavo API error:', response.status, errText);
+                console.error('[trading/proposals] Bitvavo API error:', {
+                  status: response.status,
+                  error: errText,
+                  market,
+                  side,
+                  amount
+                });
                 return null;
               }
               
-              return await response.json();
+              const data = await response.json();
+              console.log('[trading/proposals] Bitvavo API success response:', {
+                market,
+                side,
+                amount,
+                response: data
+              });
+              return data;
             };
             
             // Handle different action types
