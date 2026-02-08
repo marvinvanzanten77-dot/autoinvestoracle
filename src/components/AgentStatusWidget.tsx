@@ -29,7 +29,7 @@ export function AgentStatusWidget() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000); // Update every 3 seconds
+    const interval = setInterval(fetchStatus, 30000); // Update every 30 seconds (reduced from 3)
     return () => clearInterval(interval);
   }, []);
 

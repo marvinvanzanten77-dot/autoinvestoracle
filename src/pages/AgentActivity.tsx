@@ -83,7 +83,7 @@ export function AgentActivity() {
 
     const interval = setInterval(() => {
       fetchActivities();
-    }, 5000); // Refresh every 5 seconds
+    }, 30000); // Refresh every 30 seconds (reduced from 5)
 
     return () => clearInterval(interval);
   }, [autoRefresh, filter, exchange]);
