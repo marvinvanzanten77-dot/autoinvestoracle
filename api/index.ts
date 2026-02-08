@@ -1501,7 +1501,8 @@ type Proposal = {
   };
   reasoning: string;
   createdAt: string;
-  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed';
+  executedAt?: string;
   exchange?: string;
 };
 

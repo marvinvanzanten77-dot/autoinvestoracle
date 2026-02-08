@@ -13,6 +13,7 @@
  */
 
 import type { Balance, Order } from '../../src/lib/exchanges/types';
+import type { ExchangeConnector as BitvavoConnector } from '../../src/lib/exchanges/types';
 
 // ============================================================================
 // TYPES

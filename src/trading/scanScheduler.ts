@@ -193,6 +193,11 @@ export async function executeScan(job: ScanJob): Promise<void> {
   }
 
   // ========================================================================
+  // STEP 1B: CHECK FOR OPEN EUR BALANCE AND GENERATE PROPOSAL
+  // ========================================================================
+  await generateBalanceProposal(userId);
+
+  // ========================================================================
   // STEP 2: CHECK IF GPT CALL IS NEEDED
   // ========================================================================
   const shouldCallGpt = checkGptGate(policy, snapshot);
@@ -475,3 +480,59 @@ function formatScanJob(row: any): ScanJob {
     lastResetDate: row.last_reset_date
   };
 }
+
+/**
+ * Check for open EUR balance and generate investment proposal if available
+ */
+async function generateBalanceProposal(userId: string): Promise<void> {
+  try {
+    // Get balances from Supabase
+    const { data: balances, error } = await supabase
+      .from('balances')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('asset', 'EUR');
+
+    if (error) {
+      console.error(`[ScanScheduler] Failed to fetch EUR balance: ${error.message}`);
+      return;
+    }
+
+    if (!balances || balances.length === 0) {
+      return; // No EUR balance
+    }
+
+    const eurBalance = balances[0];
+    const openAmount = eurBalance.total ?? 0;
+
+    // Minimum threshold: 50 EUR
+    if (openAmount < 50) {
+      return; // Amount too small to generate proposal
+    }
+
+    console.log(`[ScanScheduler] Found ${openAmount} EUR open balance for user ${userId}, generating investment proposal`);
+
+    // Generate proposal for investment
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 6); // 6-hour expiry
+
+    await createProposal(userId, {
+      status: 'PROPOSED',
+      expiresAt: expiresAt.toISOString(),
+      asset: 'EUR', // Base asset
+      side: 'buy', // Always buy recommendation for open balance
+      orderType: 'market',
+      orderValueEur: openAmount,
+      confidence: 75, // Moderate confidence for balance deployment
+      rationale: {
+        why: `Je hebt €${openAmount.toFixed(2)} openstaande saldo op je gekoppelde platform. Dit bedrag is niet belegd en kan gebruikt worden om in interessante mogelijkheden te investeren.`,
+        whyNot: [],
+        riskNotes: undefined
+      },
+      createdBy: 'AI'
+    });
+  } catch (err) {
+    console.error('[ScanScheduler] Error generating balance proposal:', err);
+  }
+}
+

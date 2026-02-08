@@ -7,7 +7,7 @@
  * Used by: execute handler only (during /api/trading/execute after APPROVED proposal)
  */
 
-import crypto from 'crypto';
+import { createHmac } from 'crypto';
 
 export type BravoBitvavoTradeConfig = {
   apiKey: string;
@@ -107,8 +107,7 @@ export class BitvavoTrade {
       const signingPath = '/v2/order';
       const message = timestamp + 'POST' + signingPath + bodyStr;
       
-      const signature = crypto
-        .createHmac('sha256', this.apiSecret)
+      const signature = createHmac('sha256', this.apiSecret)
         .update(message)
         .digest('hex');
 
@@ -165,8 +164,7 @@ export class BitvavoTrade {
       const signingPath = '/v2/order';
       const message = timestamp + 'DELETE' + signingPath + bodyStr;
       
-      const signature = crypto
-        .createHmac('sha256', this.apiSecret)
+      const signature = createHmac('sha256', this.apiSecret)
         .update(message)
         .digest('hex');
 
@@ -203,8 +201,7 @@ export class BitvavoTrade {
       const signingPath = '/v2/order';
       const message = timestamp + 'GET' + signingPath;
       
-      const signature = crypto
-        .createHmac('sha256', this.apiSecret)
+      const signature = createHmac('sha256', this.apiSecret)
         .update(message)
         .digest('hex');
 
@@ -261,8 +258,7 @@ export class BitvavoTrade {
       const signingPath = '/v2/orders';
       const message = timestamp + 'GET' + signingPath;
       
-      const signature = crypto
-        .createHmac('sha256', this.apiSecret)
+      const signature = createHmac('sha256', this.apiSecret)
         .update(message)
         .digest('hex');
 
