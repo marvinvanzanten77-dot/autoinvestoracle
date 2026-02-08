@@ -11,7 +11,6 @@ const navItems: NavItem[] = [
   { label: 'Marktnieuws', to: '/today' },
   { label: 'Academy', to: '/academy' },
   { label: 'Exchange koppelingen', to: '/settings/exchanges' },
-  { label: 'Agent instellingen', to: '/agent' },
   { label: 'Agent activiteit', to: '/agent/activity' },
   { label: 'Trading Dashboard', to: '/trading' },
   { label: 'Instellingen', to: '/settings' }
