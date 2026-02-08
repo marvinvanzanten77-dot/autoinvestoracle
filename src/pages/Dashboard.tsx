@@ -742,6 +742,7 @@ export function Dashboard() {
   
   const eurBalance = activeBalances.find(b => b.asset === 'EUR' || b.asset === 'USDT' || b.asset === 'USDC');
   const amount = eurBalance?.available ?? 0;
+  const cashSaldo = amount; // Alias for consistency
   
   // Debug logging
   useEffect(() => {
