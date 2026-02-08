@@ -108,7 +108,8 @@ export function Agent() {
     }
 
     // If API call fails or returns nothing, use defaults
-    setAgentSettings(getDefaultSettings(exchange, connection.apiMode || 'readonly'));
+    const apiMode = (connection.metadata?.apiMode || connection.metadata?.agentMode || 'readonly') as 'readonly' | 'trading';
+    setAgentSettings(getDefaultSettings(exchange, apiMode));
   };
 
   useEffect(() => {
@@ -187,7 +188,7 @@ export function Agent() {
                   >
                     <p className="text-subtitle text-slate-900 font-serif capitalize">{conn.exchange}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      {conn.apiMode === 'readonly' ? '👁️ Alleen observatie' : '🤖 Volledige rechten'}
+                      {(conn.metadata?.apiMode || conn.metadata?.agentMode || 'readonly') === 'readonly' ? '👁️ Alleen observatie' : '🤖 Volledige rechten'}
                     </p>
                   </button>
                 ))}

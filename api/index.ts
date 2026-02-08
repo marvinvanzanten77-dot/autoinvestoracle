@@ -2165,7 +2165,8 @@ const routes: Record<string, Handler> = {
         updatedAt: now,
         status: 'connected',
         metadata: {
-          agentMode: apiMode
+          agentMode: apiMode,
+          apiMode: apiMode  // ← Store both ways for compatibility
         }
       };
       const storage = getStorageAdapter();
