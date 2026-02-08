@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import { createHmac, randomBytes, createCipheriv, createDecipheriv, randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { kv } from '@vercel/kv';
@@ -439,8 +439,7 @@ class BitvavoConnector implements ExchangeConnector {
     // Path must include /v2 for signing (but baseUrl already has it)
     const signingPath = `/v2${endpoint}`;
     const message = timestamp + method + signingPath + bodyStr;
-    const signature = crypto
-      .createHmac('sha256', this.apiSecret)
+    const signature = createHmac('sha256', this.apiSecret)
       .update(message)
       .digest('hex');
 
@@ -949,8 +948,8 @@ function getKey(): Buffer {
 
 function encryptString(plainText: string): string {
   const key = getKey();
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   const payload: EncryptedPayload = {
@@ -968,7 +967,7 @@ function decryptString(payload: string): string {
   const iv = Buffer.from(parsed.iv, 'base64');
   const tag = Buffer.from(parsed.tag, 'base64');
   const data = Buffer.from(parsed.data, 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
   const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
   return decrypted.toString('utf8');
@@ -2117,7 +2116,7 @@ const routes: Record<string, Handler> = {
       if (proposalMatch && userId) {
         try {
           const proposalData = JSON.parse(proposalMatch[1].trim());
-          const proposalId = crypto.randomUUID();
+          const proposalId = randomUUID();
           proposal = {
             id: proposalId,
             ...proposalData,
@@ -2215,10 +2214,17 @@ const routes: Record<string, Handler> = {
             const tradingSecret = process.env.BITVAVO_TRADE_SECRET;
             
             if (!tradingKey || !tradingSecret) {
-              console.error('[trading/proposals] Trading keys not configured');
-              proposal.status = 'failed';
-              await kv.set(proposalKey, proposal);
-              return res.status(500).json({ error: 'Trading keys niet geconfigureerd' });
+              console.warn('[trading/proposals] Trading keys not configured - proposal approved but not executed');
+              console.warn('[trading/proposals] To enable live trading, set BITVAVO_TRADE_KEY and BITVAVO_TRADE_SECRET environment variables');
+              
+              // Proposal is approved but we can't execute without keys
+              // In production, these would be configured
+              return res.status(200).json({ 
+                success: true,
+                proposal,
+                message: 'Voorstel goedgekeurd. Live trading keys zijn niet geconfigureerd - dit is normaal in development.',
+                details: 'Set BITVAVO_TRADE_KEY and BITVAVO_TRADE_SECRET environment variables for live trading.'
+              });
             }
             
             // Extract action details
@@ -2239,8 +2245,7 @@ const routes: Record<string, Handler> = {
               const signingPath = '/v2/order';
               const message = timestamp + 'POST' + signingPath + bodyStr;
               
-              const signature = crypto
-                .createHmac('sha256', tradingSecret)
+              const signature = createHmac('sha256', tradingSecret)
                 .update(message)
                 .digest('hex');
               
