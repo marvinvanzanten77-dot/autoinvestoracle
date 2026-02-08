@@ -2316,23 +2316,26 @@ const routes: Record<string, Handler> = {
               // Place market buy order
               const orderData = await executeBitvavoOrder(market, 'buy', estimatedQuantity);
               
-              if (orderData && orderData.orderId) {
-                console.log('[trading/proposals] ✅ Order placed successfully:', orderData.orderId);
+              console.log('[trading/proposals] Bitvavo order response:', orderData);
+              
+              if (orderData && (orderData.orderId || orderData.id)) {
+                const orderId = orderData.orderId || orderData.id;
+                console.log('[trading/proposals] ✅ Order placed successfully:', orderId);
                 proposal.status = 'executed';
                 proposal.executedAt = new Date().toISOString();
-                (proposal as any).orderId = orderData.orderId;
+                (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
                 return res.status(200).json({ 
                   success: true,
                   proposal, 
                   orderDetails: orderData,
-                  message: `BTC order placed: ${orderData.orderId}`
+                  message: `BTC order placed: ${orderId}`
                 });
               } else {
-                console.error('[trading/proposals] Order placement failed - no order ID returned');
+                console.error('[trading/proposals] Order placement failed - no order ID in response:', JSON.stringify(orderData));
                 proposal.status = 'failed';
                 await kv.set(proposalKey, proposal);
-                return res.status(500).json({ error: 'Order kon niet geplaatst worden' });
+                return res.status(500).json({ error: 'Order kon niet geplaatst worden - geen order ID in response' });
               }
             } else if (action.type === 'sell' || action.type === 'SELL') {
               // Sell order
@@ -2342,22 +2345,26 @@ const routes: Record<string, Handler> = {
               
               const orderData = await executeBitvavoOrder(market, 'sell', amount);
               
-              if (orderData && orderData.orderId) {
-                console.log('[trading/proposals] ✅ Sell order placed:', orderData.orderId);
+              console.log('[trading/proposals] Bitvavo sell order response:', orderData);
+              
+              if (orderData && (orderData.orderId || orderData.id)) {
+                const orderId = orderData.orderId || orderData.id;
+                console.log('[trading/proposals] ✅ Sell order placed:', orderId);
                 proposal.status = 'executed';
                 proposal.executedAt = new Date().toISOString();
-                (proposal as any).orderId = orderData.orderId;
+                (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
                 return res.status(200).json({ 
                   success: true,
                   proposal, 
                   orderDetails: orderData,
-                  message: `Sell order placed: ${orderData.orderId}`
+                  message: `Sell order placed: ${orderId}`
                 });
               } else {
+                console.error('[trading/proposals] Sell order placement failed - no order ID in response:', JSON.stringify(orderData));
                 proposal.status = 'failed';
                 await kv.set(proposalKey, proposal);
-                return res.status(500).json({ error: 'Verkooporder kon niet geplaatst worden' });
+                return res.status(500).json({ error: 'Verkooporder kon niet geplaatst worden - geen order ID in response' });
               }
             } else {
               // Unknown action type
