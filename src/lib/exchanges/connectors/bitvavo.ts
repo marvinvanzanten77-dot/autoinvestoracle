@@ -38,7 +38,7 @@ export class BitvavoConnector implements ExchangeConnector {
     }
 
     // Bitvavo signing: HMAC-SHA256(apiSecret, timestamp + method + path + body)
-    // Path includes /v2 prefix!
+    // Path is just the endpoint (without /v2, that's added in URL but used for signing)
     const path = `/v2${endpoint}`;
     const message = timestamp + method + path + bodyStr;
     const signature = crypto
@@ -56,8 +56,8 @@ export class BitvavoConnector implements ExchangeConnector {
       message: message.substring(0, 100) + '...'
     });
 
-    // CRITICAL FIX: Use /v2 prefix in the actual API URL!
-    const fullUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/v2${endpoint}`;
+    // Use path (which already has /v2) in the actual API URL!
+    const fullUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}${path}`;
     console.log('[Bitvavo] Fetching URL:', fullUrl);
     
     const resp = await fetch(fullUrl, {
