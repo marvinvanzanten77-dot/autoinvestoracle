@@ -2921,6 +2921,84 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon analyse niet uitvoeren.' });
     }
   },
+  'agent/settings': async (req, res) => {
+    if (req.method === 'GET') {
+      // GET - Retrieve current settings
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        
+        const exchange = (req.query?.exchange as string) || 'bitvavo';
+        const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
+        
+        if (!settings) {
+          res.status(404).json({ error: 'Settings niet gevonden.' });
+          return;
+        }
+        
+        res.status(200).json(settings);
+      } catch (err) {
+        console.error('[agent/settings GET] Error:', err);
+        res.status(500).json({ error: 'Kon instellingen niet ophalen.' });
+      }
+    } else if (req.method === 'POST') {
+      // POST - Update settings
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        
+        const { exchange, ...updates } = (req.body || {}) as {
+          exchange: string;
+          [key: string]: any;
+        };
+        
+        if (!exchange) {
+          res.status(400).json({ error: 'exchange is verplicht.' });
+          return;
+        }
+        
+        // Get current settings
+        const settingsKey = `user:${userId}:agent:${exchange}:settings`;
+        const currentSettings = (await kv.get(settingsKey)) as any;
+        
+        if (!currentSettings) {
+          res.status(404).json({ error: 'Settings niet gevonden.' });
+          return;
+        }
+        
+        // Merge updates (prevent unsafe changes)
+        const newSettings = {
+          ...currentSettings,
+          ...updates,
+          exchange,  // Always preserve exchange
+          // Ensure autoTrade is consistent with apiMode
+          autoTrade: updates.apiMode === 'trading' ? (updates.autoTrade !== false) : false
+        };
+        
+        // Save updated settings
+        await kv.set(settingsKey, newSettings);
+        
+        // Invalidate cache
+        const stateCache = `agent:state:${userId}:${exchange}`;
+        const intentCache = `agent:intent:${userId}:${exchange}`;
+        await kv.del(stateCache);
+        await kv.del(intentCache);
+        
+        res.status(200).json(newSettings);
+      } catch (err) {
+        console.error('[agent/settings POST] Error:', err);
+        res.status(500).json({ error: 'Kon instellingen niet opslaan.' });
+      }
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
+  },
   'academy/progress': async (req, res) => {
     if (req.method && req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });
