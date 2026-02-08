@@ -100,7 +100,7 @@ export function AgentStatePanel({ exchange }: AgentStatePanelProps) {
             </div>
             <div className="rounded bg-white p-3">
               <p className="text-xs text-slate-500">Totaalwaarde</p>
-              <p className="text-lg font-semibold text-slate-900">€{state.portfolio.totalValue.toFixed(2)}</p>
+              <p className="text-lg font-semibold text-slate-900">€{(state.portfolio.totalValue || 0).toFixed(2)}</p>
             </div>
           </div>
 
@@ -111,7 +111,7 @@ export function AgentStatePanel({ exchange }: AgentStatePanelProps) {
                 <div key={asset.asset} className="flex justify-between text-xs bg-white p-2 rounded">
                   <span className="font-medium text-slate-900">{asset.asset}</span>
                   <span className="text-slate-600">
-                    {asset.amount.toFixed(6)} ({asset.available.toFixed(6)} beschikbaar)
+                    {(asset.amount || 0).toFixed(6)} ({(asset.available || 0).toFixed(6)} beschikbaar)
                   </span>
                 </div>
               ))}
