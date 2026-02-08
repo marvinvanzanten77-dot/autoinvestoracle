@@ -2783,10 +2783,10 @@ const routes: Record<string, Handler> = {
         return {
           exchange: conn.exchange,
           mode: (conn.metadata?.['agentMode'] || 'readonly') as 'readonly' | 'trading',
-          enabled: true,
-          status: 'idle' as const,
+          enabled: conn.metadata?.['agentEnabled'] ?? true,
+          status: (conn.metadata?.['agentStatus'] || 'idle') as 'idle' | 'monitoring' | 'analyzing' | 'trading' | 'error',
           lastActivity: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-          nextAction: 'Monitoring...',
+          nextAction: conn.metadata?.['agentNextAction'] || 'Waiting...',
           errorMessage: undefined
         };
       });
