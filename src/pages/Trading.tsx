@@ -448,7 +448,9 @@ export function Trading() {
             </div>
           ) : (
             <div className="space-y-4">
-              {proposals.map((proposal) => (
+              {proposals
+                .filter((p) => p && p.price && p.amount && p.estimatedValue)
+                .map((proposal) => (
                 <div key={proposal.id} className="border border-slate-200 rounded-lg p-4 space-y-3">
                   {/* Header */}
                   <div className="flex items-start justify-between gap-4">
@@ -458,17 +460,17 @@ export function Trading() {
                           {getActionLabel(proposal.action)}
                         </span>
                         <p className="font-semibold text-slate-900">
-                          {proposal.asset} @ €{proposal.price.toFixed(2)}
+                          {proposal.asset} @ €{proposal.price?.toFixed(2) || 'N/A'}
                         </p>
                       </div>
                       <p className="text-sm text-slate-600">{proposal.reasoning}</p>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-900">
-                        €{proposal.estimatedValue.toFixed(2)}
+                        €{proposal.estimatedValue?.toFixed(2) || 'N/A'}
                       </div>
                       <div className="text-xs text-slate-500">
-                        {proposal.amount.toFixed(4)} {proposal.asset}
+                        {proposal.amount?.toFixed(4) || '0'} {proposal.asset}
                       </div>
                     </div>
                   </div>
@@ -477,15 +479,15 @@ export function Trading() {
                   <div className="grid grid-cols-3 gap-3 text-xs">
                     <div className="bg-slate-50 rounded p-2">
                       <p className="text-slate-500">Betrouwbaarheid</p>
-                      <p className="font-semibold text-slate-900">{proposal.confidence}%</p>
+                      <p className="font-semibold text-slate-900">{proposal.confidence || 0}%</p>
                     </div>
                     <div className="bg-slate-50 rounded p-2">
                       <p className="text-slate-500">Aantal</p>
-                      <p className="font-semibold text-slate-900">{proposal.amount.toFixed(4)}</p>
+                      <p className="font-semibold text-slate-900">{proposal.amount?.toFixed(4) || '0'}</p>
                     </div>
                     <div className="bg-slate-50 rounded p-2">
                       <p className="text-slate-500">Geschat bedrag</p>
-                      <p className="font-semibold text-slate-900">€{proposal.estimatedValue.toFixed(2)}</p>
+                      <p className="font-semibold text-slate-900">€{proposal.estimatedValue?.toFixed(2) || 'N/A'}</p>
                     </div>
                   </div>
 
