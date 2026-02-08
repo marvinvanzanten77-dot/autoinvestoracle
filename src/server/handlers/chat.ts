@@ -33,7 +33,7 @@ async function generateChatReply(messages: ChatMessage[]) {
         {
           role: 'system',
           content:
-            'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.'
+            'Je bent een crypto-assistent die vraag en advies geeft in mensentaal.'
         },
         ...messages
       ]

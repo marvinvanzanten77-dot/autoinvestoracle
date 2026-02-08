@@ -188,7 +188,7 @@ export function Agent() {
                   >
                     <p className="text-subtitle text-slate-900 font-serif capitalize">{conn.exchange}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      {(conn.metadata?.apiMode || conn.metadata?.agentMode || 'readonly') === 'readonly' ? '👁️ Alleen observatie' : '🤖 Volledige rechten'}
+                      {agentSettings?.autoTrade ? '🤖 Trading Agent' : '👁️ Observation Only'}
                     </p>
                   </button>
                 ))}
@@ -218,12 +218,12 @@ export function Agent() {
                   </label>
                 </div>
 
-                {/* Readonly agent settings */}
-                {agentSettings.apiMode === 'readonly' && (
+                {/* Observation agent settings */}
+                {!agentSettings.autoTrade && (
                   <div className="space-y-4 rounded-lg bg-blue-50/50 border border-blue-200/50 p-4">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="text-xl">👁️</span>
-                      <p className="text-sm font-medium text-slate-700">Observerend Agent</p>
+                      <p className="text-sm font-medium text-slate-700">Observation Mode</p>
                     </div>
 
                     <div className="space-y-3">
@@ -311,7 +311,7 @@ export function Agent() {
                 )}
 
                 {/* Trading agent settings */}
-                {agentSettings.apiMode === 'trading' && (
+                {agentSettings.autoTrade && (
                   <div className="space-y-4 rounded-lg bg-amber-50/50 border border-amber-200/50 p-4">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="text-xl">🤖</span>

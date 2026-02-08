@@ -130,12 +130,12 @@ export function AgentStatePanel({ exchange }: AgentStatePanelProps) {
   return (
     <Card title="📊 Huidige Stand van Zaken" subtitle={`${exchange} portfolio analyse`}>
       <div className="space-y-4">
-        {/* Permission Warning Banner */}
+        {/* Trading Mode Warning Banner */}
         {state.settings.apiMode === 'readonly' && (
-          <div className="rounded-lg bg-amber-50 border border-amber-300 p-3">
-            <p className="text-xs text-amber-700 font-medium mb-1">⚠️ Read-only API sleutels actief</p>
-            <p className="text-xs text-amber-600 leading-relaxed">
-              Je huidige API sleutels hebben geen trading rechten. Om trading mode in te schakelen, genereer je nieuwe sleutels met de rechten "Account Read" EN "Account Manage" (of "Trading") en verbind ze opnieuw.
+          <div className="rounded-lg bg-blue-50 border border-blue-300 p-3">
+            <p className="text-xs text-blue-700 font-medium mb-1">👁️ Read-only mode</p>
+            <p className="text-xs text-blue-600 leading-relaxed">
+              Je huidige API sleutels hebben alleen lees-rechten. Voor automatische trading mode, verbind nieuwe API sleutels met "Account Read" EN "Account Manage" rechten.
             </p>
           </div>
         )}

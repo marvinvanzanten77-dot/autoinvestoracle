@@ -84,7 +84,7 @@ async function generateAllocation(input: AllocationInput) {
     `- Som van pct is 100.`,
     `- Gebruik alleen de 4 labels.`,
     `- Geen extra tekst buiten JSON.`,
-    `- Geen advies of voorspellingen, alleen verdeling en toelichting.`
+    `- Verdeling op basis van huidige marktomstandigheden en strategie.`
   ].join('\n');
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -99,7 +99,7 @@ async function generateAllocation(input: AllocationInput) {
       messages: [
         {
           role: 'system',
-          content: 'Je bent een rustige crypto-observator die alleen verdelingen geeft in JSON.'
+          content: 'Je bent een crypto-allocatie-adviseur die verdelingen geeft in JSON.'
         },
         {
           role: 'user',

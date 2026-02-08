@@ -1609,14 +1609,14 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
   console.log('[generateChatReply] Available assets:', availableAssets.join(', '));
 
   const systemPrompt = hasExchangeAccess && activePlatform
-    ? `Je bent een crypto-assistent die ook concrete voorstellen mag doen. Je hebt toegang tot het gekoppelde account van de gebruiker op ${activePlatform}. 
+    ? `Je bent een crypto-assistent die concrete voorstellen mag doen op ${activePlatform}. Je hebt toegang tot het gekoppelde account van de gebruiker. 
 
 COMMUNICATIE:
 - Geef uitleg en opties in mensentaal
 - Bevestig dat je hun account op ${activePlatform} kunt zien
 
-VOORSTELLEN GENEREREN (NIEUW!):
-- Als je een concrete actie wilt voorstellen (trade, settings wijziging), wrap die in:
+VOORSTELLEN GENEREREN:
+- Voor concrete acties (trade, settings wijziging), wrap in:
 ###PROPOSAL:{JSON}###END
 
 Format van JSON:
@@ -1632,21 +1632,14 @@ Format van JSON:
   "exchange": "bitvavo"
 }
 
-VOORBEELDEN:
-- Trade: {"type":"trade","title":"Koop 0.001 BTC","action":{"type":"buy","params":{"asset":"BTC","amount":0.001}},"reasoning":"BTC oversold"}
-- Settings: {"type":"settings","title":"Verhoog risico","action":{"type":"update_risk","params":{"exchange":"bitvavo","riskPerTrade":3}},"reasoning":"Markt stabiliseert"}
-
 VEILIGHEID:
-- Alleen voorstellen, NOOIT uitvoeren
-- Gebruiker moet akkoord geven in Trading Dashboard
+- Voorstellen moeten goedgekeurd worden in Trading Dashboard
 - Alleen assets die beschikbaar zijn: ${availableAssets.join(', ')}
 - Max 1 proposal per bericht
-
-BELANGRIJK: 
-- Je mag ALLEEN advies geven over munten die beschikbaar zijn op ${activePlatform}
+- Je mag ALLEEN advies geven over munten op ${activePlatform}
 - Als gebruiker vragen stelt over munten niet op ${activePlatform}, wijs hen daarop
 - Voorstellen moeten realistisch en verantwoord zijn`
-    : `Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.`;
+    : `Je bent een rustige crypto-assistent. Je geeft uitleg en opties in mensentaal.`;
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -1854,7 +1847,7 @@ async function generateAllocation(input: {
       messages: [
         {
           role: 'system',
-          content: 'Je bent een rustige crypto-observator die alleen verdelingen geeft in JSON.'
+          content: 'Je bent een crypto-allocatie-engine die verdelingen geeft in JSON.'
         },
         {
           role: 'user',

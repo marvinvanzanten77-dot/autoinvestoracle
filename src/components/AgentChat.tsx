@@ -139,9 +139,9 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
         lowerInput.includes('handel')
       ) {
         agentResponse =
-          'Auto-trading mode: Momenteel sta je in monitoring-mode (read-only). ' +
-          'Je kunt dit wijzigen naar trading-mode, waarna ik automatisch zal handelen volgens je regels. ' +
-          'Let op: Dit is een keuze voor je instellingen, niet iets wat ik zal doen.';
+          'Auto-trading instellingen: Ik kan je portefeuille automatisch beheren volgens je regels. ' +
+          'Je kunt instellen hoeveel transacties per dag, risico per trade, en welke strategie. ' +
+          'Wil je meer informatie over trading-instellingen?';
       } else if (
         lowerInput.includes('strategie') ||
         lowerInput.includes('strategy') ||
@@ -154,9 +154,9 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
           'Deze wijziging bepaalt hoe ik je portfolio bewaak.';
       } else if (lowerInput.includes('status') || lowerInput.includes('wat')) {
         agentResponse =
-          'Je portfolio staat goed. Alle systemen werken normaal. ' +
-          'Volgens je huidige instellingen: monitoring-mode, momenteel geen auto-trading. ' +
-          'Wat zou je willen aanpassen aan je instellingen?';
+          'Je agent status: Je systeem is actief en functioneert normaal. ' +
+          'Je kunt instellen of je in observatie-modus wilt blijven of trading-modus inschakelen. ' +
+          'Wat wil je aanpassen aan je agent instellingen?';
       } else if (
         lowerInput.includes('stop') ||
         lowerInput.includes('loss') ||
