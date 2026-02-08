@@ -641,6 +641,7 @@ export function Dashboard() {
       .then(async (res) => {
         if (!res.ok) return;
         const data = (await res.json()) as { userId: string };
+        console.log('[Dashboard] Session userId:', data.userId);
         setUserId(data.userId);
       })
       .catch(() => {
@@ -655,6 +656,7 @@ export function Dashboard() {
           return;
         }
         const data = (await res.json()) as { profile?: UserProfile };
+        console.log('[Dashboard] Profile loaded:', data.profile);
         setProfile(data.profile ?? null);
       })
       .catch(() => setProfile(null));
@@ -663,13 +665,16 @@ export function Dashboard() {
     fetch('/api/exchanges/status')
       .then(async (res) => {
         if (!res.ok) {
+          console.log('[Dashboard] No exchanges connected');
           setConnectedExchanges([]);
           return;
         }
         const data = (await res.json()) as { connections?: Array<{ exchange: string; status: string }> };
+        console.log('[Dashboard] Exchanges response:', data);
         const connected = data.connections
           ?.filter((c) => c.status === 'connected')
           .map((c) => c.exchange) || [];
+        console.log('[Dashboard] Connected exchanges:', connected);
         setConnectedExchanges(connected);
         
         // Auto-set active platform if not set or if stored platform is no longer connected
@@ -677,19 +682,32 @@ export function Dashboard() {
           if (!current || !connected.includes(current)) {
             const next = connected[0] || '';
             if (next) localStorage.setItem('aio_active_platform', next);
+            console.log('[Dashboard] Setting active platform to:', next);
             return next;
           }
           return current;
         });
       })
-      .catch(() => setConnectedExchanges([]));
+      .catch((err) => {
+        console.error('[Dashboard] Error fetching exchanges:', err);
+        setConnectedExchanges([]);
+      });
 
-    // Fetch balances from connected exchanges
-    fetchBalances(userId)
-      .then((bals) => {
-        setBalances(bals);
-      })
-      .catch(() => setBalances([]));
+    // Fetch balances from connected exchanges - ONLY if userId is set
+    if (userId) {
+      console.log('[Dashboard] Fetching balances for userId:', userId);
+      fetchBalances(userId)
+        .then((bals) => {
+          console.log('[Dashboard] Balances loaded:', bals);
+          setBalances(bals);
+        })
+        .catch((err) => {
+          console.error('[Dashboard] Error fetching balances:', err);
+          setBalances([]);
+        });
+    } else {
+      console.log('[Dashboard] Skipping balance fetch - no userId yet');
+    }
 
     const cachedScan = localStorage.getItem('aio_market_scan_v1');
     if (cachedScan) {
