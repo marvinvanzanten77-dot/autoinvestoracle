@@ -1490,6 +1490,21 @@ type ChatMessage = {
   content: string;
 };
 
+type Proposal = {
+  id: string;
+  type: 'trade' | 'settings' | 'control';
+  title: string;
+  description: string;
+  action: {
+    type: string;
+    params: Record<string, any>;
+  };
+  reasoning: string;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  exchange?: string;
+};
+
 type ChatContext = {
   profile?: {
     displayName?: string;
@@ -1594,13 +1609,44 @@ async function generateChatReply(messages: ChatMessage[], context?: ChatContext)
   console.log('[generateChatReply] Available assets:', availableAssets.join(', '));
 
   const systemPrompt = hasExchangeAccess && activePlatform
-    ? `Je bent een rustige crypto-assistent. Je hebt toegang tot het gekoppelde account van de gebruiker op ${activePlatform}. 
-BELANGRIJK: Je mag ALLEEN advies geven over munten die beschikbaar zijn op ${activePlatform}. 
-Beschikbare assets: ${availableAssets.join(', ')}.
-Geef geen advies of besluiten, alleen uitleg en opties in mensentaal. 
-Bevestig dat je hun account op ${activePlatform} kunt zien als ze erover spreken.
-Als de gebruiker vragen stelt over munten die niet beschikbaar zijn op ${activePlatform}, wijs hen daarop.`
-    : 'Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.';
+    ? `Je bent een crypto-assistent die ook concrete voorstellen mag doen. Je hebt toegang tot het gekoppelde account van de gebruiker op ${activePlatform}. 
+
+COMMUNICATIE:
+- Geef uitleg en opties in mensentaal
+- Bevestig dat je hun account op ${activePlatform} kunt zien
+
+VOORSTELLEN GENEREREN (NIEUW!):
+- Als je een concrete actie wilt voorstellen (trade, settings wijziging), wrap die in:
+###PROPOSAL:{JSON}###END
+
+Format van JSON:
+{
+  "type": "trade" | "settings" | "control",
+  "title": "Korte titel",
+  "description": "Wat gaat er gebeuren",
+  "action": {
+    "type": "buy" | "sell" | "update_risk" | "toggle_agent",
+    "params": {...specifieke parameters...}
+  },
+  "reasoning": "Waarom dit voorstel",
+  "exchange": "bitvavo"
+}
+
+VOORBEELDEN:
+- Trade: {"type":"trade","title":"Koop 0.001 BTC","action":{"type":"buy","params":{"asset":"BTC","amount":0.001}},"reasoning":"BTC oversold"}
+- Settings: {"type":"settings","title":"Verhoog risico","action":{"type":"update_risk","params":{"exchange":"bitvavo","riskPerTrade":3}},"reasoning":"Markt stabiliseert"}
+
+VEILIGHEID:
+- Alleen voorstellen, NOOIT uitvoeren
+- Gebruiker moet akkoord geven in Trading Dashboard
+- Alleen assets die beschikbaar zijn: ${availableAssets.join(', ')}
+- Max 1 proposal per bericht
+
+BELANGRIJK: 
+- Je mag ALLEEN advies geven over munten die beschikbaar zijn op ${activePlatform}
+- Als gebruiker vragen stelt over munten niet op ${activePlatform}, wijs hen daarop
+- Voorstellen moeten realistisch en verantwoord zijn`
+    : `Je bent een rustige crypto-assistent. Je geeft geen advies of besluiten, alleen uitleg en opties in mensentaal.`;
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -2055,6 +2101,7 @@ const routes: Record<string, Handler> = {
       return;
     }
     try {
+      const userId = getSessionUserId(req);
       const { messages, context } = (req.body || {}) as {
         messages: ChatMessage[];
         context?: ChatContext;
@@ -2067,10 +2114,118 @@ const routes: Record<string, Handler> = {
       console.log('[chat] Messages:', messages.length, 'messages');
       const reply = await generateChatReply(messages, context);
       console.log('[chat] Generated reply');
-      res.status(200).json({ reply, createdAt: new Date().toISOString() });
+      
+      // Check if reply contains proposal markers (e.g., ###PROPOSAL:...)
+      const proposalMatch = reply.match(/###PROPOSAL:([\s\S]*?)###END/);
+      let proposal: Proposal | null = null;
+      let displayReply = reply;
+      
+      if (proposalMatch && userId) {
+        try {
+          const proposalData = JSON.parse(proposalMatch[1].trim());
+          const proposalId = crypto.randomUUID();
+          proposal = {
+            id: proposalId,
+            ...proposalData,
+            createdAt: new Date().toISOString(),
+            status: 'pending'
+          };
+          
+          // Save proposal to KV
+          const proposalKey = `user:${userId}:proposal:${proposalId}`;
+          await kv.set(proposalKey, proposal);
+          
+          // Also add to pending list
+          const pendingKey = `user:${userId}:proposals:pending`;
+          const pending = ((await kv.get(pendingKey)) as string[] || []);
+          await kv.set(pendingKey, [...pending, proposalId]);
+          
+          // Remove proposal markers from display
+          displayReply = reply.replace(/###PROPOSAL:[\s\S]*?###END/, '').trim();
+        } catch (e) {
+          console.warn('[chat] Could not parse proposal:', e);
+        }
+      }
+      
+      res.status(200).json({ reply: displayReply, proposal, createdAt: new Date().toISOString() });
     } catch (err) {
       console.error('[chat] Error:', err);
       res.status(500).json({ error: 'Kon chat niet ophalen.' });
+    }
+  },
+  'trading/proposals': async (req, res) => {
+    if (req.method === 'GET') {
+      // GET: List pending proposals
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        
+        const pendingKey = `user:${userId}:proposals:pending`;
+        const pendingIds = ((await kv.get(pendingKey)) as string[]) || [];
+        
+        const proposals: Proposal[] = [];
+        for (const id of pendingIds) {
+          const proposal = (await kv.get(`user:${userId}:proposal:${id}`)) as Proposal | null;
+          if (proposal) proposals.push(proposal);
+        }
+        
+        res.status(200).json({ proposals: proposals.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )});
+      } catch (err) {
+        console.error('[trading/proposals GET] Error:', err);
+        res.status(500).json({ error: 'Kon proposals niet ophalen.' });
+      }
+    } else if (req.method === 'POST') {
+      // POST: Approve/reject proposal
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        
+        const { proposalId, approved } = (req.body || {}) as { proposalId: string; approved: boolean };
+        if (!proposalId) {
+          res.status(400).json({ error: 'proposalId is verplicht.' });
+          return;
+        }
+        
+        const proposalKey = `user:${userId}:proposal:${proposalId}`;
+        const proposal = (await kv.get(proposalKey)) as Proposal | null;
+        
+        if (!proposal) {
+          res.status(404).json({ error: 'Proposal niet gevonden.' });
+          return;
+        }
+        
+        // Update proposal status
+        proposal.status = approved ? 'approved' : 'rejected';
+        await kv.set(proposalKey, proposal);
+        
+        // Remove from pending
+        const pendingKey = `user:${userId}:proposals:pending`;
+        const pendingIds = ((await kv.get(pendingKey)) as string[]) || [];
+        await kv.set(pendingKey, pendingIds.filter(id => id !== proposalId));
+        
+        // If approved, execute the proposal
+        if (approved) {
+          // TODO: Execute based on proposal.action.type
+          console.log('[trading/proposals] Executing proposal:', proposalId, proposal.action);
+          proposal.status = 'executed';
+          await kv.set(proposalKey, proposal);
+        }
+        
+        res.status(200).json({ proposal });
+      } catch (err) {
+        console.error('[trading/proposals POST] Error:', err);
+        res.status(500).json({ error: 'Kon proposal niet verwerken.' });
+      }
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
     }
   },
   'market-scan': async (req, res) => {

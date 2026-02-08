@@ -39,8 +39,23 @@ type TradeProposal = {
   feedback?: string;
 };
 
+type AIProposal = {
+  id: string;
+  type: 'trade' | 'settings' | 'control';
+  title: string;
+  description: string;
+  action: {
+    type: string;
+    params: Record<string, any>;
+  };
+  reasoning: string;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  exchange?: string;
+};
+
 export function Trading() {
-  const [activeTab, setActiveTab] = useState<'proposals' | 'policy' | 'history'>('proposals');
+  const [activeTab, setActiveTab] = useState<'proposals' | 'ai-proposals' | 'policy' | 'history'>('proposals');
   const [userId, setUserId] = useState<string>('');
   const [exchange, setExchange] = useState<string>('bitvavo');
   const [exchanges, setExchanges] = useState<string[]>(['bitvavo']);
@@ -52,6 +67,10 @@ export function Trading() {
   // Proposals state
   const [proposals, setProposals] = useState<TradeProposal[]>([]);
   const [proposalsLoading, setProposalsLoading] = useState(false);
+  
+  // AI Proposals state (from chat)
+  const [aiProposals, setAiProposals] = useState<AIProposal[]>([]);
+  const [aiProposalsLoading, setAiProposalsLoading] = useState(false);
 
   // Controls state
   const [scansEnabled, setScansEnabled] = useState(true);
@@ -136,6 +155,29 @@ export function Trading() {
     fetchProposals();
   }, [userId, exchange]);
 
+  // Fetch AI proposals (from chat)
+  useEffect(() => {
+    if (!userId) return;
+    const fetchAiProposals = async () => {
+      setAiProposalsLoading(true);
+      try {
+        const resp = await fetch(`/api/trading/proposals`);
+        if (resp.ok) {
+          const data = (await resp.json()) as { proposals: AIProposal[] };
+          setAiProposals(data.proposals || []);
+        }
+      } catch (err) {
+        console.error('Error fetching AI proposals:', err);
+      } finally {
+        setAiProposalsLoading(false);
+      }
+    };
+    fetchAiProposals();
+    // Poll every 5 seconds for new proposals
+    const interval = setInterval(fetchAiProposals, 5000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
   // Handle proposal acceptance
   const handleAcceptProposal = async (proposalId: string) => {
     try {
@@ -173,6 +215,50 @@ export function Trading() {
       }
     } catch (err) {
       console.error('Error declining proposal:', err);
+    }
+  };
+
+  // Handle AI proposal approval
+  const handleApproveAIProposal = async (proposalId: string) => {
+    try {
+      const resp = await fetch(`/api/trading/proposals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, approved: true })
+      });
+
+      if (resp.ok) {
+        setAiProposals(aiProposals.filter((p) => p.id !== proposalId));
+        alert('✓ AI voorstel goedgekeurd en uitgevoerd');
+      } else {
+        const err = await resp.json();
+        alert(`❌ Fout: ${err.error || 'Onbekend'}`);
+      }
+    } catch (err) {
+      console.error('Error approving AI proposal:', err);
+      alert('❌ Fout bij goedkeuren voorstel');
+    }
+  };
+
+  // Handle AI proposal rejection
+  const handleRejectAIProposal = async (proposalId: string) => {
+    try {
+      const resp = await fetch(`/api/trading/proposals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, approved: false })
+      });
+
+      if (resp.ok) {
+        setAiProposals(aiProposals.filter((p) => p.id !== proposalId));
+        alert('✓ AI voorstel afgewezen');
+      } else {
+        const err = await resp.json();
+        alert(`❌ Fout: ${err.error || 'Onbekend'}`);
+      }
+    } catch (err) {
+      console.error('Error rejecting AI proposal:', err);
+      alert('❌ Fout bij afwijzen voorstel');
     }
   };
 
@@ -305,7 +391,7 @@ export function Trading() {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex gap-2 border-b border-slate-200 flex-wrap">
         <button
           onClick={() => setActiveTab('proposals')}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
@@ -315,6 +401,16 @@ export function Trading() {
           }`}
         >
           📋 Voorstellen ({proposals.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('ai-proposals')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            activeTab === 'ai-proposals'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          🤖 AI Suggesties ({aiProposals.length})
         </button>
         <button
           onClick={() => setActiveTab('policy')}
@@ -511,6 +607,80 @@ export function Trading() {
             <div className="text-center py-8">
               <p className="text-slate-500 text-sm">Geen actief policy</p>
               <p className="text-xs text-slate-400 mt-2">Maak een policy aan in Agent instellingen</p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* AI Proposals Tab */}
+      {activeTab === 'ai-proposals' && (
+        <Card title="🤖 AI Suggesties" subtitle="Voorgestelde acties van de ChatGPT agent">
+          {aiProposalsLoading ? (
+            <div className="text-center py-8">
+              <p className="text-slate-500 text-sm">AI suggesties laden...</p>
+            </div>
+          ) : aiProposals.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-slate-500 text-sm">Geen AI suggesties beschikbaar</p>
+              <p className="text-xs text-slate-400 mt-2">
+                Chat met de AI agent om acties voor te stellen
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {aiProposals.map((proposal) => (
+                <div key={proposal.id} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-slate-900">{proposal.title}</h4>
+                      <p className="text-sm text-slate-600 mt-1">{proposal.description}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap ml-2">
+                      {proposal.type === 'trade' && '💱 Trade'}
+                      {proposal.type === 'settings' && '⚙️ Instellingen'}
+                      {proposal.type === 'control' && '🎛️ Control'}
+                    </span>
+                  </div>
+
+                  {/* Reasoning */}
+                  {proposal.reasoning && (
+                    <div className="bg-blue-50 rounded p-3 text-sm text-blue-900 border border-blue-200">
+                      <p className="font-medium text-xs text-blue-700 mb-1">Redenering:</p>
+                      <p>{proposal.reasoning}</p>
+                    </div>
+                  )}
+
+                  {/* Action Details */}
+                  {proposal.action && (
+                    <div className="bg-slate-50 rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                      <p className="text-slate-500 font-medium mb-1">Actie:</p>
+                      <pre>{JSON.stringify(proposal.action, null, 2)}</pre>
+                    </div>
+                  )}
+
+                  {/* Timestamp */}
+                  <div className="text-xs text-slate-400">
+                    {new Date(proposal.createdAt || '').toLocaleString('nl-NL')}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => handleApproveAIProposal(proposal.id)}
+                      className="flex-1 pill bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-2 font-medium text-sm"
+                    >
+                      ✓ Goedkeuren
+                    </button>
+                    <button
+                      onClick={() => handleRejectAIProposal(proposal.id)}
+                      className="flex-1 pill border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 px-4 py-2 font-medium text-sm"
+                    >
+                      ✕ Weigeren
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </Card>
