@@ -2209,25 +2209,35 @@ const routes: Record<string, Handler> = {
           console.log('[trading/proposals] Executing proposal:', proposalId, proposal.action);
           
           try {
-            // Get trading keys from environment
-            const tradingKey = process.env.BITVAVO_TRADE_KEY;
-            const tradingSecret = process.env.BITVAVO_TRADE_SECRET;
+            // Get user's Bitvavo credentials from database
+            const storage = getStorageAdapter();
+            const exchange = proposal.exchange || 'bitvavo';
+            const connection = await storage.getConnection(userId, exchange);
             
-            if (!tradingKey || !tradingSecret) {
-              console.warn('[trading/proposals] Trading keys not configured - proposal approved but not executed');
-              console.warn('[trading/proposals] To enable live trading, set BITVAVO_TRADE_KEY and BITVAVO_TRADE_SECRET environment variables');
-              
-              // Proposal is approved but we can't execute without keys
-              // In production, these would be configured
-              return res.status(200).json({ 
-                success: true,
-                proposal,
-                message: 'Voorstel goedgekeurd. Live trading keys zijn niet geconfigureerd - dit is normaal in development.',
-                details: 'Set BITVAVO_TRADE_KEY and BITVAVO_TRADE_SECRET environment variables for live trading.'
+            if (!connection) {
+              console.error('[trading/proposals] No exchange connection found for user');
+              proposal.status = 'failed';
+              await kv.set(proposalKey, proposal);
+              return res.status(400).json({ 
+                error: 'Geen gekoppelde exchange gevonden. Koppel eerst een exchange.' 
               });
             }
             
-            // Extract action details
+            // Decrypt user's API credentials
+            const credentials = decryptSecrets(connection.encryptedSecrets) as any;
+            const tradingKey = credentials.apiKey;
+            const tradingSecret = credentials.apiSecret;
+            
+            if (!tradingKey || !tradingSecret) {
+              console.error('[trading/proposals] Could not decrypt API credentials');
+              proposal.status = 'failed';
+              await kv.set(proposalKey, proposal);
+              return res.status(400).json({ 
+                error: 'API credentials ongeldig. Koppel de exchange opnieuw.' 
+              });
+            }
+            
+            console.log('[trading/proposals] Using credentials for user:', userId, 'exchange:', exchange);
             const action = proposal.action;
             const params = action.params || {};
             
