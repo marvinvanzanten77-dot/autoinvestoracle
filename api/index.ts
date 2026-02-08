@@ -2778,18 +2778,36 @@ const routes: Record<string, Handler> = {
       const connections = await storage.listConnections(userId);
       const connectedExchanges = connections.filter(c => c.status === 'connected');
       
-      const agents = connectedExchanges.map(conn => {
-        const statusKey = `user:${userId}:agent:${conn.exchange}:status`;
-        return {
-          exchange: conn.exchange,
-          mode: (conn.metadata?.['agentMode'] || 'readonly') as 'readonly' | 'trading',
-          enabled: conn.metadata?.['agentEnabled'] ?? true,
-          status: (conn.metadata?.['agentStatus'] || 'idle') as 'idle' | 'monitoring' | 'analyzing' | 'trading' | 'error',
-          lastActivity: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-          nextAction: conn.metadata?.['agentNextAction'] || 'Waiting...',
-          errorMessage: undefined
-        };
-      });
+      const agents = await Promise.all(
+        connectedExchanges.map(async (conn) => {
+          // Read actual settings from KV, not metadata
+          const settings = (await kv.get(`user:${userId}:agent:${conn.exchange}:settings`)) as any;
+          
+          // Determine status based on actual settings
+          let status: 'idle' | 'monitoring' | 'analyzing' | 'trading' | 'error' = 'idle';
+          if (settings?.enabled) {
+            if (settings?.autoTrade) {
+              status = 'trading';
+            } else if (settings?.monitoringInterval) {
+              status = 'monitoring';
+            }
+          }
+          
+          return {
+            exchange: conn.exchange,
+            mode: (conn.metadata?.['agentMode'] || 'readonly') as 'readonly' | 'trading',
+            enabled: settings?.enabled ?? false,
+            status,
+            lastActivity: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            nextAction: status === 'trading' 
+              ? `Next trade check in ${settings?.confidenceThreshold}% confidence` 
+              : status === 'monitoring'
+              ? `Next scan in ${settings?.monitoringInterval || 5} min`
+              : 'Waiting...',
+            errorMessage: undefined
+          };
+        })
+      );
       
       res.status(200).json({ agents });
     } catch (err) {
