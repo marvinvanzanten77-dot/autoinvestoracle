@@ -7,6 +7,8 @@
  * Used by: execute handler only (during /api/trading/execute after APPROVED proposal)
  */
 
+import crypto from 'crypto';
+
 export type BravoBitvavoTradeConfig = {
   apiKey: string;
   apiSecret: string;
@@ -84,7 +86,9 @@ export class BitvavoTrade {
         `${request.market} ${request.orderType}`
       );
 
-      // In production: HMAC-SHA256 sign request with apiSecret
+      const timestamp = Date.now();
+      
+      // Build payload for Bitvavo API
       const payload = {
         market: request.market,
         side: request.side,
@@ -98,14 +102,35 @@ export class BitvavoTrade {
         (payload as any).clientOrderId = request.clientOrderId;
       }
 
+      // Sign request with HMAC-SHA256
+      const bodyStr = JSON.stringify(payload);
+      const signingPath = '/v2/order';
+      const message = timestamp + 'POST' + signingPath + bodyStr;
+      
+      const signature = crypto
+        .createHmac('sha256', this.apiSecret)
+        .update(message)
+        .digest('hex');
+
+      console.log('[BitvavoTrade] Signing request:', {
+        market: request.market,
+        side: request.side,
+        amount: request.amount,
+        timestamp,
+        hasApiKey: !!this.apiKey,
+        path: signingPath
+      });
+
+      // Place order on Bitvavo API
       const response = await fetch(`${this.apiUrl}/order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'BITVAVO-ACCESS-KEY': this.apiKey
-          // In production: Add BITVAVO-ACCESS-NONCE, BITVAVO-ACCESS-SIGNATURE
+          'Bitvavo-Access-Key': this.apiKey,
+          'Bitvavo-Access-Timestamp': timestamp.toString(),
+          'Bitvavo-Access-Signature': signature
         },
-        body: JSON.stringify(payload)
+        body: bodyStr
       });
 
       if (!response.ok) {
@@ -134,13 +159,26 @@ export class BitvavoTrade {
     try {
       console.log(`[BitvavoTrade] Cancelling order ${orderId} on ${market}`);
 
+      const timestamp = Date.now();
+      const payload = { market, orderId };
+      const bodyStr = JSON.stringify(payload);
+      const signingPath = '/v2/order';
+      const message = timestamp + 'DELETE' + signingPath + bodyStr;
+      
+      const signature = crypto
+        .createHmac('sha256', this.apiSecret)
+        .update(message)
+        .digest('hex');
+
       const response = await fetch(`${this.apiUrl}/order`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'BITVAVO-ACCESS-KEY': this.apiKey
+          'Bitvavo-Access-Key': this.apiKey,
+          'Bitvavo-Access-Timestamp': timestamp.toString(),
+          'Bitvavo-Access-Signature': signature
         },
-        body: JSON.stringify({ market, orderId })
+        body: bodyStr
       });
 
       if (!response.ok) {
@@ -161,11 +199,22 @@ export class BitvavoTrade {
    */
   async getOrderStatus(market: string, orderId: string): Promise<OrderStatus | null> {
     try {
+      const timestamp = Date.now();
+      const signingPath = '/v2/order';
+      const message = timestamp + 'GET' + signingPath;
+      
+      const signature = crypto
+        .createHmac('sha256', this.apiSecret)
+        .update(message)
+        .digest('hex');
+
       const response = await fetch(
         `${this.apiUrl}/order?market=${market}&orderId=${orderId}`,
         {
           headers: {
-            'BITVAVO-ACCESS-KEY': this.apiKey
+            'Bitvavo-Access-Key': this.apiKey,
+            'Bitvavo-Access-Timestamp': timestamp.toString(),
+            'Bitvavo-Access-Signature': signature
           }
         }
       );
@@ -208,12 +257,22 @@ export class BitvavoTrade {
     try {
       console.log(`[BitvavoTrade] Searching for order with clientOrderId: ${clientOrderId}`);
 
+      const timestamp = Date.now();
+      const signingPath = '/v2/orders';
+      const message = timestamp + 'GET' + signingPath;
+      
+      const signature = crypto
+        .createHmac('sha256', this.apiSecret)
+        .update(message)
+        .digest('hex');
+
       // Query open orders and recent orders
       const response = await fetch(`${this.apiUrl}/orders`, {
         method: 'GET',
         headers: {
-          'BITVAVO-ACCESS-KEY': this.apiKey
-          // In production: Add nonce, signature
+          'Bitvavo-Access-Key': this.apiKey,
+          'Bitvavo-Access-Timestamp': timestamp.toString(),
+          'Bitvavo-Access-Signature': signature
         }
       });
 

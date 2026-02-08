@@ -2204,12 +2204,158 @@ const routes: Record<string, Handler> = {
         const pendingIds = ((await kv.get(pendingKey)) as string[]) || [];
         await kv.set(pendingKey, pendingIds.filter(id => id !== proposalId));
         
-        // If approved, execute the proposal
+        // If approved, EXECUTE the proposal on Bitvavo
         if (approved) {
-          // TODO: Execute based on proposal.action.type
           console.log('[trading/proposals] Executing proposal:', proposalId, proposal.action);
-          proposal.status = 'executed';
-          await kv.set(proposalKey, proposal);
+          
+          try {
+            // Get trading keys from environment
+            const tradingKey = process.env.BITVAVO_TRADE_KEY;
+            const tradingSecret = process.env.BITVAVO_TRADE_SECRET;
+            
+            if (!tradingKey || !tradingSecret) {
+              console.error('[trading/proposals] Trading keys not configured');
+              proposal.status = 'failed';
+              await kv.set(proposalKey, proposal);
+              return res.status(500).json({ error: 'Trading keys niet geconfigureerd' });
+            }
+            
+            // Extract action details
+            const action = proposal.action;
+            const params = action.params || {};
+            
+            // Helper function to execute Bitvavo order
+            const executeBitvavoOrder = async (market: string, side: 'buy' | 'sell', amount: string) => {
+              const timestamp = Date.now();
+              const payload = {
+                market,
+                side,
+                orderType: 'market',
+                amount
+              };
+              
+              const bodyStr = JSON.stringify(payload);
+              const signingPath = '/v2/order';
+              const message = timestamp + 'POST' + signingPath + bodyStr;
+              
+              const signature = crypto
+                .createHmac('sha256', tradingSecret)
+                .update(message)
+                .digest('hex');
+              
+              console.log('[trading/proposals] Placing order on Bitvavo:', {
+                market,
+                side,
+                amount,
+                timestamp
+              });
+              
+              const response = await fetch('https://api.bitvavo.com/v2/order', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Bitvavo-Access-Key': tradingKey,
+                  'Bitvavo-Access-Timestamp': timestamp.toString(),
+                  'Bitvavo-Access-Signature': signature
+                },
+                body: bodyStr
+              });
+              
+              if (!response.ok) {
+                const errText = await response.text();
+                console.error('[trading/proposals] Bitvavo API error:', response.status, errText);
+                return null;
+              }
+              
+              return await response.json();
+            };
+            
+            // Handle different action types
+            if (action.type === 'buy' || action.type === 'BUY') {
+              // params should have: asset (e.g., 'BTC'), amount (EUR)
+              const asset = params.asset || 'BTC';
+              const amountEur = parseFloat(params.amount || params.amountEur || '10'); // Default 10 EUR
+              const market = `${asset}-EUR`;
+              
+              // Get current price to calculate quantity
+              let estimatedQuantity = '0.001'; // Default estimate
+              
+              try {
+                const tickerResp = await fetch(`https://api.bitvavo.com/v2/${market}/ticker24h`);
+                if (tickerResp.ok) {
+                  const ticker = await tickerResp.json();
+                  const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '50000');
+                  estimatedQuantity = (amountEur / lastPrice).toFixed(8);
+                  console.log('[trading/proposals] Calculated quantity:', {
+                    asset,
+                    amountEur,
+                    lastPrice,
+                    quantity: estimatedQuantity
+                  });
+                }
+              } catch (err) {
+                console.warn('[trading/proposals] Failed to fetch ticker:', err);
+              }
+              
+              // Place market buy order
+              const orderData = await executeBitvavoOrder(market, 'buy', estimatedQuantity);
+              
+              if (orderData && orderData.orderId) {
+                console.log('[trading/proposals] ✅ Order placed successfully:', orderData.orderId);
+                proposal.status = 'executed';
+                proposal.executedAt = new Date().toISOString();
+                (proposal as any).orderId = orderData.orderId;
+                await kv.set(proposalKey, proposal);
+                return res.status(200).json({ 
+                  success: true,
+                  proposal, 
+                  orderDetails: orderData,
+                  message: `BTC order placed: ${orderData.orderId}`
+                });
+              } else {
+                console.error('[trading/proposals] Order placement failed - no order ID returned');
+                proposal.status = 'failed';
+                await kv.set(proposalKey, proposal);
+                return res.status(500).json({ error: 'Order kon niet geplaatst worden' });
+              }
+            } else if (action.type === 'sell' || action.type === 'SELL') {
+              // Sell order
+              const asset = params.asset || 'BTC';
+              const amount = params.amount || params.quantity || '0.001';
+              const market = `${asset}-EUR`;
+              
+              const orderData = await executeBitvavoOrder(market, 'sell', amount);
+              
+              if (orderData && orderData.orderId) {
+                console.log('[trading/proposals] ✅ Sell order placed:', orderData.orderId);
+                proposal.status = 'executed';
+                proposal.executedAt = new Date().toISOString();
+                (proposal as any).orderId = orderData.orderId;
+                await kv.set(proposalKey, proposal);
+                return res.status(200).json({ 
+                  success: true,
+                  proposal, 
+                  orderDetails: orderData,
+                  message: `Sell order placed: ${orderData.orderId}`
+                });
+              } else {
+                proposal.status = 'failed';
+                await kv.set(proposalKey, proposal);
+                return res.status(500).json({ error: 'Verkooporder kon niet geplaatst worden' });
+              }
+            } else {
+              // Unknown action type
+              console.warn('[trading/proposals] Unknown action type:', action.type);
+              proposal.status = 'failed';
+              await kv.set(proposalKey, proposal);
+              return res.status(400).json({ error: `Onbekend actietype: ${action.type}` });
+            }
+          } catch (execErr) {
+            console.error('[trading/proposals] Execution error:', execErr);
+            proposal.status = 'failed';
+            await kv.set(proposalKey, proposal);
+            return res.status(500).json({ error: `Executie mislukt: ${execErr}` });
+          }
         }
         
         res.status(200).json({ proposal });
