@@ -132,7 +132,50 @@ function ChatCard({ context }: { context?: ChatContext }) {
   );
 }
 
-function WalletCard({ amount }: { amount: number }) {
+function WalletCard({ amount, userId, onRefresh }: { amount: number; userId: string; onRefresh?: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const handleTestFetch = async () => {
+    if (!userId) {
+      setTestResult('❌ Geen userId beschikbaar');
+      return;
+    }
+    setLoading(true);
+    setTestResult(null);
+    try {
+      console.log('[WalletCard] Testing balance fetch with userId:', userId);
+      const response = await fetch(`/api/exchanges/balances?userId=${userId}`);
+      const data = (await response.json()) as any;
+      console.log('[WalletCard] Test response:', data);
+      
+      if (!response.ok) {
+        setTestResult(`❌ API Error: ${response.status} - ${JSON.stringify(data)}`);
+        return;
+      }
+
+      if (!data.balances || data.balances.length === 0) {
+        setTestResult('⚠️ Geen balances geretourneerd van API');
+        return;
+      }
+
+      const eur = data.balances.find((b: any) => b.asset === 'EUR');
+      if (!eur) {
+        setTestResult(`⚠️ EUR niet gevonden. Assets: ${data.balances.map((b: any) => b.asset).join(', ')}`);
+        return;
+      }
+
+      setTestResult(`✓ EUR opgehaald: €${eur.available} beschikbaar`);
+      onRefresh?.();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResult(`❌ Error: ${msg}`);
+      console.error('[WalletCard] Test error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatted = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
     currency: 'EUR',
@@ -146,6 +189,24 @@ function WalletCard({ amount }: { amount: number }) {
         <p className="text-xs text-slate-500">
           Dit saldo wordt direct van je verbonden platform (Bitvavo) opgehaald. Verbind je account voor real-time updates.
         </p>
+        
+        <button
+          onClick={handleTestFetch}
+          disabled={loading}
+          className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-60"
+        >
+          {loading ? 'Testen...' : '🔄 Saldo testen'}
+        </button>
+
+        {testResult && (
+          <div className={`text-xs p-2 rounded-lg font-mono ${
+            testResult.startsWith('✓') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+            testResult.startsWith('⚠️') ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+            'bg-red-50 text-red-700 border border-red-200'
+          }`}>
+            {testResult}
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -849,7 +910,13 @@ export function Dashboard() {
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ChatCard context={chatContext} />
-        <WalletCard amount={amount} />
+        <WalletCard 
+          amount={amount} 
+          userId={userId}
+          onRefresh={() => {
+            if (userId) fetchBalances(userId).then(setBalances).catch(() => setBalances([]));
+          }}
+        />
         <UpdatesCard />
       </div>
 
