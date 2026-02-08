@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { AgentStatusWidget } from '../components/AgentStatusWidget';
 import { dashboardUpdates, volatilityStatus } from '../data/marketUpdates';
 import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
@@ -910,6 +911,9 @@ export function Dashboard() {
       />
 
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
+
+      {/* Agent Status */}
+      <AgentStatusWidget />
 
       {/* Platform Selector */}
       {connectedExchanges.length > 1 && (

@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { label: 'Academy', to: '/academy' },
   { label: 'Exchange koppelingen', to: '/settings/exchanges' },
   { label: 'Agent instellingen', to: '/agent' },
+  { label: 'Agent activiteit', to: '/agent/activity' },
   { label: 'Instellingen', to: '/settings' }
 ];
 

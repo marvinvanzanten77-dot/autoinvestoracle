@@ -14,6 +14,7 @@ import { Academy } from './pages/Academy';
 import { Onboarding } from './pages/Onboarding';
 import { Exchanges } from './pages/Exchanges';
 import { Agent } from './pages/Agent';
+import { AgentActivity } from './pages/AgentActivity';
 import { Login } from './pages/Login';
 import { supabase } from './lib/supabase/client';
 
@@ -28,6 +29,7 @@ function MainLayoutRoutes() {
         <Route path="/charts" element={<Charts />} />
         <Route path="/academy" element={<Academy />} />
         <Route path="/agent" element={<Agent />} />
+        <Route path="/agent/activity" element={<AgentActivity />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/exchanges" element={<Exchanges />} />
       </Routes>
