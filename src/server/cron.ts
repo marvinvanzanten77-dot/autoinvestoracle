@@ -83,28 +83,14 @@ export async function jobAnalyzePatterns(): Promise<void> {
 /**
  * JOB 3: Refresh market scans (elk uur)
  * 
- * Elk uur:
- * 1. Roep CoinGecko API aan
- * 2. Genereer observatie
- * 3. Log tickets
+ * DISABLED: Automatic background scans are disabled per user preference.
+ * Market scans are now:
+ * - Manual only via POST /api/trading/scan/now
+ * - Or via user-configured agent settings with interval monitoring
  */
 export async function jobRefreshMarketScans(): Promise<void> {
-  console.log('🔄 [CRON] Running: Refresh Market Scans');
-
-  try {
-    // IMPLEMENTATION NEEDED:
-    // 1. Call /api/market-scan internally via server-to-server fetch
-    // 2. Trigger observation logging with market snapshot
-    // 3. Update dashboard cache (Redis/memory)
-    // Example:
-    //   const scanResult = await handleAutoLoadMarketData()
-    //   await logObservation(scanResult)
-    //   cache.set('market_scan_latest', scanResult)
-
-    console.log('  → Market scan refresh placeholder');
-  } catch (err) {
-    console.error('❌ Error in jobRefreshMarketScans:', err);
-  }
+  console.log('[CRON] Automatic market scans are disabled per user preference');
+  return;
 }
 
 /**

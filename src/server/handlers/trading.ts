@@ -23,8 +23,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { AITradingAgent, type TradeSignal, type AgentContext } from '../../server/ai/tradingAgent';
-import { supabase } from '../lib/supabase/client';
+import { AITradingAgent, type TradeSignal, type AgentContext } from '../../../server/ai/tradingAgent';
+import { supabase } from '../../lib/supabase/client';
 import {
   getActivePolicy,
   getPolicyById,
@@ -50,6 +50,7 @@ import {
   initializeScanJob,
   pauseScan,
   resumeScan,
+  executeScan,
   executeScheduledScans
 } from '../../trading/scanScheduler';
 
@@ -443,18 +444,21 @@ export async function handleForceScan(req: ApiRequest, res: ApiResponse) {
     const userId = extractUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Force immediate execution by setting next_run_at to now
-    const { error } = await supabase
-      .from('scan_jobs')
-      .update({ next_run_at: new Date().toISOString() })
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('[ForceScan] Update error:', error);
-      return res.status(500).json({ error: 'Failed to force scan' });
+    // Get the scan job
+    const job = await getScanJob(userId);
+    if (!job) {
+      return res.status(404).json({ error: 'No scan job configured for this user' });
     }
 
-    return res.status(200).json({ success: true, message: 'Scan scheduled to run immediately' });
+    // Execute the scan immediately
+    console.log(`[ForceScan] Executing manual scan for user ${userId}`);
+    await executeScan(job);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Manual scan executed successfully',
+      timestamp: new Date().toISOString()
+    });
   } catch (err) {
     console.error('[ForceScan] Error:', err);
     return res.status(500).json({

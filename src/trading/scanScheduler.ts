@@ -136,34 +136,23 @@ export async function resumeScan(userId: string): Promise<boolean> {
 // SCAN PIPELINE
 // ============================================================================
 
+/**
+ * DISABLED: Automatic background scans
+ * 
+ * User preference: No automatic scans via open API
+ * Only manual scans + explicitly configured interval scans with user observation
+ * 
+ * This function is disabled and will not execute any scheduled scans.
+ * Scans are triggered:
+ * - Manually via POST /api/trading/scan/now
+ * - Or via user-configured agent settings with interval monitoring
+ */
 export async function executeScheduledScans(): Promise<void> {
-  console.log('[ScanScheduler] Starting scheduled scans...');
-
-  // Find all active scan jobs due to run
-  const { data: jobs, error } = await supabase
-    .from('scan_jobs')
-    .select('*')
-    .eq('status', 'active')
-    .lt('next_run_at', new Date().toISOString());
-
-  if (error) {
-    console.error('[ScanScheduler] Failed to fetch scan jobs:', error);
-    return;
-  }
-
-  if (!jobs || jobs.length === 0) {
-    console.log('[ScanScheduler] No scans due to run');
-    return;
-  }
-
-  // Execute each scan
-  for (const jobRow of jobs) {
-    const job = formatScanJob(jobRow);
-    await executeScan(job);
-  }
+  console.log('[ScanScheduler] Scheduled scans are disabled per user preference');
+  return;
 }
 
-async function executeScan(job: ScanJob): Promise<void> {
+export async function executeScan(job: ScanJob): Promise<void> {
   const userId = job.userId;
   console.log(`[ScanScheduler] Executing scan for user ${userId}`);
 
