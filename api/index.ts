@@ -2972,6 +2972,33 @@ const routes: Record<string, Handler> = {
           return;
         }
         
+        // VALIDATION: If trying to switch to trading mode, check permissions
+        if (updates.apiMode === 'trading' && currentSettings.apiMode !== 'trading') {
+          // Check if connection has sufficient scopes for trading
+          const storage = getStorageAdapter();
+          const connections = await storage.listConnections(userId);
+          const connection = connections.find(c => c.exchange === exchange && c.status === 'connected');
+          
+          if (!connection) {
+            res.status(400).json({ 
+              error: 'Exchange niet verbonden.',
+              requiresReconnect: true 
+            });
+            return;
+          }
+          
+          // Check if connection was set up with trading mode
+          const connApiMode = connection.metadata?.apiMode || connection.metadata?.agentMode;
+          if (connApiMode === 'readonly') {
+            res.status(403).json({ 
+              error: 'Je API keys hebben onvoldoende rechten voor trading mode. Reconnecteer met keys die trading-rechten hebben.',
+              requiresReconnect: true,
+              hint: 'Zorg dat je API keys BEIDE deze rechten hebben: Account Read, Account Manage (of Trading)'
+            });
+            return;
+          }
+        }
+        
         // Merge updates (prevent unsafe changes)
         const newSettings = {
           ...currentSettings,

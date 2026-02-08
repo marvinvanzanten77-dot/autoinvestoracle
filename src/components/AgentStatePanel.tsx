@@ -98,6 +98,10 @@ export function AgentStatePanel({ exchange }: AgentStatePanelProps) {
         
         // Refetch to get fresh data
         await fetchState();
+      } else if (resp.status === 403) {
+        // Permission denied - API keys don't have trading rights
+        const errData = await resp.json();
+        setError(errData.error || 'Je API keys hebben onvoldoende rechten voor trading mode');
       } else {
         setError('Kon modus niet wijzigen');
       }
@@ -126,6 +130,30 @@ export function AgentStatePanel({ exchange }: AgentStatePanelProps) {
   return (
     <Card title="📊 Huidige Stand van Zaken" subtitle={`${exchange} portfolio analyse`}>
       <div className="space-y-4">
+        {/* Permission Warning Banner */}
+        {state.settings.apiMode === 'readonly' && (
+          <div className="rounded-lg bg-amber-50 border border-amber-300 p-3">
+            <p className="text-xs text-amber-700 font-medium mb-1">⚠️ Read-only API sleutels actief</p>
+            <p className="text-xs text-amber-600 leading-relaxed">
+              Je huidige API sleutels hebben geen trading rechten. Om trading mode in te schakelen, genereer je nieuwe sleutels met de rechten "Account Read" EN "Account Manage" (of "Trading") en verbind ze opnieuw.
+            </p>
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-300 p-3">
+            <p className="text-xs text-red-700 font-medium mb-1">❌ Fout</p>
+            <p className="text-xs text-red-600 leading-relaxed">{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-xs text-red-600 underline mt-1 hover:text-red-700"
+            >
+              Sluiten
+            </button>
+          </div>
+        )}
         {/* Portfolio Summary */}
         <div className="rounded-lg bg-slate-50 p-4">
           <div className="flex items-center justify-between mb-3">
