@@ -314,11 +314,12 @@ interface ExchangeConnector {
   name: string;
   capabilities: ConnectorCapabilities;
   connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult>;
-  fetchAccounts(userId: string, credentials: ExchangeCredentials): Promise<Account[]>;
-  fetchBalances(userId: string, credentials: ExchangeCredentials): Promise<Balance[]>;
-  fetchPositions(userId: string, credentials: ExchangeCredentials): Promise<Position[]>;
-  fetchTransactions(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Transaction[]>;
-  fetchOrders(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Order[]>;
+  setCredentials(credentials: ExchangeCredentials): void;
+  fetchAccounts(): Promise<Account[]>;
+  fetchBalances(): Promise<Balance[]>;
+  fetchPositions(): Promise<Position[]>;
+  fetchTransactions(params: FetchParams): Promise<Transaction[]>;
+  fetchOrders(params: FetchParams): Promise<Order[]>;
   fetchMarketData(params: MarketDataParams): Promise<MarketCandle[]>;
   fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>>;
 }
