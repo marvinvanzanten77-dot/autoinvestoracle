@@ -24,7 +24,7 @@ export type TradeProposal = {
   status: TradeProposalStatus;
   expiresAt: string;
   asset: string;
-  side: 'buy' | 'sell';
+  side: 'buy' | 'sell' | 'rebalance' | 'close_position' | 'hold' | 'wait';
   orderType: 'limit' | 'market';
   orderValueEur: number;
   confidence: number; // 0, 25, 50, 75, 100

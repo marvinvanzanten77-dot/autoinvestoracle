@@ -18,7 +18,7 @@ import type { Balance, Order } from '../../src/lib/exchanges/types';
 // TYPES
 // ============================================================================
 
-export type TradeAction = 'buy' | 'sell' | 'hold' | 'close_position' | 'wait';
+export type TradeAction = 'buy' | 'sell' | 'hold' | 'close_position' | 'rebalance' | 'wait';
 
 export type TradeSignal = {
   action: TradeAction;
@@ -172,6 +172,9 @@ export class AITradingAgent {
         case 'sell':
           result = await this.executeSellOrder(signal, context, connector, auditId);
           break;
+        case 'rebalance':
+          result = await this.executeRebalance(signal, context, connector, auditId);
+          break;
         case 'close_position':
           result = await this.closePosition(signal, context, connector, auditId);
           break;
@@ -209,14 +212,21 @@ export class AITradingAgent {
   // ======================== PRIVATE METHODS ========================
 
   /**
-   * Build prompt for market analysis
+   * Build prompt for market analysis with extended trading capabilities
+   * Includes: BUY, SELL, HOLD, CLOSE_POSITION, REBALANCE, WAIT
    */
   private buildAnalysisPrompt(context: AgentContext): string {
     const riskLabel = context.profile.riskProfile;
     const posLimit = TRADE_RULES.positionLimits[riskLabel];
     const maxExp = TRADE_RULES.maxExposure[riskLabel];
 
-    return `You are an expert crypto trading agent for Auto Invest Oracle.
+    // Calculate portfolio allocation percentages
+    const allocations = context.portfolio.balances.map((b) => {
+      const percent = (b.total / context.portfolio.totalValue * 100).toFixed(1);
+      return `${b.asset}: €${b.total.toFixed(2)} (${percent}%)`;
+    });
+
+    return `You are an expert crypto trading agent for Auto Invest Oracle with full trading capabilities.
 
 MARKET CONTEXT:
 - Volatility: ${context.market.volatility}/100
@@ -225,7 +235,7 @@ MARKET CONTEXT:
 
 PORTFOLIO STATE:
 - Total value: €${context.portfolio.totalValue.toFixed(2)}
-- Balances: ${context.portfolio.balances.map((b) => `${b.asset}: ${b.total}`).join(', ')}
+- Asset allocation: ${allocations.join('; ')}
 - Open positions: ${context.portfolio.openPositions.length}
 
 USER RISK PROFILE: ${riskLabel.toUpperCase()}
@@ -233,29 +243,56 @@ USER RISK PROFILE: ${riskLabel.toUpperCase()}
 - Max total exposure: ${(maxExp * 100).toFixed(0)}%
 - Allowed assets: ${context.profile.allowedAssets.join(', ')}
 
+TRADING INSTRUCTIONS:
+You can propose 5 types of actions:
+
+1. BUY: Purchase additional assets to diversify or increase position
+   - Check if new position will respect limits
+   - Provide quantity or EUR value to purchase
+
+2. SELL: Reduce positions to take profits or reduce risk
+   - Sell when asset is overbought or at profit targets
+   - Helpful for risk management and reallocating capital
+
+3. REBALANCE: Temporarily move funds between assets
+   - Use when one position has grown too large
+   - Example: Sell 30% of ETH to buy more BTC if BTC is underweighted
+
+4. CLOSE_POSITION: Fully exit a position (emergency or target reached)
+   - Use when position is underwater or target profit reached
+   - Converts position back to EUR/cash
+
+5. HOLD/WAIT: Do nothing
+   - HOLD: Maintain current positions (conviction to wait)
+   - WAIT: Undecided, check again later
+
 RULES YOU MUST FOLLOW:
 1. Only propose trades in allowed assets
 2. Never exceed position size limits
-3. Volatility > 85: only hold/close positions, no new buys
+3. Volatility > 85: only close/rebalance, no new buys/sells to open
 4. Confidence must be 0, 25, 50, 75, or 100
-5. Always provide clear rationale
-6. Risk level must be low/medium/high based on position size
+5. Always provide detailed rationale including:
+   - Why this action now
+   - What triggers it should wait for
+   - Risk considerations
+6. Risk level (low/medium/high) must reflect position size impact
+7. Prefer rebalancing for risk management over pure sells
 
 RESPOND ONLY WITH VALID JSON, no markdown:
 {
   "signals": [
     {
-      "action": "buy|sell|hold|close_position|wait",
-      "asset": "BTC|ETH|...",
-      "quantity": number or null,
-      "price": number or null,
-      "rationale": "string",
+      "action": "buy|sell|rebalance|hold|close_position|wait",
+      "asset": "BTC|ETH|EUR|...",
+      "quantity": number or null (for buy/sell/rebalance),
+      "price": number or null (target exit price for sells),
+      "rationale": "string with detailed explanation",
       "confidence": 0|25|50|75|100,
       "riskLevel": "low|medium|high",
-      "maxLoss": number or null
+      "maxLoss": number or null (EUR amount user willing to lose)
     }
   ],
-  "reasoning": "string explaining your analysis"
+  "reasoning": "string explaining your overall market analysis and portfolio strategy"
 }`;
   }
 
@@ -470,6 +507,44 @@ RESPOND ONLY WITH VALID JSON, no markdown:
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sell order failed';
+      return this.createFailureResult(signal, msg, auditId);
+    }
+  }
+
+  /**
+   * Execute rebalance: Sell from one asset, buy another
+   * This helps maintain target allocations and manage risk
+   */
+  private async executeRebalance(
+    signal: TradeSignal,
+    context: AgentContext,
+    connector: BitvavoConnector,
+    auditId: string
+  ): Promise<TradeExecutionResult> {
+    if (!signal.quantity || !signal.price) {
+      return this.createFailureResult(signal, 'Missing quantity or price for rebalance', auditId);
+    }
+
+    try {
+      // Rebalance: sell from overweighted position, reinvest in underweighted
+      const saleValue = signal.quantity * signal.price;
+      const fee = saleValue * 0.002; // Double fee for two transactions (sell + buy)
+
+      return {
+        success: true,
+        action: 'rebalance',
+        asset: signal.asset,
+        quantity: signal.quantity,
+        price: signal.price,
+        orderId: `reb_${Date.now()}`,
+        fee,
+        totalValue: saleValue - fee,
+        timestamp: new Date().toISOString(),
+        message: `REBALANCE: Reduce ${signal.asset} by ${signal.quantity} (€${saleValue.toFixed(2)}) and reinvest. ${signal.rationale}`,
+        auditId
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Rebalance failed';
       return this.createFailureResult(signal, msg, auditId);
     }
   }

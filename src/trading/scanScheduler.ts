@@ -8,7 +8,7 @@
 import { supabase } from '../lib/supabase/client';
 import { getActivePolicy, getTradingEnabled } from './policy';
 import { createProposal, expireProposals } from './proposals';
-import { AITradingAgent } from '../../server/ai/tradingAgent';
+import { AITradingAgent, type TradeAction, type AgentContext } from '../../server/ai/tradingAgent';
 
 // ============================================================================
 // TYPES
@@ -254,13 +254,35 @@ export async function executeScan(job: ScanJob): Promise<void> {
   }
 
   // ========================================================================
-  // STEP 4: CALL AI TRADING AGENT
+  // STEP 4: BUILD AGENT CONTEXT
   // ========================================================================
-  const agent = new AITradingAgent(userId);
-  const proposals = await agent.analyzeAndProposeTrades({
-    policy,
-    marketSnapshot: snapshot
-  });
+  
+  const agentContext: AgentContext = {
+    userId,
+    profile: {
+      riskProfile: 'gebalanceerd', // Could be derived from policy presets
+      maxDrawdown: 0.10, // From risk config
+      maxPositionSize: 0.20, // Derived from risk.maxExposureEur / totalValue
+      allowedAssets: policy.assets?.allowlist || ['BTC-EUR', 'ETH-EUR']
+    },
+    market: {
+      volatility: Math.min(100, Math.max(0, snapshot.volatility24h)),
+      sentiment: 50, // Placeholder: could integrate with Fear & Greed Index
+      recentObservations: snapshot.triggersFired || []
+    },
+    portfolio: {
+      totalValue: snapshot.portfolioValue,
+      balances: [], // TODO: Fetch actual balances from Bitvavo
+      openOrders: [], // TODO: Fetch actual orders
+      openPositions: [] // TODO: Fetch actual positions
+    }
+  };
+
+  // ========================================================================
+  // STEP 5: CALL AI TRADING AGENT
+  // ========================================================================
+  const agent = new AITradingAgent();
+  const proposals = await agent.analyzeAndProposeTrades(agentContext);
 
   if (!proposals || proposals.length === 0) {
     console.log(`[ScanScheduler] No proposals generated for user ${userId}`);
@@ -269,29 +291,41 @@ export async function executeScan(job: ScanJob): Promise<void> {
   }
 
   // ========================================================================
-  // STEP 5: STORE PROPOSALS
+  // STEP 6: CONVERT SIGNALS TO PROPOSALS
   // ========================================================================
   console.log(`[ScanScheduler] Creating ${proposals.length} proposals for user ${userId}`);
 
-  for (const proposal of proposals) {
+  for (const signal of proposals) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 60); // 60-minute expiry
+
+    // Map TradeAction to proposal side
+    const proposalSide = mapActionToProposalSide(signal.action);
+    
+    // Calculate order value if not provided
+    const orderValue = signal.action === 'hold' || signal.action === 'wait' 
+      ? 0 
+      : (signal.price && signal.quantity ? signal.price * signal.quantity : 100);
 
     await createProposal(userId, {
       status: 'PROPOSED',
       expiresAt: expiresAt.toISOString(),
-      asset: proposal.asset,
-      side: proposal.side,
-      orderType: proposal.orderType,
-      orderValueEur: proposal.orderValueEur,
-      confidence: proposal.confidence,
-      rationale: proposal.rationale,
+      asset: signal.asset,
+      side: proposalSide,
+      orderType: 'limit',
+      orderValueEur: orderValue,
+      confidence: signal.confidence,
+      rationale: {
+        why: signal.rationale,
+        whyNot: [],
+        riskNotes: signal.riskLevel === 'high' ? 'High risk position' : undefined
+      },
       createdBy: 'AI'
     });
   }
 
   // ========================================================================
-  // STEP 6: UPDATE SCAN JOB
+  // STEP 7: UPDATE SCAN JOB
   // ========================================================================
   await supabase
     .from('scan_jobs')
@@ -406,6 +440,28 @@ async function scheduleNextRun(userId: string, intervalMinutes: number): Promise
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/**
+ * Map TradeAction to ProposalSide for display
+ */
+function mapActionToProposalSide(action: TradeAction): 'buy' | 'sell' | 'rebalance' | 'close_position' | 'hold' | 'wait' {
+  switch (action) {
+    case 'buy':
+      return 'buy';
+    case 'sell':
+      return 'sell';
+    case 'rebalance':
+      return 'rebalance';
+    case 'close_position':
+      return 'close_position';
+    case 'hold':
+      return 'hold';
+    case 'wait':
+      return 'wait';
+    default:
+      return 'hold';
+  }
+}
 
 function formatScanJob(row: any): ScanJob {
   return {
