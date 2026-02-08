@@ -6,7 +6,7 @@ import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
 import { fetchPortfolioAllocation, type PortfolioAllocationResponse } from '../api/portfolioAllocate';
 import { fetchInsights, type InsightInput } from '../api/chat';
-import { fetchBalances, fetchPerformance, type Balance } from '../api/exchanges';
+import { fetchBalances, fetchPerformance, fetchAvailableAssets, type Balance } from '../api/exchanges';
 import { STRATEGIES } from '../data/strategies';
 import { sendChatMessage, type ChatContext, type ChatMessage } from '../api/chat';
 import type { UserProfile } from '../lib/profile/types';
@@ -771,6 +771,7 @@ export function Dashboard() {
   });
   const [currentAllocation, setCurrentAllocation] = useState<Array<{ label: string; pct: number }>>();
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [exchangeAssets, setExchangeAssets] = useState<{ [platform: string]: string[] }>({});
 
   useEffect(() => {
     // Initialize session and get userId
@@ -842,8 +843,26 @@ export function Dashboard() {
           console.error('[Dashboard] Error fetching balances:', err);
           setBalances([]);
         });
+
+      // Also fetch available assets from all exchanges
+      fetchAvailableAssets(userId)
+        .then((response) => {
+          console.log('[Dashboard] Available assets loaded:', response.assetsByExchange);
+          // Convert to { platform: [assets] } format
+          const assets: { [platform: string]: string[] } = {};
+          Object.entries(response.assetsByExchange).forEach(([platform, assetList]) => {
+            assets[platform] = assetList.map((a) => 
+              typeof a === 'string' ? a : a.symbol
+            );
+          });
+          setExchangeAssets(assets);
+        })
+        .catch((err) => {
+          console.error('[Dashboard] Error fetching available assets:', err);
+          setExchangeAssets({});
+        });
     } else {
-      console.log('[Dashboard] Skipping balance fetch - no userId yet');
+      console.log('[Dashboard] Skipping fetch - no userId yet');
     }
 
     const cachedScan = localStorage.getItem('aio_market_scan_v1');
@@ -942,7 +961,7 @@ export function Dashboard() {
         exchanges: {
           connected: connectedExchanges,
           activePlatform: activePlatform,
-          availableAssets: activeBalances.map(b => b.asset),
+          availableAssets: activePlatform ? exchangeAssets[activePlatform] || [] : [],
           cashSaldo: cashSaldo
         }
       }
