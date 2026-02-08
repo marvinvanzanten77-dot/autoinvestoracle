@@ -14,18 +14,56 @@ interface AgentChatProps {
 }
 
 export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
+  const [userId, setUserId] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initial analysis on mount
+  // Load user session and restore chat history from localStorage
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      fetchInitialAnalysis();
+    const initSession = async () => {
+      try {
+        const resp = await fetch('/api/session/init');
+        if (resp.ok) {
+          const data = (await resp.json()) as { userId: string };
+          setUserId(data.userId);
+
+          // Restore chat history from localStorage
+          const storageKey = `agent_chat_${data.userId}_${exchange}`;
+          const storedMessages = localStorage.getItem(storageKey);
+          if (storedMessages) {
+            try {
+              setMessages(JSON.parse(storedMessages));
+              return; // Don't fetch initial analysis if we have stored messages
+            } catch (e) {
+              console.warn('Could not restore agent chat history:', e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing session:', err);
+      }
+    };
+
+    if (isOpen) {
+      initSession().then(() => {
+        // Fetch initial analysis only if no stored messages
+        if (messages.length === 0) {
+          fetchInitialAnalysis();
+        }
+      });
     }
   }, [isOpen]);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (userId && messages.length > 0) {
+      const storageKey = `agent_chat_${userId}_${exchange}`;
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    }
+  }, [messages, userId, exchange]);
 
   // Auto-scroll to bottom
   useEffect(() => {

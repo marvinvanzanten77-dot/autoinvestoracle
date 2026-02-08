@@ -62,6 +62,17 @@ export type ChatContext = {
 
 export type ChatResponse = {
   reply: string;
+  proposal?: {
+    id: string;
+    type: 'trade' | 'settings';
+    title: string;
+    description?: string;
+    action: any;
+    reasoning?: string;
+    exchange?: string;
+    createdAt: string;
+    status: 'pending' | 'approved' | 'rejected';
+  };
   createdAt: string;
 };
 

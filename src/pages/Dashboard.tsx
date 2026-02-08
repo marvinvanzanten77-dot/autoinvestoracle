@@ -62,10 +62,44 @@ function DashboardHeader({
 }
 
 function ChatCard({ context }: { context?: ChatContext }) {
+  const [userId, setUserId] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load user session and restore chat history from localStorage
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const resp = await fetch('/api/session/init');
+        if (resp.ok) {
+          const data = (await resp.json()) as { userId: string };
+          setUserId(data.userId);
+          
+          // Restore chat history from localStorage
+          const storedMessages = localStorage.getItem(`chat_history_${data.userId}`);
+          if (storedMessages) {
+            try {
+              setMessages(JSON.parse(storedMessages));
+            } catch (e) {
+              console.warn('Could not restore chat history:', e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing session:', err);
+      }
+    };
+    initSession();
+  }, []);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (userId && messages.length > 0) {
+      localStorage.setItem(`chat_history_${userId}`, JSON.stringify(messages));
+    }
+  }, [messages, userId]);
 
   const handleSend = async () => {
     const text = input.trim();
