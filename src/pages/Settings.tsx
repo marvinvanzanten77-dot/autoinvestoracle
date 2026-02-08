@@ -33,8 +33,6 @@ export function Settings() {
     dailyEmail: true,
     volAlerts: true
   });
-  const [customBalance, setCustomBalance] = useState<string>('');
-  const [balanceSaveSuccess, setBalanceSaveSuccess] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -47,11 +45,6 @@ export function Settings() {
       }
     } catch {
       // ignore invalid storage
-    }
-    // Load custom balance
-    const customBal = localStorage.getItem('aio_custom_balance');
-    if (customBal) {
-      setCustomBalance(customBal);
     }
   }, []);
 
@@ -281,52 +274,6 @@ export function Settings() {
           >
             {profileSaving ? 'Opslaan...' : 'Profiel opslaan'}
           </button>
-        </div>
-      </Card>
-
-      <Card title="Beschikbaar saldo" subtitle="Wijzig je investeringsbedrag">
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm text-slate-600 mb-2 block">
-              Bedrag in €
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={customBalance}
-                onChange={(e) => {
-                  setCustomBalance(e.target.value);
-                  setBalanceSaveSuccess(false);
-                }}
-                min="0"
-                step="0.01"
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
-                placeholder="0.00"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const balance = parseFloat(customBalance);
-                  if (!isNaN(balance) && balance >= 0) {
-                    localStorage.setItem('aio_custom_balance', String(balance));
-                    setBalanceSaveSuccess(true);
-                    setTimeout(() => setBalanceSaveSuccess(false), 3000);
-                  }
-                }}
-                className="pill border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 transition"
-              >
-                Opslaan
-              </button>
-            </div>
-          </div>
-          {balanceSaveSuccess && (
-            <p className="text-sm text-emerald-700 bg-emerald-50 rounded px-3 py-2">
-              ✓ Saldo bijgewerkt
-            </p>
-          )}
-          <p className="text-xs text-slate-500">
-            Dit bedrag wordt gebruikt voor alle portefeuille-berekeningen. Het overschrijft je startkeuze.
-          </p>
         </div>
       </Card>
 

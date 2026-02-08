@@ -132,7 +132,7 @@ function ChatCard({ context }: { context?: ChatContext }) {
   );
 }
 
-function WalletCard({ amount, onEdit }: { amount: number; onEdit?: () => void }) {
+function WalletCard({ amount }: { amount: number }) {
   const formatted = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
     currency: 'EUR',
@@ -140,42 +140,15 @@ function WalletCard({ amount, onEdit }: { amount: number; onEdit?: () => void })
   }).format(amount || 0);
 
   return (
-    <Card title="Portemonnee" subtitle="Beschikbaar saldo">
+    <Card title="Portemonnee" subtitle="Beschikbaar saldo van Bitvavo">
       <div className="space-y-3">
         <p className="text-title text-slate-900 font-serif">{formatted}</p>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="pill border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 transition text-sm"
-          >
-            Saldo aanpassen
-          </button>
-        )}
         <p className="text-xs text-slate-500">
-          Je kunt dit real-time updaten door een koppeling naar je platform(en) te maken. Tot die tijd kun je het hier
-          handmatig bijhouden.
+          Dit saldo wordt direct van je verbonden platform (Bitvavo) opgehaald. Verbind je account voor real-time updates.
         </p>
       </div>
     </Card>
   );
-}
-
-function mapRangeToAmount(range?: UserProfile['startAmountRange']) {
-  switch (range) {
-    case '0-500':
-      return 250;
-    case '500-2k':
-      return 1250;
-    case '2k-10k':
-      return 6000;
-    case '10k-50k':
-      return 30000;
-    case '50k+':
-      return 75000;
-    default:
-      return 0;
-  }
 }
 
 function mapGoalLabel(goal?: UserProfile['primaryGoal']) {
@@ -395,14 +368,12 @@ function DataOverviewPanel({
   profile,
   market,
   exchanges,
-  allocation,
-  customBalance
+  allocation
 }: {
   profile?: UserProfile | null;
   market?: { volatility: MarketScanResponse['volatility']; changes: MarketScanResponse['changes'] | null };
   exchanges: string[];
   allocation?: Array<{ label: string; pct: number }>;
-  customBalance?: number | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -430,7 +401,6 @@ function DataOverviewPanel({
               <div><span className="font-medium">Doel:</span> {profile?.primaryGoal || '-'}</div>
               <div><span className="font-medium">Horizon:</span> {profile?.timeHorizon || '-'}</div>
               <div><span className="font-medium">Kennis:</span> {profile?.knowledgeLevel || '-'}</div>
-              <div><span className="font-medium">Startbedrag:</span> {profile?.startAmountRange || '-'}</div>
             </div>
           </div>
 
@@ -465,11 +435,10 @@ function DataOverviewPanel({
 
           {/* Balans & Allocatie */}
           <div className="rounded-lg bg-slate-50 p-3 space-y-1">
-            <p className="font-semibold text-slate-700">Balans & Allocatie</p>
+            <p className="font-semibold text-slate-700">Allocatie</p>
             <div className="text-slate-600 space-y-0.5">
-              <div><span className="font-medium">Saldo:</span> €{customBalance?.toFixed(2) || '0.00'}</div>
               {allocation && allocation.length > 0 ? (
-                <div className="mt-1 space-y-0.5">
+                <div className="space-y-0.5">
                   {allocation.map((a) => (
                     <div key={a.label}><span className="font-medium">{a.label}:</span> {a.pct}%</div>
                   ))}
@@ -517,72 +486,6 @@ function DataOverviewPanel({
   );
 }
 
-
-function BalanceEditDialog({ 
-  isOpen, 
-  currentBalance, 
-  onSave, 
-  onCancel 
-}: { 
-  isOpen: boolean; 
-  currentBalance: number; 
-  onSave: (balance: number) => void; 
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState(currentBalance.toString());
-  
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newBalance = parseFloat(value);
-    if (!isNaN(newBalance) && newBalance >= 0) {
-      onSave(newBalance);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-3xl p-6 max-w-sm w-full mx-4 space-y-4">
-        <div>
-          <p className="text-subtitle text-slate-900 font-serif">Saldo aanpassen</p>
-          <p className="text-sm text-slate-600 mt-1">Wijzig je beschikbare investeringsbedrag</p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Bedrag (€)
-            </label>
-            <input
-              type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              min="0"
-              step="0.01"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              autoFocus
-            />
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-            >
-              Annuleren
-            </button>
-            <button
-              type="submit"
-              className="flex-1 rounded-lg bg-primary/20 border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/30 transition"
-            >
-              Opslaan
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 function AllocationCard({
   amount,
@@ -724,8 +627,6 @@ export function Dashboard() {
     volatilityStatus
   );
   const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
-  const [editingBalance, setEditingBalance] = useState(false);
-  const [customBalance, setCustomBalance] = useState<number | null>(null);
   const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
   const [activePlatform, setActivePlatform] = useState<string>(() => {
     return localStorage.getItem('aio_active_platform') || '';
@@ -743,14 +644,6 @@ export function Dashboard() {
         }
         const data = (await res.json()) as { profile?: UserProfile };
         setProfile(data.profile ?? null);
-        // Load custom balance from localStorage
-        const stored = localStorage.getItem('aio_custom_balance');
-        if (stored) {
-          const balance = parseFloat(stored);
-          if (!isNaN(balance)) {
-            setCustomBalance(balance);
-          }
-        }
       })
       .catch(() => setProfile(null));
 
@@ -783,13 +676,6 @@ export function Dashboard() {
     fetchBalances()
       .then((bals) => {
         setBalances(bals);
-        // Auto-set custom balance to total from exchanges if available
-        if (bals.length > 0) {
-          const total = bals.reduce((sum, bal) => sum + bal.total, 0);
-          if (total > 0 && !localStorage.getItem('aio_custom_balance')) {
-            setCustomBalance(total);
-          }
-        }
       })
       .catch(() => setBalances([]));
 
@@ -829,14 +715,17 @@ export function Dashboard() {
   };
 
   const handleAllocate = async (strategy: string) => {
-    const amount = customBalance ?? mapRangeToAmount(profile?.startAmountRange);
-    if (!amount) return;
+    // Use live Bitvavo EUR balance for allocation
+    const activeBalances = balances.filter(b => !activePlatform || b.exchange === activePlatform);
+    const eurBalance = activeBalances.find(b => b.asset === 'EUR' || b.asset === 'USDT' || b.asset === 'USDC');
+    const allocAmount = eurBalance?.available ?? 0;
+    if (!allocAmount) return;
     const goals = profile
       ? [mapGoalLabel(profile.primaryGoal), mapHorizonLabel(profile.timeHorizon)]
       : undefined;
     const knowledge = profile ? mapKnowledgeLabel(profile.knowledgeLevel) : undefined;
     const payload = await fetchPortfolioAllocation({
-      amount,
+      amount: allocAmount,
       strategy,
       goals,
       knowledge,
@@ -846,22 +735,13 @@ export function Dashboard() {
     setCurrentAllocation(payload.allocation);
   };
 
-  const handleBalanceEdit = (newBalance: number) => {
-    setCustomBalance(newBalance);
-    localStorage.setItem('aio_custom_balance', String(newBalance));
-    setEditingBalance(false);
-  };
-
-  const amount = customBalance ?? mapRangeToAmount(profile?.startAmountRange);
-  
-  // Filter balances by active platform
+  // Get EUR/cash saldo from active platform (always use Bitvavo data, never manual input)
   const activeBalances = activePlatform 
     ? balances.filter(b => b.exchange === activePlatform)
     : balances;
   
-  // Get EUR/cash saldo (available balance for investment)
   const eurBalance = activeBalances.find(b => b.asset === 'EUR' || b.asset === 'USDT' || b.asset === 'USDC');
-  const cashSaldo = eurBalance?.available ?? 0;
+  const amount = eurBalance?.available ?? 0;
   
   // Debug logging
   useEffect(() => {
@@ -883,8 +763,7 @@ export function Dashboard() {
           strategy: profile.strategies?.[0],
           primaryGoal: mapGoalLabel(profile.primaryGoal),
           timeHorizon: mapHorizonLabel(profile.timeHorizon),
-          knowledgeLevel: mapKnowledgeLabel(profile.knowledgeLevel),
-          startAmountRange: profile.startAmountRange
+          knowledgeLevel: mapKnowledgeLabel(profile.knowledgeLevel)
         },
         market: {
           volatilityLabel: volatility.label,
@@ -903,13 +782,6 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      <BalanceEditDialog
-        isOpen={editingBalance}
-        currentBalance={amount || 0}
-        onSave={handleBalanceEdit}
-        onCancel={() => setEditingBalance(false)}
-      />
-
       <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
 
       {/* Agent Status */}
@@ -946,7 +818,7 @@ export function Dashboard() {
 
       <div className="grid gap-4 md:gap-5 md:grid-cols-3">
         <ChatCard context={chatContext} />
-        <WalletCard amount={amount} onEdit={() => setEditingBalance(true)} />
+        <WalletCard amount={amount} />
         <UpdatesCard />
       </div>
 
@@ -963,7 +835,6 @@ export function Dashboard() {
         market={{ volatility, changes: scanChanges }}
         exchanges={connectedExchanges}
         allocation={currentAllocation}
-        customBalance={customBalance}
       />
 
       <AllocationCard

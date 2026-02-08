@@ -36,7 +36,6 @@ export type ChatContext = {
     primaryGoal?: string;
     timeHorizon?: string;
     knowledgeLevel?: string;
-    startAmountRange?: string;
   };
   market?: {
     volatilityLabel?: string;

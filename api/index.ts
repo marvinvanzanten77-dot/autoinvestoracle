@@ -124,7 +124,6 @@ type UserProfile = {
   maxDrawdownComfort: '5' | '10' | '20' | '30' | '50';
   rebalancing: 'none' | 'quarterly' | 'monthly';
   panicSellLikelihood: 'low' | 'medium' | 'high';
-  startAmountRange: '0-500' | '500-2k' | '2k-10k' | '10k-50k' | '50k+';
   monthlyContributionRange: '0' | '1-100' | '100-500' | '500-2k' | '2k+';
   knowledgeLevel: 'beginner' | 'intermediate' | 'advanced';
   assetPreference: Array<'crypto' | 'etf' | 'stocks' | 'mixed'>;
@@ -1498,7 +1497,6 @@ type ChatContext = {
     primaryGoal?: string;
     timeHorizon?: string;
     knowledgeLevel?: string;
-    startAmountRange?: string;
   };
   market?: {
     volatilityLabel?: string;
@@ -1538,8 +1536,7 @@ function formatChatContext(context?: ChatContext) {
       context.profile.strategy ? `Strategie: ${context.profile.strategy}` : null,
       context.profile.primaryGoal ? `Doel: ${context.profile.primaryGoal}` : null,
       context.profile.timeHorizon ? `Horizon: ${context.profile.timeHorizon}` : null,
-      context.profile.knowledgeLevel ? `Kennisniveau: ${context.profile.knowledgeLevel}` : null,
-      context.profile.startAmountRange ? `Startbedrag: ${context.profile.startAmountRange}` : null
+      context.profile.knowledgeLevel ? `Kennisniveau: ${context.profile.knowledgeLevel}` : null
     ].filter(Boolean) as string[];
     if (profileParts.length > 0) {
       lines.push('Gebruikersprofiel:', ...profileParts);

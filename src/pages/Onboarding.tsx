@@ -29,14 +29,6 @@ const STRATEGY_DETAILS: Record<string, string> = {
   'Kleine stappen, lage spanning': 'Rustig beginnen en overzicht houden.'
 };
 
-const START_AMOUNTS: Array<{ value: UserProfile['startAmountRange']; label: string }> = [
-  { value: '0-500', label: '0 - 500' },
-  { value: '500-2k', label: '500 - 2k' },
-  { value: '2k-10k', label: '2k - 10k' },
-  { value: '10k-50k', label: '10k - 50k' },
-  { value: '50k+', label: '50k+' }
-];
-
 const KNOWLEDGE_LEVELS: Array<{ value: UserProfile['knowledgeLevel']; label: string }> = [
   { value: 'beginner', label: 'Nieuw' },
   { value: 'intermediate', label: 'Bekend' },
@@ -59,7 +51,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     maxDrawdownComfort: '10',
     rebalancing: 'quarterly',
     panicSellLikelihood: 'medium',
-    startAmountRange: '500-2k',
     monthlyContributionRange: '0',
     knowledgeLevel: 'beginner',
     assetPreference: ['crypto'],
@@ -84,7 +75,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const canContinue = useMemo(() => {
     if (step === 0) return data.displayName.trim().length > 1 && data.email.trim().length > 3;
     if (step === 1) return data.strategies.length > 0 && Boolean(data.primaryGoal && data.timeHorizon);
-    if (step === 2) return Boolean(data.startAmountRange && data.knowledgeLevel && acceptedRules);
+    if (step === 2) return Boolean(data.knowledgeLevel && acceptedRules);
     return false;
   }, [acceptedRules, data, step]);
 
@@ -92,7 +83,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (!showErrors || canContinue) return '';
     if (step === 0) return 'Vul je naam en e-mailadres in.';
     if (step === 1) return 'Kies een strategie, doel en tijdshorizon.';
-    if (step === 2) return 'Kies je startpunt en ga akkoord met de huisregels.';
+    if (step === 2) return 'Kies je kennis niveau en ga akkoord met de huisregels.';
     return '';
   }, [canContinue, showErrors, step]);
 
@@ -257,27 +248,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         )}
 
         {step === 2 && (
-          <Card title="Startpunt" subtitle="Klein maar belangrijk">
+          <Card title="Laatste stap" subtitle="Kennis en huisregels">
             <div className="space-y-5 text-sm text-slate-700">
-              <div className="space-y-2">
-                <p className="text-xs text-slate-500">Startbedrag</p>
-                <div className="flex flex-wrap gap-2">
-                  {START_AMOUNTS.map((amount) => (
-                    <button
-                      key={amount.value}
-                      type="button"
-                      onClick={() => setData((current) => ({ ...current, startAmountRange: amount.value }))}
-                      className={`pill border transition ${
-                        data.startAmountRange === amount.value
-                          ? 'border-primary/40 bg-primary/30 text-primary'
-                          : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-white'
-                      }`}
-                    >
-                      {amount.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <div className="space-y-2">
                 <p className="text-xs text-slate-500">Kennisniveau</p>
                 <div className="flex flex-wrap gap-2">

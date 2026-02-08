@@ -13,7 +13,6 @@ export type UserProfile = {
   maxDrawdownComfort: '5' | '10' | '20' | '30' | '50';
   rebalancing: 'none' | 'quarterly' | 'monthly';
   panicSellLikelihood: 'low' | 'medium' | 'high';
-  startAmountRange: '0-500' | '500-2k' | '2k-10k' | '10k-50k' | '50k+';
   monthlyContributionRange: '0' | '1-100' | '100-500' | '500-2k' | '2k+';
   knowledgeLevel: 'beginner' | 'intermediate' | 'advanced';
   assetPreference: Array<'crypto' | 'etf' | 'stocks' | 'mixed'>;

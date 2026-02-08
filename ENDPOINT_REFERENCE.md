@@ -623,7 +623,6 @@ Persistence: ✅ KV storage
   timeHorizon: 'lt1y' | '1-3y' | '3-7y' | '7y+'
   riskTolerance: number (1-10)
   knowledgeLevel: 'beginner' | 'intermediate' | 'advanced'
-  startAmountRange: string
   // ... additional optional fields
 }
 ```
