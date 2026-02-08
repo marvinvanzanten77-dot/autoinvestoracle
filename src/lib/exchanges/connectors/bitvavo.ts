@@ -56,7 +56,11 @@ export class BitvavoConnector implements ExchangeConnector {
       message: message.substring(0, 100) + '...'
     });
 
-    const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}${endpoint}`, {
+    // CRITICAL FIX: Use /v2 prefix in the actual API URL!
+    const fullUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/v2${endpoint}`;
+    console.log('[Bitvavo] Fetching URL:', fullUrl);
+    
+    const resp = await fetch(fullUrl, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -70,7 +74,12 @@ export class BitvavoConnector implements ExchangeConnector {
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error('[Bitvavo] Error response:', { status: resp.status, body: errText });
+      console.error('[Bitvavo] Error response:', { 
+        status: resp.status, 
+        statusText: resp.statusText,
+        body: errText,
+        url: fullUrl
+      });
       throw new Error(`Bitvavo API error ${resp.status}: ${errText}`);
     }
 
