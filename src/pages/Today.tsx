@@ -196,34 +196,7 @@ export function Today() {
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Tempo van de markt" subtitle={scanData?.volatility.label || volatilityStatus.label}>
-          <p className="text-sm text-slate-700">
-            {scanData?.volatility.detail || volatilityStatus.detail}
-          </p>
-        </Card>
-        <Card title="Extra context" subtitle="In gewone woorden">
-          <div className="space-y-3">
-            {marketContext.map((item) => (
-              <div key={item.title} className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                <p className="text-sm text-slate-700">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
 
-      <Card title="Leren in kleine stappen" subtitle="Korte uitleg zonder jargon">
-        <div className="grid gap-3 md:grid-cols-3">
-          {educationSnippets.slice(0, 6).map((item) => (
-            <div key={item.title} className="rounded-xl border border-slate-200/70 bg-white/70 p-4">
-              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-              <p className="text-sm text-slate-700 mt-1">{item.detail}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }
