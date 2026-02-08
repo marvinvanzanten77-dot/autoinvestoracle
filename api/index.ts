@@ -2988,26 +2988,41 @@ const routes: Record<string, Handler> = {
             .sort((a, b) => (b.total || 0) - (a.total || 0))
             .slice(0, 1);
           const topAsset = topAssets.length > 0 ? topAssets[0] : null;
+          const eurBalance = balances.find(b => b.asset === 'EUR');
+          const availableCash = eurBalance?.available || 0;
           
-          analysis = balances.length > 0
-            ? `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
+          if (balances.length > 0 && totalValue > 0) {
+            analysis = `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
               (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.total || 0).toFixed(2)}). ` : '') +
-              `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`
-            : `Je portfolio is leeg. Maak je eerste aankoop om te beginnen.`;
+              `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`;
+          } else if (availableCash > 0) {
+            analysis = `Je portfolio is leeg. Je hebt €${availableCash.toFixed(2)} beschikbaar saldo. ` +
+              `${settings?.autoTrade ? 'Je agent wacht op trading signalen om dit in te zetten.' : 'Je agent observeert marktcondities.'}`;
+          } else {
+            analysis = `Je portfolio is leeg en je hebt geen beschikbaar saldo. ` +
+              `Voeg eerst geld toe aan je account om te kunnen handelen.`;
+          }
         } else if (mode === 'planner_explainer') {
           // PLANNER MODE: What will happen next and why?
           // SAFETY: Only explains existing settings, never suggests market actions
           if (!settings?.enabled) {
             analysis = `Volgens je huidige instellingen: je agent is uitgeschakeld. Je kunt dit aanpassen in Agent instellingen.`;
-          } else if (settings?.autoTrade) {
-            analysis = `Volgens je huidige instellingen: je agent zal de volgende acties uitvoeren: ` +
-              `Portfolio monitoren elk ${settings.monitoringInterval || 5} minuut. ` +
-              `Bij geschikte marktcondities (gebaseerd op je regels): orders plaatsen met max ${settings.riskPerTrade || 2}% risico per trade. ` +
-              `Voorzorgsmaatregel: stoppen bij ${settings.maxDailyLoss || 5}% dagelijks verlies.`;
           } else {
-            analysis = `Volgens je huidige instellingen: je agent werkt in monitoring modus. ` +
-              `Het zal elk ${settings.monitoringInterval || 5} minuut je portfolio checken ` +
-              `en alerts sturen als voorwaarden veranderen. Niets automatisch.`;
+            // Get available cash/EUR balance for recommendations
+            const eurBalance = balances.find(b => b.asset === 'EUR');
+            const availableCash = eurBalance?.available || 0;
+            
+            if (settings?.autoTrade) {
+              analysis = `Volgens je huidige instellingen: je agent zal de volgende acties uitvoeren: ` +
+                `Portfolio monitoren elk ${settings.monitoringInterval || 5} minuut. ` +
+                `Bij geschikte marktcondities (gebaseerd op je regels): orders plaatsen met max ${settings.riskPerTrade || 2}% risico per trade. ` +
+                `Voorzorgsmaatregel: stoppen bij ${settings.maxDailyLoss || 5}% dagelijks verlies. ` +
+                (availableCash > 0 ? `Momenteel beschikbaar saldo: €${availableCash.toFixed(2)}. De agent zoekt naar trading signalen om dit in te zetten.` : `Geen beschikbaar saldo. Voeg geld toe om te beginnen met trading.`);
+            } else {
+              analysis = `Volgens je huidige instellingen: je agent werkt in monitoring modus. ` +
+                `Het zal elk ${settings.monitoringInterval || 5} minuut je portfolio checken ` +
+                `en alerts sturen als voorwaarden veranderen. Niets automatisch.`;
+            }
           }
         } else if (mode === 'config_chat') {
           // CONFIG_CHAT MODE: Brief status for conversation starter
