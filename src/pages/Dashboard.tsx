@@ -823,12 +823,6 @@ export function Dashboard() {
         <UpdatesCard />
       </div>
 
-      <InsightsCard
-        profile={profile}
-        market={{ volatility, changes: scanChanges }}
-        allocation={currentAllocation}
-      />
-
       <PortfolioCard balances={activeBalances} />
 
       <DataOverviewPanel
@@ -836,13 +830,6 @@ export function Dashboard() {
         market={{ volatility, changes: scanChanges }}
         exchanges={connectedExchanges}
         allocation={currentAllocation}
-      />
-
-      <AllocationCard
-        amount={amount}
-        strategies={[...STRATEGIES]}
-        selectedStrategies={profile?.strategies ?? []}
-        onAllocate={handleAllocate}
       />
     </div>
   );
