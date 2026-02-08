@@ -374,10 +374,13 @@ export async function getTradingEnabled(userId: string): Promise<boolean> {
 
   if (error && error.code === 'PGRST116') {
     // No row yet; create one
-    await supabase
+    const { error: insertError } = await supabase
       .from('user_trading_settings')
-      .insert({ user_id: userId, trading_enabled: false })
-      .catch((err) => console.error('[PolicyService] Failed to create trading setting:', err));
+      .insert({ user_id: userId, trading_enabled: false });
+    
+    if (insertError) {
+      console.error('[PolicyService] Failed to create trading setting:', insertError);
+    }
     return false;
   }
 

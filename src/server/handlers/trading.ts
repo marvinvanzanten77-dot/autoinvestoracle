@@ -23,8 +23,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { AITradingAgent, type TradeSignal, type AgentContext } from '../ai/tradingAgent';
-import { supabase } from '../../src/lib/supabase/client';
+import { AITradingAgent, type TradeSignal, type AgentContext } from '../../server/ai/tradingAgent';
+import { supabase } from '../lib/supabase/client';
 import {
   getActivePolicy,
   getPolicyById,

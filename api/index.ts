@@ -651,6 +651,16 @@ class KrakenConnector implements ExchangeConnector {
   id = 'kraken' as const;
   name = EXCHANGE_CONFIG.kraken.name;
   capabilities = EXCHANGE_CONFIG.kraken.capabilities;
+  private apiKey: string = '';
+  private apiSecret: string = '';
+
+  setCredentials(credentials: ExchangeCredentials) {
+    if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
+      throw new ValidationError('API key/secret ontbreekt.');
+    }
+    this.apiKey = credentials.apiKey;
+    this.apiSecret = credentials.apiSecret;
+  }
 
   async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
     if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
@@ -733,6 +743,16 @@ class CoinbaseConnector implements ExchangeConnector {
   id = 'coinbase' as const;
   name = EXCHANGE_CONFIG.coinbase.name;
   capabilities = EXCHANGE_CONFIG.coinbase.capabilities;
+  private apiKey: string = '';
+  private apiSecret: string = '';
+
+  setCredentials(credentials: ExchangeCredentials) {
+    if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
+      throw new ValidationError('API key/secret ontbreekt.');
+    }
+    this.apiKey = credentials.apiKey;
+    this.apiSecret = credentials.apiSecret;
+  }
 
   async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
     if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
@@ -798,7 +818,6 @@ class CoinbaseConnector implements ExchangeConnector {
     }
   }
 }
-}
 
 function intervalToBybit(interval: string) {
   if (interval === '1h') return '60';
@@ -811,6 +830,16 @@ class BybitConnector implements ExchangeConnector {
   id = 'bybit' as const;
   name = EXCHANGE_CONFIG.bybit.name;
   capabilities = EXCHANGE_CONFIG.bybit.capabilities;
+  private apiKey: string = '';
+  private apiSecret: string = '';
+
+  setCredentials(credentials: ExchangeCredentials) {
+    if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
+      throw new ValidationError('API key/secret ontbreekt.');
+    }
+    this.apiKey = credentials.apiKey;
+    this.apiSecret = credentials.apiSecret;
+  }
 
   async connect(credentials: ExchangeCredentials): Promise<ConnectorConnectResult> {
     if (!('apiKey' in credentials) || !credentials.apiKey || !credentials.apiSecret) {
@@ -1174,11 +1203,13 @@ async function syncExchange(userId: string, exchange: ExchangeId): Promise<SyncR
   }
 
   try {
-    const accounts = await withRetry(() => connector.fetchAccounts(), 2, 800);
-    const balances = await withRetry(() => connector.fetchBalances(), 2, 800);
-    const positions = await withRetry(() => connector.fetchPositions(), 2, 800);
-    const transactions = await withRetry(() => connector.fetchTransactions(), 2, 800);
-    const orders = await withRetry(() => connector.fetchOrders(), 2, 800);
+    const [accounts, balances, positions, transactions, orders] = await Promise.all([
+      withRetry(() => connector.fetchAccounts(), 2, 800),
+      withRetry(() => connector.fetchBalances(), 2, 800),
+      withRetry(() => connector.fetchPositions(), 2, 800),
+      withRetry(() => connector.fetchTransactions(), 2, 800),
+      withRetry(() => connector.fetchOrders(), 2, 800),
+    ]);
 
     const accountsWithUserId = accounts.map((a) => ({ ...a, userId }));
     const balancesWithUserId = balances.map((b) => ({ ...b, userId }));
@@ -1482,6 +1513,9 @@ type ChatContext = {
   };
   exchanges?: {
     connected: string[];
+    activePlatform?: string;
+    cashSaldo?: number;
+    availableAssets?: string[];
     balances?: Array<{
       exchange: string;
       total: number;
@@ -1499,26 +1533,26 @@ function formatChatContext(context?: ChatContext) {
   if (!context) return '';
   const lines: string[] = [];
   if (context.profile) {
-    const profileParts = [
+    const profileParts: string[] = [
       context.profile.displayName ? `Naam: ${context.profile.displayName}` : null,
       context.profile.strategy ? `Strategie: ${context.profile.strategy}` : null,
       context.profile.primaryGoal ? `Doel: ${context.profile.primaryGoal}` : null,
       context.profile.timeHorizon ? `Horizon: ${context.profile.timeHorizon}` : null,
       context.profile.knowledgeLevel ? `Kennisniveau: ${context.profile.knowledgeLevel}` : null,
       context.profile.startAmountRange ? `Startbedrag: ${context.profile.startAmountRange}` : null
-    ].filter(Boolean);
+    ].filter(Boolean) as string[];
     if (profileParts.length > 0) {
       lines.push('Gebruikersprofiel:', ...profileParts);
     }
   }
   if (context.market) {
-    const marketParts = [
+    const marketParts: string[] = [
       context.market.lastScan ? `Laatste check: ${context.market.lastScan}` : null,
       context.market.volatilityLabel ? `Tempo: ${context.market.volatilityLabel}` : null,
       context.market.changes
         ? `Bewegingen (%): BTC ${context.market.changes.bitcoin}, ETH ${context.market.changes.ethereum}, Stable ${context.market.changes.stablecoins}, Alt ${context.market.changes.altcoins}`
         : null
-    ].filter(Boolean);
+    ].filter(Boolean) as string[];
     if (marketParts.length > 0) {
       lines.push('Marktcontext:', ...marketParts);
     }
@@ -2305,8 +2339,8 @@ const routes: Record<string, Handler> = {
         
         try {
           console.log(`[exchanges/balances] Fetching from ${connection.exchange}...`);
-          const connector = createConnector(connection.exchange);
-          const creds = decryptSecrets(connection.encryptedSecrets);
+          const connector = createConnector(connection.exchange as ExchangeId);
+          const creds = decryptSecrets(connection.encryptedSecrets) as any;
           connector.setCredentials(creds);
           
           const balances = await connector.fetchBalances();
@@ -2592,8 +2626,6 @@ const routes: Record<string, Handler> = {
       }
       return;
     }
-    
-    res.status(405).json({ error: 'Method not allowed' });
   },
   'agent/status': async (req, res) => {
     if (req.method !== 'GET') {
@@ -2731,8 +2763,8 @@ const routes: Record<string, Handler> = {
       }
       
       try {
-        const connector = createConnector(exchange);
-        const creds = decryptSecrets(connection.encryptedSecrets);
+        const connector = createConnector(exchange as ExchangeId);
+        const creds = decryptSecrets(connection.encryptedSecrets) as any;
         connector.setCredentials(creds);
         
         const balances = await connector.fetchBalances();
@@ -2905,8 +2937,8 @@ const routes: Record<string, Handler> = {
       }
       
       try {
-        const connector = createConnector(exchange);
-        const creds = decryptSecrets(connection.encryptedSecrets);
+        const connector = createConnector(exchange as ExchangeId);
+        const creds = decryptSecrets(connection.encryptedSecrets) as any;
         connector.setCredentials(creds);
         
         const balances = await connector.fetchBalances();

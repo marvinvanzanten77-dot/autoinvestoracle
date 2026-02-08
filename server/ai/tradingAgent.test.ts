@@ -5,7 +5,7 @@
  * npm run test:trading
  */
 
-import { AITradingAgent, type AgentContext, type TradeSignal } from '../server/ai/tradingAgent';
+import { AITradingAgent, type AgentContext, type TradeSignal } from './tradingAgent';
 
 // ============================================================================
 // TEST DATA
@@ -66,7 +66,7 @@ async function testAnalyzeMarket() {
     
     console.log('✓ Analysis completed');
     console.log(`  Generated ${signals.length} signals`);
-    signals.forEach((s, idx) => {
+    signals.forEach((s: TradeSignal, idx: number) => {
       console.log(`  [${idx}] ${s.action.toUpperCase()} ${s.asset} @ confidence ${s.confidence}%`);
     });
     
@@ -263,7 +263,7 @@ async function testAuditTrail() {
     
     console.log(`  ✓ Audit trail captured`);
     console.log(`    Trades logged: ${trail.length}`);
-    trail.slice(-3).forEach((t) => {
+    trail.slice(-3).forEach((t: any) => {
       console.log(`      [${t.auditId}] ${t.action} ${t.asset} @ ${t.timestamp}`);
     });
 

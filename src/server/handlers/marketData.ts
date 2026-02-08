@@ -29,8 +29,8 @@ export async function handleAutoLoadMarketData(req: Request, res: Response) {
       return res.status(503).json(
         createErrorResponse(
           'Market data unavailable',
-          'SERVICE_UNAVAILABLE',
-          'Both BTC and ETH aggregation failed'
+          'EXTERNAL_SERVICE_ERROR',
+          { details: 'Both BTC and ETH aggregation failed' }
         )
       );
     }
@@ -76,7 +76,7 @@ export async function handleAutoLoadMarketData(req: Request, res: Response) {
       createErrorResponse(
         'Failed to load market data',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }
@@ -100,7 +100,7 @@ export async function handleGetObservations(req: Request, res: Response) {
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json(
-        createErrorResponse('Missing userId', 'VALIDATION_ERROR', 'userId query param required')
+        createErrorResponse('Missing userId', 'INVALID_REQUEST', { detail: 'userId query param required' })
       );
     }
 
@@ -138,7 +138,7 @@ export async function handleGetObservations(req: Request, res: Response) {
       createErrorResponse(
         'Failed to fetch observations',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }
@@ -162,7 +162,7 @@ export async function handleGetLearnedPatterns(req: Request, res: Response) {
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json(
-        createErrorResponse('Missing userId', 'VALIDATION_ERROR', 'userId query param required')
+        createErrorResponse('Missing userId', 'INVALID_REQUEST', { detail: 'userId query param required' })
       );
     }
 
@@ -203,7 +203,7 @@ export async function handleGetLearnedPatterns(req: Request, res: Response) {
       createErrorResponse(
         'Failed to fetch patterns',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }
@@ -227,7 +227,7 @@ export async function handleGetDetailedAnalysis(req: Request, res: Response) {
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json(
-        createErrorResponse('Missing userId', 'VALIDATION_ERROR', 'userId query param required')
+        createErrorResponse('Missing userId', 'INVALID_REQUEST', { detail: 'userId query param required' })
       );
     }
 
@@ -235,8 +235,8 @@ export async function handleGetDetailedAnalysis(req: Request, res: Response) {
       return res.status(400).json(
         createErrorResponse(
           'Invalid asset',
-          'VALIDATION_ERROR',
-          'asset must be BTC or ETH'
+          'INVALID_REQUEST',
+          { detail: 'asset must be BTC or ETH' }
         )
       );
     }
@@ -289,7 +289,7 @@ Jij beslist wat je ermee doet.
       createErrorResponse(
         'Failed to fetch analysis',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }
@@ -353,7 +353,7 @@ export async function handleGetComparison(req: Request, res: Response) {
       createErrorResponse(
         'Failed to fetch comparison',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }
@@ -397,7 +397,7 @@ export async function handleGetSourcesHealth(req: Request, res: Response) {
       createErrorResponse(
         'Failed to fetch sources health',
         'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown error'
+        { details: error instanceof Error ? error.message : 'Unknown error' }
       )
     );
   }

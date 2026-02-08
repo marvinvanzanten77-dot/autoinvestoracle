@@ -12,8 +12,7 @@
  * and can execute trades with proper safeguards.
  */
 
-import type { BitvavoConnector } from '../src/lib/exchanges/connectors/bitvavo';
-import type { Balance, Order } from '../src/lib/exchanges/types';
+import type { Balance, Order } from '../../src/lib/exchanges/types';
 
 // ============================================================================
 // TYPES
@@ -226,7 +225,7 @@ MARKET CONTEXT:
 
 PORTFOLIO STATE:
 - Total value: €${context.portfolio.totalValue.toFixed(2)}
-- Balances: ${context.portfolio.balances.map((b) => \`\${b.asset}: \${b.total}\`).join(', ')}
+- Balances: ${context.portfolio.balances.map((b) => `${b.asset}: ${b.total}`).join(', ')}
 - Open positions: ${context.portfolio.openPositions.length}
 
 USER RISK PROFILE: ${riskLabel.toUpperCase()}

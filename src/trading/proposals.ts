@@ -269,7 +269,7 @@ export async function expireProposals(userId: string): Promise<number> {
     return 0;
   }
 
-  return data?.length ?? 0;
+  return (data ? data.length : 0);
 }
 
 // ============================================================================

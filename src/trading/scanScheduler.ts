@@ -5,10 +5,10 @@
  * and proposal creation through the AITradingAgent
  */
 
-import { supabase } from '../../src/lib/supabase/client';
+import { supabase } from '../lib/supabase/client';
 import { getActivePolicy, getTradingEnabled } from './policy';
 import { createProposal, expireProposals } from './proposals';
-import { AITradingAgent } from '../server/ai/tradingAgent';
+import { AITradingAgent } from '../../server/ai/tradingAgent';
 
 // ============================================================================
 // TYPES
