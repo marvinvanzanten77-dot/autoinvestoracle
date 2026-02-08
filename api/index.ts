@@ -2370,6 +2370,41 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon balances niet ophalen.' });
     }
   },
+  'exchanges/debug': async (req, res) => {
+    if (req.method && req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = (req.query?.userId as string) || getSessionUserId(req);
+      if (!userId) {
+        res.status(400).json({ error: 'userId is verplicht.' });
+        return;
+      }
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      
+      console.log('[exchanges/debug] Checking connections for user:', userId);
+      
+      const debug = {
+        userId,
+        connectionsCount: connections.length,
+        connections: connections.map((c) => ({
+          exchange: c.exchange,
+          status: c.status,
+          hasEncryptedSecrets: !!c.encryptedSecrets,
+          encryptedSecretsLength: c.encryptedSecrets?.length || 0
+        })),
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('[exchanges/debug] Response:', JSON.stringify(debug, null, 2));
+      res.status(200).json(debug);
+    } catch (err) {
+      console.error('[exchanges/debug] Error:', err);
+      res.status(500).json({ error: String(err) });
+    }
+  },
   'exchanges/performance': async (req, res) => {
     if (req.method && req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });

@@ -155,7 +155,7 @@ function WalletCard({ amount, userId, onRefresh }: { amount: number; userId: str
       }
 
       if (!data.balances || data.balances.length === 0) {
-        setTestResult('⚠️ Geen balances geretourneerd van API');
+        setTestResult('⚠️ Geen balances geretourneerd van API. Klik "Debug" voor meer info.');
         return;
       }
 
@@ -176,6 +176,39 @@ function WalletCard({ amount, userId, onRefresh }: { amount: number; userId: str
     }
   };
 
+  const handleDebug = async () => {
+    if (!userId) {
+      setTestResult('❌ Geen userId beschikbaar');
+      return;
+    }
+    setLoading(true);
+    try {
+      console.log('[WalletCard] Requesting debug info for userId:', userId);
+      const response = await fetch(`/api/exchanges/debug?userId=${userId}`);
+      const data = (await response.json()) as any;
+      console.log('[WalletCard] Debug response:', data);
+      
+      if (!response.ok) {
+        setTestResult(`❌ Debug error: ${JSON.stringify(data)}`);
+        return;
+      }
+
+      const info = `
+Connections: ${data.connectionsCount}
+${data.connections.map((c: any) => `  - ${c.exchange}: ${c.status} (encrypted secrets: ${c.encryptedSecretsLength} bytes)`).join('\n')}`;
+      
+      setTestResult(data.connectionsCount === 0 
+        ? `⚠️ GEEN CONNECTIES OPGESLAGEN!\n\n${info}\n\nGa naar "Exchange koppelingen" en verbind Bitvavo.`
+        : `Debug info:\n${info}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResult(`❌ Debug error: ${msg}`);
+      console.error('[WalletCard] Debug error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatted = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
     currency: 'EUR',
@@ -190,13 +223,22 @@ function WalletCard({ amount, userId, onRefresh }: { amount: number; userId: str
           Dit saldo wordt direct van je verbonden platform (Bitvavo) opgehaald. Verbind je account voor real-time updates.
         </p>
         
-        <button
-          onClick={handleTestFetch}
-          disabled={loading}
-          className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-60"
-        >
+        <div className="flex gap-2">
+          <button
+            onClick={handleTestFetch}
+            disabled={loading}
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-60"
+          >
           {loading ? 'Testen...' : '🔄 Saldo testen'}
         </button>
+          <button
+            onClick={handleDebug}
+            disabled={loading}
+            className="text-xs px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition disabled:opacity-60"
+          >
+            {loading ? 'Debug...' : '🔍 Debug'}
+          </button>
+        </div>
 
         {testResult && (
           <div className={`text-xs p-2 rounded-lg font-mono ${
