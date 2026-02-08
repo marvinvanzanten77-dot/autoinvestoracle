@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import ProgressIndicator from '../components/ProgressIndicator';
+import { useProgressTracking } from '../lib/hooks/useProgressTracking';
 
 type TradeAction = 'buy' | 'sell' | 'rebalance' | 'close_position' | 'hold' | 'wait';
 
@@ -76,6 +78,9 @@ export function Trading() {
   const [scansEnabled, setScansEnabled] = useState(true);
   const [tradingEnabled, setTradingEnabled] = useState(true);
   const [scanLoading, setScanLoading] = useState(false);
+
+  // Progress tracking
+  const progress = useProgressTracking();
 
   // Fetch session
   useEffect(() => {
@@ -243,45 +248,67 @@ export function Trading() {
 
   // Handle AI proposal approval
   const handleApproveAIProposal = async (proposalId: string) => {
+    progress.startProgress('Handeling uitvoeren');
+    
     try {
+      progress.addUpdate('Voorstel validatie', 'Details controleren...', 10, 'processing');
+
       const resp = await fetch(`/api/trading/proposals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId, approved: true })
       });
 
+      progress.updateLatest({ progress: 40, message: 'Order plaatsen...' });
+
       if (resp.ok) {
+        progress.addUpdate('Order uitvoering', 'Wachten op bevestiging...', 70, 'processing');
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
         setAiProposals(aiProposals.filter((p) => p.id !== proposalId));
-        alert('✓ AI voorstel goedgekeurd en uitgevoerd');
+        progress.updateLatest({ progress: 95, message: 'Database updaten...' });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        progress.finalize(true, 'Handeling uitgevoerd');
       } else {
         const err = await resp.json();
-        alert(`❌ Fout: ${err.error || 'Onbekend'}`);
+        throw new Error(err.error || 'Onbekend');
       }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Onbekende fout';
+      progress.finalize(false, `Fout: ${errorMsg}`);
       console.error('Error approving AI proposal:', err);
-      alert('❌ Fout bij goedkeuren voorstel');
     }
   };
 
   // Handle AI proposal rejection
   const handleRejectAIProposal = async (proposalId: string) => {
+    progress.startProgress('Voorstel afwijzen');
+    
     try {
+      progress.addUpdate('Afwijzing verwerken', 'Details opslaan...', 20, 'processing');
+
       const resp = await fetch(`/api/trading/proposals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId, approved: false })
       });
 
+      progress.updateLatest({ progress: 60, message: 'Database updaten...' });
+
       if (resp.ok) {
         setAiProposals(aiProposals.filter((p) => p.id !== proposalId));
-        alert('✓ AI voorstel afgewezen');
+        progress.finalize(true, 'Voorstel afgewezen');
       } else {
         const err = await resp.json();
-        alert(`❌ Fout: ${err.error || 'Onbekend'}`);
+        throw new Error(err.error || 'Onbekend');
       }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Onbekende fout';
+      progress.finalize(false, `Fout: ${errorMsg}`);
       console.error('Error rejecting AI proposal:', err);
-      alert('❌ Fout bij afwijzen voorstel');
     }
   };
 
@@ -309,17 +336,44 @@ export function Trading() {
   // Force scan
   const handleForceScan = async () => {
     setScanLoading(true);
+    progress.startProgress('Marktanalyse uitvoeren');
+    
     try {
+      progress.addUpdate('Scan voorbereiding', 'Initialisatie...', 5, 'processing');
+
+      // Start the scan
       const resp = await fetch('/api/trading/scan/now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, exchange })
       });
 
-      if (resp.ok) {
-        alert('✓ Scan gestart!');
+      progress.updateLatest({ progress: 30, message: 'Marktdata ophalen...' });
+
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
       }
+
+      const data = await resp.json();
+      progress.addUpdate('Analyse voltooid', 'Voorstellen genereren...', 75, 'processing');
+
+      // Fetch proposals to see what was generated
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      progress.updateLatest({ progress: 90, message: 'Resultaten laden...' });
+
+      // Refresh proposals
+      const proposalsResp = await fetch(`/api/trading/proposals?userId=${userId}`);
+      if (proposalsResp.ok) {
+        const proposalsData = await proposalsResp.json();
+        setProposals(proposalsData);
+        progress.addUpdate('Database update', `${proposalsData.length} voorstellen opgeslagen`, 100, 'success');
+      }
+
+      progress.finalize(true, 'Scan voltooid');
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Onbekende fout';
+      progress.finalize(false, `Scan mislukt: ${errorMsg}`);
       console.error('Error forcing scan:', err);
     } finally {
       setScanLoading(false);
@@ -720,6 +774,13 @@ export function Trading() {
           </div>
         </Card>
       )}
+
+      {/* Progress Indicator */}
+      <ProgressIndicator 
+        updates={progress.updates}
+        isVisible={progress.isVisible}
+        title="Marktanalyse"
+      />
     </div>
   );
 }

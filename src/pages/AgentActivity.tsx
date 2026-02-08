@@ -54,6 +54,15 @@ type AgentSettings = {
   tradingStrategy?: 'conservative' | 'balanced' | 'aggressive';
   enableStopLoss?: boolean;
   stopLossPercent?: number;
+  assetPreferences?: {
+    bitcoin: number; // 0-100
+    ethereum: number; // 0-100
+    stablecoins: number; // 0-100
+    altcoins: number; // 0-100
+    memecoins: number; // 0-100
+    hypeCoins: number; // 0-100
+    newCoins: number; // 0-100
+  };
 };
 
 const ACTIVITY_COLORS: Record<ActivityType, { bg: string; text: string; icon: string }> = {
@@ -792,6 +801,64 @@ export function AgentActivity() {
                       )}
                     </div>
                   )}
+
+                  {/* Asset Preferences */}
+                  <div className="space-y-4 rounded-lg bg-purple-50/50 border border-purple-200/50 p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-xl">🎯</span>
+                      <p className="text-sm font-medium text-slate-700">Interessegebieden</p>
+                    </div>
+
+                    <p className="text-xs text-slate-600">
+                      Geef aan hoeveel interesse je hebt in verschillende crypto-categorieën:
+                    </p>
+
+                    <div className="space-y-4">
+                      {[
+                        { key: 'bitcoin', label: '₿ Bitcoin', icon: '🔵' },
+                        { key: 'ethereum', label: '◆ Ethereum', icon: '🔷' },
+                        { key: 'stablecoins', label: '💵 Stablecoins', icon: '💵' },
+                        { key: 'altcoins', label: '🪙 Altcoins', icon: '🪙' },
+                        { key: 'memecoins', label: '🐕 Memecoins', icon: '🐕' },
+                        { key: 'hypeCoins', label: '🚀 Hype Coins', icon: '🚀' },
+                        { key: 'newCoins', label: '🆕 Nieuwe Coins', icon: '🆕' }
+                      ].map(({ key, label, icon }) => (
+                        <div key={key} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm text-slate-700 font-medium">
+                              {icon} {label}
+                            </label>
+                            <span className="text-sm font-bold text-purple-600">
+                              {(agentSettings.assetPreferences?.[key as keyof typeof agentSettings.assetPreferences] ?? 0)}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={
+                              agentSettings.assetPreferences?.[key as keyof typeof agentSettings.assetPreferences] ?? 0
+                            }
+                            onChange={(e) =>
+                              setAgentSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      assetPreferences: {
+                                        ...current.assetPreferences,
+                                        [key]: parseInt(e.target.value)
+                                      }
+                                    }
+                                  : null
+                              )
+                            }
+                            className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                   {error && (
                     <div className="rounded-lg bg-red-50 border border-red-200 p-3">
