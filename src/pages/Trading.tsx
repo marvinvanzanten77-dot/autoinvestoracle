@@ -158,24 +158,47 @@ export function Trading() {
   // Fetch AI proposals (from chat)
   useEffect(() => {
     if (!userId) return;
+    
+    let isMounted = true;
     const fetchAiProposals = async () => {
-      setAiProposalsLoading(true);
       try {
         const resp = await fetch(`/api/trading/proposals`);
+        if (!isMounted) return;
+        
         if (resp.ok) {
           const data = (await resp.json()) as { proposals: AIProposal[] };
-          setAiProposals(data.proposals || []);
+          setAiProposals((prev) => {
+            // Only update if proposals actually changed
+            const newProposals = data.proposals || [];
+            const prevIds = new Set(prev.map(p => p.id));
+            const newIds = new Set(newProposals.map(p => p.id));
+            
+            // If same IDs, don't trigger update
+            if (prevIds.size === newIds.size && Array.from(prevIds).every(id => newIds.has(id))) {
+              return prev;
+            }
+            return newProposals;
+          });
         }
       } catch (err) {
         console.error('Error fetching AI proposals:', err);
       } finally {
-        setAiProposalsLoading(false);
+        if (isMounted) {
+          setAiProposalsLoading(false);
+        }
       }
     };
+    
+    // Initial fetch
+    setAiProposalsLoading(true);
     fetchAiProposals();
-    // Poll every 5 seconds for new proposals
-    const interval = setInterval(fetchAiProposals, 5000);
-    return () => clearInterval(interval);
+    
+    // Poll every 10 seconds (reduced from 5) for new proposals
+    const interval = setInterval(fetchAiProposals, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [userId]);
 
   // Handle proposal acceptance
