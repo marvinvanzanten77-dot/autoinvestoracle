@@ -2614,51 +2614,6 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ ok: false, error: 'Health check mislukt.' });
     }
   },
-  'agent/settings': async (req, res) => {
-    if (req.method === 'GET') {
-      try {
-        const userId = getSessionUserId(req);
-        if (!userId) {
-          res.status(401).json({ error: 'Geen sessie.' });
-          return;
-        }
-        const exchange = (req.query?.exchange as string) || 'bitvavo';
-        const settingsKey = `user:${userId}:agent:${exchange}:settings`;
-        const settings = (await kv.get(settingsKey)) as any;
-        if (!settings) {
-          res.status(404).json({ error: 'Instellingen niet gevonden.' });
-          return;
-        }
-        res.status(200).json({ settings });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Kon instellingen niet ophalen.' });
-      }
-      return;
-    }
-    
-    if (req.method === 'POST') {
-      try {
-        const userId = getSessionUserId(req);
-        if (!userId) {
-          res.status(401).json({ error: 'Geen sessie.' });
-          return;
-        }
-        const { settings } = (req.body || {}) as { settings?: any };
-        if (!settings || !settings.exchange) {
-          res.status(400).json({ error: 'settings en exchange zijn verplicht.' });
-          return;
-        }
-        const settingsKey = `user:${userId}:agent:${settings.exchange}:settings`;
-        await kv.set(settingsKey, settings);
-        res.status(200).json({ ok: true, settings });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Kon instellingen niet opslaan.' });
-      }
-      return;
-    }
-  },
   'agent/status': async (req, res) => {
     if (req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });
@@ -3065,7 +3020,7 @@ const routes: Record<string, Handler> = {
           return;
         }
         
-        res.status(200).json(settings);
+        res.status(200).json({ settings });
       } catch (err) {
         console.error('[agent/settings GET] Error:', err);
         res.status(500).json({ error: 'Kon instellingen niet ophalen.' });
@@ -3143,7 +3098,7 @@ const routes: Record<string, Handler> = {
         await kv.del(stateCache);
         await kv.del(intentCache);
         
-        res.status(200).json(newSettings);
+        res.status(200).json({ settings: newSettings });
       } catch (err) {
         console.error('[agent/settings POST] Error:', err);
         res.status(500).json({ error: 'Kon instellingen niet opslaan.' });
