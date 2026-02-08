@@ -521,10 +521,31 @@ class BitvavoConnector implements ExchangeConnector {
     try {
       const data = await this.makeRequest('GET', '/balance');
       if (!Array.isArray(data)) {
+        console.error('[Bitvavo] fetchBalances: /balance returned non-array:', typeof data);
         return [];
       }
-      return data
-        .filter((bal: any) => Number(bal.available) > 0 || Number(bal.held) > 0)
+      
+      console.log('[Bitvavo API] RAW /balance response:', {
+        count: data.length,
+        all_entries: data.map(b => ({
+          symbol: b.symbol,
+          available: b.available,
+          held: b.held,
+          inOrder: b.inOrder,
+          all_fields: Object.keys(b)
+        }))
+      });
+      
+      const balances = data
+        .filter((bal: any) => {
+          const available = Number(bal.available ?? 0);
+          const held = Number(bal.held ?? 0);
+          const hasBalance = available > 0 || held > 0;
+          if (!hasBalance) {
+            console.log(`[Bitvavo API] Filtering out ${bal.symbol}: available=${available}, held=${held}`);
+          }
+          return hasBalance;
+        })
         .map((bal: any) => ({
           id: crypto.randomUUID(),
           userId: '', // Will be set by caller
@@ -534,8 +555,15 @@ class BitvavoConnector implements ExchangeConnector {
           available: Number(bal.available),
           updatedAt: new Date().toISOString()
         }));
+        
+      console.log('[Bitvavo API] Final fetchBalances result:', {
+        count: balances.length,
+        assets: balances.map(b => `${b.asset}:${b.available}/${b.total}`)
+      });
+      
+      return balances;
     } catch (err) {
-      console.error('Bitvavo fetchBalances error:', err);
+      console.error('[Bitvavo API] fetchBalances error:', err);
       return [];
     }
   }
@@ -2703,6 +2731,16 @@ const routes: Record<string, Handler> = {
         connector.setCredentials(creds);
         
         const balances = await connector.fetchBalances();
+        
+        console.log('[/api/agent/state] Fetched balances:', {
+          count: balances.length,
+          all: balances.map(b => ({
+            asset: b.asset,
+            total: b.total,
+            available: b.available
+          }))
+        });
+        
         const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
         
         // Calculate portfolio metrics
@@ -2710,6 +2748,10 @@ const routes: Record<string, Handler> = {
         const topAssets = balances
           .sort((a, b) => (b.total || 0) - (a.total || 0))
           .slice(0, 3);
+        
+        console.log('[/api/agent/state] Top assets:', {
+          topAssets: topAssets.map(b => `${b.asset}:${b.total}`)
+        });
         
         const state = {
           exchange,
