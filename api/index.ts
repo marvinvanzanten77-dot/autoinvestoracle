@@ -3325,11 +3325,28 @@ const routes: Record<string, Handler> = {
         }
         
         const exchange = (req.query?.exchange as string) || 'bitvavo';
-        const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
+        let settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
         
         if (!settings) {
-          res.status(404).json({ error: 'Settings niet gevonden.' });
-          return;
+          // Return default settings if none exist
+          settings = {
+            exchange,
+            apiMode: 'readonly',
+            enabled: true,
+            monitoringInterval: 5,
+            alertOnVolatility: false,
+            volatilityThreshold: 5,
+            analysisDepth: 'basic',
+            autoTrade: false,
+            riskPerTrade: 2,
+            maxDailyLoss: 5,
+            confidenceThreshold: 70,
+            orderLimit: 100,
+            tradingStrategy: 'balanced',
+            enableStopLoss: false,
+            stopLossPercent: 5
+          };
+          console.log('[agent/settings GET] Returning default settings for', exchange);
         }
         
         res.status(200).json({ settings });
@@ -3346,23 +3363,47 @@ const routes: Record<string, Handler> = {
           return;
         }
         
+        console.log('[agent/settings POST] Body received:', req.body);
+        
         const { exchange, ...updates } = (req.body || {}) as {
           exchange: string;
           [key: string]: any;
         };
         
+        console.log('[agent/settings POST] Extracted exchange:', exchange, 'updates:', Object.keys(updates));
+        
         if (!exchange) {
+          console.error('[agent/settings POST] Missing exchange in body');
           res.status(400).json({ error: 'exchange is verplicht.' });
           return;
         }
         
-        // Get current settings
+        // Get current settings or create defaults if they don't exist
         const settingsKey = `user:${userId}:agent:${exchange}:settings`;
-        const currentSettings = (await kv.get(settingsKey)) as any;
+        let currentSettings = (await kv.get(settingsKey)) as any;
         
         if (!currentSettings) {
-          res.status(404).json({ error: 'Settings niet gevonden.' });
-          return;
+          // Create default settings if they don't exist
+          const defaultSettings = {
+            exchange,
+            apiMode: 'readonly' as const,
+            enabled: true,
+            monitoringInterval: 5,
+            alertOnVolatility: false,
+            volatilityThreshold: 5,
+            analysisDepth: 'basic' as const,
+            autoTrade: false,
+            riskPerTrade: 2,
+            maxDailyLoss: 5,
+            confidenceThreshold: 70,
+            orderLimit: 100,
+            tradingStrategy: 'balanced' as const,
+            enableStopLoss: false,
+            stopLossPercent: 5
+          };
+          await kv.set(settingsKey, defaultSettings);
+          currentSettings = defaultSettings;
+          console.log('[agent/settings POST] Created default settings:', defaultSettings);
         }
         
         // VALIDATION: If trying to switch to trading mode, check permissions
@@ -3413,6 +3454,10 @@ const routes: Record<string, Handler> = {
         res.status(200).json({ settings: newSettings });
       } catch (err) {
         console.error('[agent/settings POST] Error:', err);
+        console.error('[agent/settings POST] Error details:', {
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined
+        });
         res.status(500).json({ error: 'Kon instellingen niet opslaan.' });
       }
     } else {

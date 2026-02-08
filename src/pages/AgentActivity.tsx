@@ -205,7 +205,8 @@ export function AgentActivity() {
         body: JSON.stringify(agentSettings)
       });
       if (!resp.ok) {
-        throw new Error('Kon instellingen niet opslaan');
+        const data = await resp.json();
+        throw new Error(data.error || 'Kon instellingen niet opslaan');
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
