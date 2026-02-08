@@ -320,6 +320,7 @@ interface ExchangeConnector {
   fetchTransactions(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Transaction[]>;
   fetchOrders(userId: string, credentials: ExchangeCredentials, params: FetchParams): Promise<Order[]>;
   fetchMarketData(params: MarketDataParams): Promise<MarketCandle[]>;
+  fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>>;
 }
 
 class ExchangeError extends Error {
@@ -585,6 +586,24 @@ class BitvavoConnector implements ExchangeConnector {
       volume: row[5]
     }));
   }
+
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}/markets`, {
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!resp.ok) return [];
+      const data = (await resp.json()) as Array<{ market: string; baseAsset: string; quoteAsset?: string }>;
+      const assets = data.filter(m => m.quoteAsset === 'EUR').map(m => ({
+        symbol: m.market,
+        name: m.baseAsset
+      }));
+      return assets;
+    } catch (err) {
+      console.error('[Bitvavo] fetchAvailableAssets error:', err);
+      return [];
+    }
+  }
 }
 
 function intervalToMinutes(interval: string) {
@@ -651,6 +670,22 @@ class KrakenConnector implements ExchangeConnector {
       volume: Number(row[6])
     }));
   }
+
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.kraken.baseUrl}/public/AssetPairs`);
+      if (!resp.ok) return [];
+      const payload = (await resp.json()) as { result?: Record<string, any> };
+      const assets = Object.entries(payload.result || {}).map(([key, value]: [string, any]) => ({
+        symbol: key,
+        name: value?.wsname || key
+      }));
+      return assets;
+    } catch (err) {
+      console.error('[Kraken] fetchAvailableAssets error:', err);
+      return [];
+    }
+  }
 }
 
 function intervalToGranularity(interval: string) {
@@ -713,6 +748,22 @@ class CoinbaseConnector implements ExchangeConnector {
       volume: row[5]
     }));
   }
+
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.coinbase.baseUrl}/products`);
+      if (!resp.ok) return [];
+      const data = (await resp.json()) as Array<{ id: string; display_name?: string }>;
+      return data.map(p => ({
+        symbol: p.id,
+        name: p.display_name || p.id
+      }));
+    } catch (err) {
+      console.error('[Coinbase] fetchAvailableAssets error:', err);
+      return [];
+    }
+  }
+}
 }
 
 function intervalToBybit(interval: string) {
@@ -775,6 +826,22 @@ class BybitConnector implements ExchangeConnector {
       close: Number(row[4]),
       volume: Number(row[5])
     }));
+  }
+
+  async fetchAvailableAssets(): Promise<Array<{ symbol: string; name?: string }>> {
+    try {
+      const resp = await fetch(`${EXCHANGE_CONFIG.bybit.baseUrl}/market/instruments-info?category=spot`);
+      if (!resp.ok) return [];
+      const payload = (await resp.json()) as { result?: { list?: Array<{ symbol: string; baseCoin?: string }> } };
+      const assets = (payload.result?.list || []).map(a => ({
+        symbol: a.symbol,
+        name: a.baseCoin || a.symbol
+      }));
+      return assets;
+    } catch (err) {
+      console.error('[Bybit] fetchAvailableAssets error:', err);
+      return [];
+    }
   }
 }
 
@@ -2058,13 +2125,14 @@ const routes: Record<string, Handler> = {
       return;
     }
     try {
-      const { userId: bodyUserId, exchange, method, credentials, scopes = [] } =
+      const { userId: bodyUserId, exchange, method, credentials, scopes = [], apiMode = 'readonly' } =
         (req.body || {}) as {
           userId?: string;
           exchange: ExchangeId;
           method: AuthMethod;
           credentials: ExchangeCredentials;
           scopes?: string[];
+          apiMode?: 'readonly' | 'trading';
         };
       const userId = bodyUserId || getSessionUserId(req);
       if (!userId || !exchange || !method || !credentials) {
@@ -2074,6 +2142,7 @@ const routes: Record<string, Handler> = {
       const connector = createConnector(exchange);
       console.log('[exchanges/connect] Testing', exchange, 'with credentials:', {
         exchange,
+        apiMode,
         hasApiKey: !!(credentials as any)?.apiKey,
         hasApiSecret: !!(credentials as any)?.apiSecret
       });
@@ -2093,10 +2162,35 @@ const routes: Record<string, Handler> = {
         scopes: result.scopes?.length ? result.scopes : scopes,
         createdAt: now,
         updatedAt: now,
-        status: 'connected'
+        status: 'connected',
+        metadata: {
+          agentMode: apiMode
+        }
       };
       const storage = getStorageAdapter();
       await storage.saveConnection(userId, connection);
+      
+      // Save default agent settings for this exchange
+      const defaultSettings = {
+        exchange,
+        apiMode,
+        enabled: true,
+        monitoringInterval: 5,
+        alertOnVolatility: false,
+        volatilityThreshold: 5,
+        analysisDepth: 'basic',
+        autoTrade: apiMode === 'trading',
+        riskPerTrade: 2,
+        maxDailyLoss: 5,
+        confidenceThreshold: 70,
+        orderLimit: 100,
+        tradingStrategy: 'balanced',
+        enableStopLoss: false,
+        stopLossPercent: 5
+      };
+      const settingsKey = `user:${userId}:agent:${exchange}:settings`;
+      await kv.set(settingsKey, defaultSettings);
+      
       res.status(200).json({ ok: true, connection });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -2417,6 +2511,157 @@ const routes: Record<string, Handler> = {
     } catch (err) {
       console.error(err);
       res.status(500).json({ ok: false, error: 'Health check mislukt.' });
+    }
+  },
+  'agent/settings': async (req, res) => {
+    if (req.method === 'GET') {
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        const exchange = (req.query?.exchange as string) || 'bitvavo';
+        const settingsKey = `user:${userId}:agent:${exchange}:settings`;
+        const settings = (await kv.get(settingsKey)) as any;
+        if (!settings) {
+          res.status(404).json({ error: 'Instellingen niet gevonden.' });
+          return;
+        }
+        res.status(200).json({ settings });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Kon instellingen niet ophalen.' });
+      }
+      return;
+    }
+    
+    if (req.method === 'POST') {
+      try {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+          res.status(401).json({ error: 'Geen sessie.' });
+          return;
+        }
+        const { settings } = (req.body || {}) as { settings?: any };
+        if (!settings || !settings.exchange) {
+          res.status(400).json({ error: 'settings en exchange zijn verplicht.' });
+          return;
+        }
+        const settingsKey = `user:${userId}:agent:${settings.exchange}:settings`;
+        await kv.set(settingsKey, settings);
+        res.status(200).json({ ok: true, settings });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Kon instellingen niet opslaan.' });
+      }
+      return;
+    }
+    
+    res.status(405).json({ error: 'Method not allowed' });
+  },
+  'agent/status': async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      const connectedExchanges = connections.filter(c => c.status === 'connected');
+      
+      const agents = connectedExchanges.map(conn => {
+        const statusKey = `user:${userId}:agent:${conn.exchange}:status`;
+        return {
+          exchange: conn.exchange,
+          mode: (conn.metadata?.['agentMode'] || 'readonly') as 'readonly' | 'trading',
+          enabled: true,
+          status: 'idle' as const,
+          lastActivity: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+          nextAction: 'Monitoring...',
+          errorMessage: undefined
+        };
+      });
+      
+      res.status(200).json({ agents });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon agent status niet ophalen.' });
+    }
+  },
+  'agent/activity': async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const typeFilter = (req.query?.type as string) || '';
+      const exchangeFilter = (req.query?.exchange as string) || '';
+      
+      // Generate mock activities for demonstration
+      const activities = [
+        {
+          id: '1',
+          exchange: 'bitvavo',
+          type: 'monitoring',
+          status: 'success',
+          title: 'Monitoring aktief',
+          description: 'Agent scant markt op volatiiliteit',
+          details: { volatility: 2.3, priceChange: '-0.5%' },
+          timestamp: new Date(Date.now() - 300000).toISOString(),
+          executedAt: new Date(Date.now() - 299000).toISOString(),
+          duration: 1000
+        },
+        {
+          id: '2',
+          exchange: 'bitvavo',
+          type: 'analysis',
+          status: 'success',
+          title: 'Technische analyse voltooid',
+          description: 'BTC analyse: bearish signal',
+          details: { symbol: 'BTC-EUR', signal: 'bearish', confidence: 65 },
+          timestamp: new Date(Date.now() - 600000).toISOString(),
+          executedAt: new Date(Date.now() - 599000).toISOString(),
+          duration: 1500
+        },
+        {
+          id: '3',
+          exchange: 'bitvavo',
+          type: 'alert',
+          status: 'success',
+          title: 'Volatiliteit alert',
+          description: 'Volatiliteit overschrijdt drempel (5%)',
+          details: { threshold: 5, current: 6.2 },
+          timestamp: new Date(Date.now() - 900000).toISOString(),
+          executedAt: new Date(Date.now() - 899000).toISOString(),
+          duration: 500
+        }
+      ];
+      
+      let filtered = activities;
+      if (typeFilter && typeFilter !== 'all') {
+        filtered = filtered.filter(a => a.type === typeFilter);
+      }
+      if (exchangeFilter && exchangeFilter !== 'all') {
+        filtered = filtered.filter(a => a.exchange === exchangeFilter);
+      }
+      
+      res.status(200).json({ activities: filtered });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon activiteiten niet ophalen.' });
     }
   },
   'academy/progress': async (req, res) => {
