@@ -621,6 +621,7 @@ function AllocationCard({
 }
 
 export function Dashboard() {
+  const [userId, setUserId] = useState<string>('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [lastScan, setLastScan] = useState('Nog geen check');
   const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>(
@@ -635,6 +636,17 @@ export function Dashboard() {
   const [balances, setBalances] = useState<Balance[]>([]);
 
   useEffect(() => {
+    // Initialize session and get userId
+    fetch('/api/session/init')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { userId: string };
+        setUserId(data.userId);
+      })
+      .catch(() => {
+        // ignore error
+      });
+
     // Fetch profile
     fetch('/api/profile/get')
       .then(async (res) => {
@@ -673,7 +685,7 @@ export function Dashboard() {
       .catch(() => setConnectedExchanges([]));
 
     // Fetch balances from connected exchanges
-    fetchBalances()
+    fetchBalances(userId)
       .then((bals) => {
         setBalances(bals);
       })
@@ -699,7 +711,7 @@ export function Dashboard() {
         // ignore invalid storage
       }
     }
-  }, []);
+  }, [userId]);
 
   const handleScan = async () => {
     const time = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
