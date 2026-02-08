@@ -454,8 +454,8 @@ class BitvavoConnector implements ExchangeConnector {
       message: message.substring(0, 100) + '...'
     });
 
-    // CRITICAL FIX: Use /v2 prefix in the actual API URL!
-    const fullUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/v2${endpoint}`;
+    // Use path (which already has /v2) in the actual API URL!
+    const fullUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}${path}`;
     console.log('[Bitvavo] Fetching URL:', fullUrl);
     
     const resp = await fetch(fullUrl, {
