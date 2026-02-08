@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { AgentStatePanel } from '../components/AgentStatePanel';
+import { AgentIntentPanel } from '../components/AgentIntentPanel';
+import { AgentChat } from '../components/AgentChat';
 
 type ActivityType =
   | 'monitoring'
@@ -41,9 +44,11 @@ export function AgentActivity() {
   const [activities, setActivities] = useState<AgentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ActivityType | 'all'>('all');
-  const [exchange, setExchange] = useState<string>('all');
-  const [exchanges, setExchanges] = useState<string[]>([]);
+  const [exchange, setExchange] = useState<string>('bitvavo');
+  const [exchanges, setExchanges] = useState<string[]>(['bitvavo']);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
 
   const fetchActivities = async () => {
     try {
@@ -110,146 +115,197 @@ export function AgentActivity() {
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      <Card title="Agent activiteit" subtitle="Real-time overzicht van alles wat agents doen">
-        {/* Controls */}
-        <div className="space-y-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2 flex-wrap">
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  className="h-4 w-4 text-primary"
-                />
-                Auto-refresh (5s)
-              </label>
-            </div>
-            <button
-              type="button"
-              onClick={fetchActivities}
-              className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 transition"
-            >
-              Nu vernieuwen
-            </button>
-          </div>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            activeTab === 'overview'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          📊 Stand van Zaken
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('history')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            activeTab === 'history'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          📋 Activiteiten Log
+        </button>
+        <button
+          type="button"
+          onClick={() => setChatOpen(!chatOpen)}
+          className="ml-auto px-4 py-2 text-sm font-medium border-b-2 border-transparent text-slate-600 hover:text-primary transition"
+        >
+          💬 Agent Copilot
+        </button>
+      </div>
 
-          {/* Filter rows */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Type filter */}
-            <div>
-              <label className="text-xs text-slate-500 font-medium block mb-2">Activiteit type</label>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as ActivityType | 'all')}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              >
-                <option value="all">Alle types</option>
-                <option value="monitoring">👁️ Monitoring</option>
-                <option value="alert">⚠️ Alertes</option>
-                <option value="analysis">📊 Analyse</option>
-                <option value="trade_placed">🛒 Order geplaatst</option>
-                <option value="trade_filled">✓ Order voltooid</option>
-                <option value="trade_cancelled">✕ Order geannuleerd</option>
-                <option value="stop_loss_triggered">🛑 Stop-loss</option>
-                <option value="daily_limit_reached">📈 Dagelijkse limiet</option>
-                <option value="error">❌ Fouten</option>
-              </select>
-            </div>
-
-            {/* Exchange filter */}
-            <div>
-              <label className="text-xs text-slate-500 font-medium block mb-2">Exchange</label>
-              <select
-                value={exchange}
-                onChange={(e) => setExchange(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              >
-                <option value="all">Alle exchanges</option>
-                {exchanges.map((ex) => (
-                  <option key={ex} value={ex}>
-                    {ex}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <div className="space-y-5">
+          <div className="grid gap-5 md:grid-cols-2">
+            <AgentStatePanel exchange={exchange} />
+            <AgentIntentPanel exchange={exchange} />
           </div>
         </div>
+      )}
 
-        {/* Activity list */}
-        {loading ? (
-          <div className="text-center py-8">
-            <p className="text-slate-500 text-sm">Activiteiten laden...</p>
-          </div>
-        ) : activities.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-slate-500 text-sm">Geen activiteiten gevonden</p>
-          </div>
-        ) : (
-          <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {activities.map((activity) => {
-              const colors = ACTIVITY_COLORS[activity.type];
-              return (
-                <div
-                  key={activity.id}
-                  className={`${colors.bg} border border-slate-200/50 rounded-lg p-4 space-y-2`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      <span className="text-xl mt-0.5">{colors.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${colors.text}`}>{activity.title}</p>
-                        <p className="text-xs text-slate-600 mt-1">{activity.description}</p>
-                        {activity.details && (
-                          <div className="mt-2 space-y-1 text-xs text-slate-600">
-                            {Object.entries(activity.details).map(([key, value]) => (
-                              <div key={key} className="flex justify-between">
-                                <span className="font-medium">{key}:</span>
-                                <span className="text-right">{String(value)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2">
-                      {getStatusBadge(activity.status)}
-                      <div className="text-right">
-                        <p className="text-xs font-medium text-slate-700 capitalize">{activity.exchange}</p>
-                        <p className="text-xs text-slate-500">
-                          {formatDate(activity.timestamp)} {formatTime(activity.timestamp)}
-                        </p>
-                        {activity.duration && (
-                          <p className="text-xs text-slate-500">{activity.duration}ms</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+      {/* History Tab */}
+      {activeTab === 'history' && (
+        <>
+          <Card title="Agent activiteit" subtitle="Real-time overzicht van alles wat agents doen">
+            {/* Controls */}
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2 flex-wrap">
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={autoRefresh}
+                      onChange={(e) => setAutoRefresh(e.target.checked)}
+                      className="h-4 w-4 text-primary"
+                    />
+                    Auto-refresh (5s)
+                  </label>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+                <button
+                  type="button"
+                  onClick={fetchActivities}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 transition"
+                >
+                  Nu vernieuwen
+                </button>
+              </div>
 
-      {/* Summary stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card title={activities.filter((a) => a.type === 'monitoring').length.toString()} subtitle="Monitoring sessies">
-          <p className="text-xs text-slate-500">Aantal keer agents monitoring hebben gedaan</p>
-        </Card>
-        <Card
-          title={activities.filter((a) => a.type.startsWith('trade')).length.toString()}
-          subtitle="Trades uitgevoerd"
-        >
-          <p className="text-xs text-slate-500">Orders geplaatst en voltooid</p>
-        </Card>
-        <Card title={activities.filter((a) => a.status === 'pending').length.toString()} subtitle="Bezig">
-          <p className="text-xs text-slate-500">Activiteiten in uitvoering</p>
-        </Card>
-        <Card title={activities.filter((a) => a.status === 'failed').length.toString()} subtitle="Fouten">
-          <p className="text-xs text-slate-500">Mislukte activiteiten</p>
-        </Card>
-      </div>
+              {/* Filter rows */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Type filter */}
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-2">Activiteit type</label>
+                  <select
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value as ActivityType | 'all')}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="all">Alle types</option>
+                    <option value="monitoring">👁️ Monitoring</option>
+                    <option value="alert">⚠️ Alertes</option>
+                    <option value="analysis">📊 Analyse</option>
+                    <option value="trade_placed">🛒 Order geplaatst</option>
+                    <option value="trade_filled">✓ Order voltooid</option>
+                    <option value="trade_cancelled">✕ Order geannuleerd</option>
+                    <option value="stop_loss_triggered">🛑 Stop-loss</option>
+                    <option value="daily_limit_reached">📈 Dagelijkse limiet</option>
+                    <option value="error">❌ Fouten</option>
+                  </select>
+                </div>
+
+                {/* Exchange filter */}
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-2">Exchange</label>
+                  <select
+                    value={exchange}
+                    onChange={(e) => setExchange(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="bitvavo">Bitvavo</option>
+                    {exchanges.map((ex) => (
+                      <option key={ex} value={ex}>
+                        {ex}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Activity list */}
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-slate-500 text-sm">Activiteiten laden...</p>
+              </div>
+            ) : activities.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-slate-500 text-sm">Geen activiteiten gevonden</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                {activities.map((activity) => {
+                  const colors = ACTIVITY_COLORS[activity.type];
+                  return (
+                    <div
+                      key={activity.id}
+                      className={`${colors.bg} border border-slate-200/50 rounded-lg p-4 space-y-2`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                          <span className="text-xl mt-0.5">{colors.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${colors.text}`}>{activity.title}</p>
+                            <p className="text-xs text-slate-600 mt-1">{activity.description}</p>
+                            {activity.details && (
+                              <div className="mt-2 space-y-1 text-xs text-slate-600">
+                                {Object.entries(activity.details).map(([key, value]) => (
+                                  <div key={key} className="flex justify-between">
+                                    <span className="font-medium">{key}:</span>
+                                    <span className="text-right">{String(value)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 ml-2">
+                          {getStatusBadge(activity.status)}
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-slate-700 capitalize">{activity.exchange}</p>
+                            <p className="text-xs text-slate-500">
+                              {formatDate(activity.timestamp)} {formatTime(activity.timestamp)}
+                            </p>
+                            {activity.duration && (
+                              <p className="text-xs text-slate-500">{activity.duration}ms</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Summary stats */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card title={activities.filter((a) => a.type === 'monitoring').length.toString()} subtitle="Monitoring sessies">
+              <p className="text-xs text-slate-500">Aantal keer agents monitoring hebben gedaan</p>
+            </Card>
+            <Card
+              title={activities.filter((a) => a.type.startsWith('trade')).length.toString()}
+              subtitle="Trades uitgevoerd"
+            >
+              <p className="text-xs text-slate-500">Orders geplaatst en voltooid</p>
+            </Card>
+            <Card title={activities.filter((a) => a.status === 'pending').length.toString()} subtitle="Bezig">
+              <p className="text-xs text-slate-500">Activiteiten in uitvoering</p>
+            </Card>
+            <Card title={activities.filter((a) => a.status === 'failed').length.toString()} subtitle="Fouten">
+              <p className="text-xs text-slate-500">Mislukte activiteiten</p>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* Agent Chat Sidebar */}
+      <AgentChat exchange={exchange} isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

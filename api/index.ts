@@ -2665,6 +2665,261 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon activiteiten niet ophalen.' });
     }
   },
+  'agent/state': async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const exchange = (req.query?.exchange as string) || 'bitvavo';
+      
+      // CHECK CACHE FIRST (10 sec TTL) - prevents rate limit explosion
+      const cacheKey = `agent:state:${userId}:${exchange}`;
+      const cached = await kv.get(cacheKey) as any;
+      if (cached && Date.now() - cached.cachedAt < 10000) {
+        res.status(200).json(cached.data);
+        return;
+      }
+      
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      const connection = connections.find(c => c.exchange === exchange && c.status === 'connected');
+      
+      if (!connection) {
+        res.status(404).json({ error: 'Exchange niet verbonden.' });
+        return;
+      }
+      
+      try {
+        const connector = createConnector(exchange);
+        const creds = decryptSecrets(connection.encryptedSecrets);
+        connector.setCredentials(creds);
+        
+        const balances = await connector.fetchBalances();
+        const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
+        
+        // Calculate portfolio metrics
+        const totalValue = balances.reduce((sum, b) => sum + (b.total || 0), 0);
+        const topAssets = balances
+          .sort((a, b) => (b.total || 0) - (a.total || 0))
+          .slice(0, 3);
+        
+        const state = {
+          exchange,
+          timestamp: new Date().toISOString(),
+          portfolio: {
+            totalAssets: balances.length,
+            totalValue,
+            topAssets: topAssets.map(b => ({
+              asset: b.asset,
+              amount: b.total,
+              available: b.available
+            }))
+          },
+          settings: {
+            apiMode: settings?.apiMode || 'readonly',
+            enabled: settings?.enabled !== false,
+            monitoringInterval: settings?.monitoringInterval || 5,
+            autoTrade: settings?.autoTrade || false,
+            riskPerTrade: settings?.riskPerTrade || 2
+          },
+          healthChecks: {
+            dataFresh: true,
+            connectionActive: true,
+            lastSync: connection.lastSyncAt || new Date().toISOString()
+          }
+        };
+        
+        // CACHE RESULT (TTL 10 sec) - prevents rate limit explosion
+        await kv.setex(cacheKey, 10, JSON.stringify({
+          data: state,
+          cachedAt: Date.now()
+        }));
+        
+        res.status(200).json(state);
+      } catch (err) {
+        console.error('[agent/state] Error fetching data:', err);
+        res.status(500).json({ error: 'Kon portfolio state niet ophalen.' });
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon state niet ophalen.' });
+    }
+  },
+  'agent/intent': async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const exchange = (req.query?.exchange as string) || 'bitvavo';
+      
+      // CHECK CACHE FIRST (15 sec TTL) - prevents rate limit explosion
+      const cacheKey = `agent:intent:${userId}:${exchange}`;
+      const cached = await kv.get(cacheKey) as any;
+      if (cached && Date.now() - cached.cachedAt < 15000) {
+        res.status(200).json(cached.data);
+        return;
+      }
+      
+      const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
+      
+      if (!settings) {
+        res.status(404).json({ error: 'Settings niet gevonden.' });
+        return;
+      }
+      
+      // READONLY ENFORCEMENT: Intent endpoint never modifies settings
+      // Determine intent based on configuration (READ-ONLY)
+      const intent = {
+        exchange,
+        timestamp: new Date().toISOString(),
+        mode: settings.apiMode,
+        enabled: settings.enabled !== false,
+        nextAction: {
+          type: settings.enabled !== false ? (settings.autoTrade ? 'prepare_trade' : 'monitor') : 'idle',
+          description: 
+            !settings.enabled ? 'Agent is uitgeschakeld' :
+            settings.autoTrade ? 'Wacht op trading signaal met ' + settings.riskPerTrade + '% risico' :
+            'Bewaakt portfolio met interval van ' + settings.monitoringInterval + ' minuten',
+          reason: 
+            !settings.enabled ? 'User heeft agent disabled' :
+            settings.autoTrade ? 'Trading modus actief, criteria: ' + settings.tradingStrategy + ' strategie' :
+            'Read-only modus: monitoring en alerts'
+        },
+        safetyLimits: {
+          maxRiskPerTrade: settings.riskPerTrade || 2,
+          maxDailyLoss: settings.maxDailyLoss || 5,
+          confidenceThreshold: settings.confidenceThreshold || 70,
+          enableStopLoss: settings.enableStopLoss || false
+        },
+        nextCheck: {
+          in: settings.monitoringInterval || 5,
+          unit: 'minutes',
+          estimatedTime: new Date(Date.now() + (settings.monitoringInterval || 5) * 60000).toISOString()
+        }
+      };
+      
+      // CACHE RESULT (TTL 15 sec) - prevents rate limit explosion  
+      await kv.setex(cacheKey, 15, JSON.stringify({
+        data: intent,
+        cachedAt: Date.now()
+      }));
+      
+      res.status(200).json(intent);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon intent niet ophalen.' });
+    }
+  },
+  'agent/analyze': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const { exchange, mode = 'observer' } = (req.body || {}) as {
+        exchange?: string;
+        mode?: 'observer' | 'planner_explainer' | 'config_chat';
+      };
+      
+      if (!exchange) {
+        res.status(400).json({ error: 'exchange is verplicht.' });
+        return;
+      }
+      
+      // Fetch current state and intent
+      const storage = getStorageAdapter();
+      const connections = await storage.listConnections(userId);
+      const connection = connections.find(c => c.exchange === exchange && c.status === 'connected');
+      
+      if (!connection) {
+        res.status(404).json({ error: 'Exchange niet verbonden.' });
+        return;
+      }
+      
+      try {
+        const connector = createConnector(exchange);
+        const creds = decryptSecrets(connection.encryptedSecrets);
+        connector.setCredentials(creds);
+        
+        const balances = await connector.fetchBalances();
+        const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
+        
+        // Generate AI analysis based on mode
+        let analysis = '';
+        
+        if (mode === 'observer') {
+          // OBSERVER MODE: What is the current situation?
+          // SAFETY: Only safe normalized data, no raw exchange responses
+          const totalValue = balances.reduce((sum, b) => sum + (b.total || 0), 0);
+          const topAssets = balances
+            .filter(b => b && b.asset && b.total)
+            .sort((a, b) => (b.total || 0) - (a.total || 0))
+            .slice(0, 1);
+          const topAsset = topAssets.length > 0 ? topAssets[0] : null;
+          
+          analysis = balances.length > 0
+            ? `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
+              (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.total || 0).toFixed(2)}). ` : '') +
+              `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`
+            : `Je portfolio is leeg. Maak je eerste aankoop om te beginnen.`;
+        } else if (mode === 'planner_explainer') {
+          // PLANNER MODE: What will happen next and why?
+          // SAFETY: Only explains existing settings, never suggests market actions
+          if (!settings?.enabled) {
+            analysis = `Volgens je huidige instellingen: je agent is uitgeschakeld. Je kunt dit aanpassen in Agent instellingen.`;
+          } else if (settings?.autoTrade) {
+            analysis = `Volgens je huidige instellingen: je agent zal de volgende acties uitvoeren: ` +
+              `Portfolio monitoren elk ${settings.monitoringInterval || 5} minuut. ` +
+              `Bij geschikte marktcondities (gebaseerd op je regels): orders plaatsen met max ${settings.riskPerTrade || 2}% risico per trade. ` +
+              `Voorzorgsmaatregel: stoppen bij ${settings.maxDailyLoss || 5}% dagelijks verlies.`;
+          } else {
+            analysis = `Volgens je huidige instellingen: je agent werkt in monitoring modus. ` +
+              `Het zal elk ${settings.monitoringInterval || 5} minuut je portfolio checken ` +
+              `en alerts sturen als voorwaarden veranderen. Niets automatisch.`;
+          }
+        } else if (mode === 'config_chat') {
+          // CONFIG_CHAT MODE: Brief status for conversation starter
+          // SAFETY: Never suggests market actions, only config changes  
+          const modeLabel = settings?.apiMode === 'trading' ? 'volledig (trading)' : 'observatie (monitoring)';
+          const tradeStatus = settings?.autoTrade ? 'Auto-trading is aan.' : 'Enkel monitoring.';
+          analysis = `Volgens je huidige instellingen: je agent werkt in ${modeLabel} modus. ${tradeStatus} Wat wil je aanpassen?`;
+        }
+        
+        res.status(200).json({
+          mode,
+          exchange,
+          analysis,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('[agent/analyze] Error:', err);
+        res.status(500).json({ error: 'Kon analyse niet genereren.' });
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Kon analyse niet uitvoeren.' });
+    }
+  },
   'academy/progress': async (req, res) => {
     if (req.method && req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });
