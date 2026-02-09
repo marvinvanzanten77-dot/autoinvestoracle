@@ -3373,36 +3373,6 @@ const routes: Record<string, Handler> = {
         return;
       }
       
-      // If format is 'text', return readable format
-      if (format === 'text') {
-        let text = `=== AGENT EXECUTION HISTORY ===\n`;
-        text += `Exchange: ${exchange}\n`;
-        text += `Hours Back: ${hoursBack}\n`;
-        text += `Type Filter: ${typeFilter || 'all'}\n`;
-        text += `Exported: ${new Date().toISOString()}\n`;
-        text += `Total Logs: ${logs.length}\n`;
-        text += `\n${'='.repeat(60)}\n\n`;
-        
-        logs.forEach((log, idx) => {
-          text += `[${idx + 1}] ${log.title}\n`;
-          text += `    Status: ${log.status} | Type: ${log.type}\n`;
-          text += `    Time: ${new Date(log.timestamp).toLocaleString('nl-NL')}\n`;
-          text += `    Duration: ${log.duration}ms\n`;
-          text += `    Description: ${log.description}\n`;
-          if (log.details && Object.keys(log.details).length > 0) {
-            text += `    Details: ${JSON.stringify(log.details)}\n`;
-          }
-          text += `\n`;
-        });
-        
-        // Return as text in JSON response
-        res.status(200).json({
-          filename: `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`,
-          content: text
-        });
-        return;
-      }
-      
       // Default: return JSON response
       res.status(200).json({
         exchange,

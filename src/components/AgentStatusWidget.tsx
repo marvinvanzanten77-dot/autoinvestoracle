@@ -28,9 +28,9 @@ export function AgentStatusWidget() {
     }
   };
 
-  const downloadHistory = async (exchange: string, format: 'json' | 'text') => {
+  const downloadHistory = async (exchange: string) => {
     try {
-      setDownloading(`${exchange}-${format}`);
+      setDownloading(`${exchange}-json`);
       const url = `/api/agent/history?exchange=${exchange}&hours=24&format=download`;
       const resp = await fetch(url);
       if (!resp.ok) {
@@ -38,20 +38,11 @@ export function AgentStatusWidget() {
       }
       
       const data = await resp.json() as any;
-      
-      // Determine what to download
-      const content = format === 'json' 
-        ? JSON.stringify(data, null, 2)
-        : data.content;
-      
-      const filename = format === 'json'
-        ? `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.json`
-        : `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`;
+      const content = JSON.stringify(data, null, 2);
+      const filename = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.json`;
       
       // Create blob and download
-      const blob = new Blob([content], {
-        type: format === 'json' ? 'application/json' : 'text/plain'
-      });
+      const blob = new Blob([content], { type: 'application/json' });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -192,21 +183,14 @@ export function AgentStatusWidget() {
                 </div>
               )}
 
-              {/* Download buttons */}
-              <div className="mt-2 flex gap-2">
+              {/* Download button */}
+              <div className="mt-2">
                 <button
-                  onClick={() => downloadHistory(agent.exchange, 'json')}
+                  onClick={() => downloadHistory(agent.exchange)}
                   disabled={downloading === `${agent.exchange}-json`}
-                  className="flex-1 text-xs py-1 px-2 rounded border border-current/30 hover:bg-black/5 transition disabled:opacity-50"
+                  className="w-full text-xs py-1 px-2 rounded border border-current/30 hover:bg-black/5 transition disabled:opacity-50"
                 >
-                  {downloading === `${agent.exchange}-json` ? '⬇️ JSON...' : '📥 JSON'}
-                </button>
-                <button
-                  onClick={() => downloadHistory(agent.exchange, 'text')}
-                  disabled={downloading === `${agent.exchange}-text`}
-                  className="flex-1 text-xs py-1 px-2 rounded border border-current/30 hover:bg-black/5 transition disabled:opacity-50"
-                >
-                  {downloading === `${agent.exchange}-text` ? '⬇️ TXT...' : '📄 TXT'}
+                  {downloading === `${agent.exchange}-json` ? '⬇️ Downloading...' : '📥 Download History (JSON)'}
                 </button>
               </div>
             </div>
