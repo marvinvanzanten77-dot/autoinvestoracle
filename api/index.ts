@@ -3235,11 +3235,11 @@ const routes: Record<string, Handler> = {
       // Get real agent execution history
       let activities = await getAgentHistory(userId, exchangeFilter, 24);
       
-      // If no real data, use mock data for demo
+      // If no real data, create demo logs and save them
       if (activities.length === 0) {
-        activities = [
+        const demoLogs: AgentExecutionLog[] = [
           {
-            id: '1',
+            id: crypto.randomUUID(),
             userId,
             exchange: exchangeFilter,
             type: 'monitoring',
@@ -3251,7 +3251,7 @@ const routes: Record<string, Handler> = {
             duration: 1000
           },
           {
-            id: '2',
+            id: crypto.randomUUID(),
             userId,
             exchange: exchangeFilter,
             type: 'analysis',
@@ -3263,7 +3263,7 @@ const routes: Record<string, Handler> = {
             duration: 1500
           },
           {
-            id: '3',
+            id: crypto.randomUUID(),
             userId,
             exchange: exchangeFilter,
             type: 'alert',
@@ -3275,6 +3275,13 @@ const routes: Record<string, Handler> = {
             duration: 500
           }
         ];
+        
+        // Save demo logs to KV
+        for (const log of demoLogs) {
+          await logAgentExecution(log);
+        }
+        
+        activities = demoLogs;
       }
       
       let filtered = activities;
