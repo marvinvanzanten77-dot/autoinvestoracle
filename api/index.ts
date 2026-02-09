@@ -556,8 +556,8 @@ class BitvavoConnector implements ExchangeConnector {
           userId: '', // Will be set by caller
           exchange: this.id,
           asset: bal.symbol,
-          total: Number(bal.available) + Number(bal.held),
-          available: Number(bal.available),
+          total: Number(bal.available ?? 0) + Number(bal.held ?? 0),
+          available: Number(bal.available ?? 0),
           updatedAt: new Date().toISOString()
         }));
       
@@ -570,28 +570,48 @@ class BitvavoConnector implements ExchangeConnector {
             continue;
           }
           try {
-            const tickerResp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}/${bal.asset}-EUR/ticker24h`, {
-              signal: AbortSignal.timeout(5000)
+            const market = `${bal.asset}-EUR`;
+            const tickerUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${market}/ticker24h`;
+            console.log(`[Bitvavo] Fetching price from: ${tickerUrl}`);
+            
+            const tickerResp = await fetch(tickerUrl, {
+              signal: AbortSignal.timeout(8000)
             });
-            if (tickerResp.ok) {
-              const ticker = await tickerResp.json();
-              const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '0');
+            
+            if (!tickerResp.ok) {
+              console.warn(`[Bitvavo] Price fetch failed for ${market}: HTTP ${tickerResp.status}`);
+              pricesMap[bal.asset] = 0;
+              continue;
+            }
+            
+            const ticker = await tickerResp.json();
+            console.log(`[Bitvavo] Ticker response for ${market}:`, {
+              lastPrice: ticker.lastPrice,
+              price: ticker.price,
+              keys: Object.keys(ticker).slice(0, 10)
+            });
+            
+            const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '0');
+            if (isNaN(lastPrice) || lastPrice === 0) {
+              console.warn(`[Bitvavo] Invalid price for ${market}: ${lastPrice}, raw:`, ticker.lastPrice || ticker.price);
+              pricesMap[bal.asset] = 0;
+            } else {
               pricesMap[bal.asset] = lastPrice;
-              console.log(`[Bitvavo] Fetched price for ${bal.asset}-EUR: €${lastPrice}`);
+              console.log(`[Bitvavo] ✓ Price for ${market}: €${lastPrice}`);
             }
           } catch (err) {
-            console.warn(`[Bitvavo] Failed to fetch price for ${bal.asset}-EUR:`, err);
-            pricesMap[bal.asset] = 0; // Default to 0 if price fetch fails
+            console.warn(`[Bitvavo] Error fetching price for ${bal.asset}-EUR:`, err instanceof Error ? err.message : String(err));
+            pricesMap[bal.asset] = 0;
           }
         }
       } catch (err) {
-        console.warn('[Bitvavo] Error fetching prices:', err);
+        console.warn('[Bitvavo] Error in price fetching loop:', err);
       }
       
       // Enhance balances with EUR values
       const enhancedBalances = balances.map(bal => {
-        const price = pricesMap[bal.asset] || 0;
-        const eurValue = bal.total * price;
+        const price = pricesMap[bal.asset] ?? 0;
+        const eurValue = isNaN(bal.total) ? 0 : bal.total * price;
         return {
           ...bal,
           priceEUR: price,
@@ -601,7 +621,14 @@ class BitvavoConnector implements ExchangeConnector {
       
       console.log('[Bitvavo API] Final fetchBalances with prices:', {
         count: enhancedBalances.length,
-        assets: enhancedBalances.map(b => `${b.asset}: €${(b.estimatedValue || 0).toFixed(2)} (${b.total} @ €${b.priceEUR || 0})`)
+        pricesMap,
+        assets: enhancedBalances.map(b => ({
+          asset: b.asset,
+          quantity: b.total,
+          priceEUR: b.priceEUR,
+          estimatedValue: b.estimatedValue,
+          estimatedValueFormatted: `€${(b.estimatedValue || 0).toFixed(2)}`
+        }))
       });
       
       return enhancedBalances;
