@@ -570,42 +570,56 @@ class BitvavoConnector implements ExchangeConnector {
             continue;
           }
           try {
+            // Try Bitvavo ticker first
             const market = `${bal.asset}-EUR`;
             const tickerUrl = `${EXCHANGE_CONFIG.bitvavo.baseUrl}/${market}/ticker24h`;
             console.log(`[Bitvavo] Fetching price from: ${tickerUrl}`);
             
+            let lastPrice = 0;
             const tickerResp = await fetch(tickerUrl, {
-              signal: AbortSignal.timeout(8000)
-            });
+              signal: AbortSignal.timeout(5000)
+            }).catch(() => null);
             
-            if (!tickerResp.ok) {
-              console.warn(`[Bitvavo] Price fetch failed for ${market}: HTTP ${tickerResp.status}`);
-              pricesMap[bal.asset] = 0;
-              continue;
+            if (tickerResp?.ok) {
+              const ticker = await tickerResp.json();
+              lastPrice = parseFloat(ticker.lastPrice || ticker.price || '0');
+              if (!isNaN(lastPrice) && lastPrice > 0) {
+                pricesMap[bal.asset] = lastPrice;
+                console.log(`[Bitvavo] ✓ Price for ${market}: €${lastPrice}`);
+                continue;
+              }
             }
             
-            const ticker = await tickerResp.json();
-            console.log(`[Bitvavo] Ticker response for ${market}:`, {
-              lastPrice: ticker.lastPrice,
-              price: ticker.price,
-              keys: Object.keys(ticker).slice(0, 10)
+            // Fallback to CoinGecko if Bitvavo fails
+            console.log(`[Bitvavo] Bitvavo failed, trying CoinGecko for ${bal.asset}`);
+            const coinId = bal.asset === 'BTC' ? 'bitcoin' : bal.asset === 'ETH' ? 'ethereum' : bal.asset.toLowerCase();
+            const cgUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`;
+            
+            const cgResp = await fetch(cgUrl, {
+              signal: AbortSignal.timeout(5000)
             });
             
-            const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '0');
-            if (isNaN(lastPrice) || lastPrice === 0) {
-              console.warn(`[Bitvavo] Invalid price for ${market}: ${lastPrice}, raw:`, ticker.lastPrice || ticker.price);
-              pricesMap[bal.asset] = 0;
+            if (cgResp.ok) {
+              const cgData = await cgResp.json();
+              const price = cgData[coinId]?.eur;
+              if (price && !isNaN(price) && price > 0) {
+                pricesMap[bal.asset] = price;
+                console.log(`[CoinGecko] ✓ Price for ${bal.asset}: €${price}`);
+              } else {
+                console.warn(`[CoinGecko] Invalid price for ${bal.asset}:`, price);
+                pricesMap[bal.asset] = 0;
+              }
             } else {
-              pricesMap[bal.asset] = lastPrice;
-              console.log(`[Bitvavo] ✓ Price for ${market}: €${lastPrice}`);
+              console.warn(`[CoinGecko] Failed for ${bal.asset}: HTTP ${cgResp.status}`);
+              pricesMap[bal.asset] = 0;
             }
           } catch (err) {
-            console.warn(`[Bitvavo] Error fetching price for ${bal.asset}-EUR:`, err instanceof Error ? err.message : String(err));
+            console.warn(`[Price Fetch] Error for ${bal.asset}:`, err instanceof Error ? err.message : String(err));
             pricesMap[bal.asset] = 0;
           }
         }
       } catch (err) {
-        console.warn('[Bitvavo] Error in price fetching loop:', err);
+        console.warn('[Price Fetching] Error in loop:', err);
       }
       
       // Enhance balances with EUR values
