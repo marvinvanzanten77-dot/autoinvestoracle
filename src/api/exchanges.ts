@@ -57,7 +57,22 @@ export async function fetchBalances(userId?: string): Promise<Balance[]> {
     return [];
   }
   const data = (await resp.json()) as BalancesResponse;
-  console.log('[fetchBalances] Got balances:', data.balances);
+  console.log('[fetchBalances] RAW response:', data);
+  console.log('[fetchBalances] Parsed balances:', data.balances);
+  
+  // Log each balance in detail
+  if (data.balances && Array.isArray(data.balances)) {
+    data.balances.forEach(bal => {
+      console.log(`[fetchBalances] ${bal.asset}:`, {
+        total: bal.total,
+        available: bal.available,
+        priceEUR: bal.priceEUR,
+        estimatedValue: bal.estimatedValue,
+        allFields: Object.keys(bal)
+      });
+    });
+  }
+  
   return data.balances || [];
 }
 
