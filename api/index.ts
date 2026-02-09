@@ -2827,12 +2827,20 @@ const routes: Record<string, Handler> = {
     }
     try {
       const userId = (req.query?.userId as string) || getSessionUserId(req);
+      console.log('[exchanges/balances] REQUEST START', {
+        userId,
+        hasQuery: !!req.query?.userId,
+        hasSession: !!getSessionUserId(req),
+        timestamp: new Date().toISOString()
+      });
+      
       if (!userId) {
         res.status(400).json({ error: 'userId is verplicht.' });
         return;
       }
       const storage = getStorageAdapter();
       const connections = await storage.listConnections(userId);
+      console.log('[exchanges/balances] Found', connections.length, 'connections for user');
       
       const allBalances: Array<Balance & { exchange: string }> = [];
       const totalValue = { btc: 0, eur: 0 };
@@ -2847,13 +2855,26 @@ const routes: Record<string, Handler> = {
         
         try {
           console.log(`[exchanges/balances] Fetching from ${connection.exchange}...`);
+          console.log(`[exchanges/balances] Connection details:`, {
+            exchange: connection.exchange,
+            status: connection.status,
+            encryptedSecretsLength: connection.encryptedSecrets?.length || 0,
+            accountId: (connection as any).accountId
+          });
+          
           const connector = createConnector(connection.exchange as ExchangeId);
           const creds = decryptSecrets(connection.encryptedSecrets) as any;
+          console.log(`[exchanges/balances] Decrypted credentials:`, {
+            hasApiKey: !!creds?.apiKey,
+            apiKeyLength: creds?.apiKey?.length || 0,
+            hasApiSecret: !!creds?.apiSecret,
+            allCredsKeys: Object.keys(creds || {})
+          });
           connector.setCredentials(creds);
           
           const balances = await connector.fetchBalances();
           console.log(`[exchanges/balances] Got ${balances.length} balances from ${connection.exchange}:`, {
-            assets: balances.map(b => `${b.asset}:${b.available}`)
+            assets: balances.map(b => `${b.asset}:${b.total}:€${b.estimatedValue}`)
           });
           
           allBalances.push(
