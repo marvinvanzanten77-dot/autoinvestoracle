@@ -405,6 +405,7 @@ function InsightsCard({
 
 function PortfolioCard({ balances }: { balances: Balance[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [performance, setPerformance] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -489,13 +490,51 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
             <p><strong>Last Updated:</strong> {new Date().toLocaleTimeString('nl-NL')}</p>
           </div>
         )}
+
+        {showDebug && (
+          <div className="rounded-lg bg-slate-900 p-3 text-xs space-y-2 text-slate-100 border border-slate-700 font-mono max-h-96 overflow-auto">
+            <p><strong className="text-amber-400">🐛 DEBUG INFO - BALANCES</strong></p>
+            <button
+              onClick={() => {
+                console.log('=== PORTFOLIO DEBUG ===');
+                console.log('Raw balances:', balances);
+                console.log('Crypto balances only:', cryptoBalances);
+                cryptoBalances.forEach(b => {
+                  console.log(`${b.asset}:`, {
+                    total: b.total,
+                    priceEUR: b.priceEUR,
+                    estimatedValue: b.estimatedValue,
+                    calculation: `${b.total} × ${b.priceEUR} = ${b.estimatedValue}`
+                  });
+                });
+                console.log('Total value:', totalValue);
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded text-xs"
+            >
+              📋 Log to Console
+            </button>
+            <div className="bg-slate-950 p-2 rounded border border-slate-700 max-h-60 overflow-auto">
+              <pre className="text-xs whitespace-pre-wrap break-words">
+{cryptoBalances.map(b => `${b.asset}: qty=${b.total.toFixed(8)} price=€${b.priceEUR?.toFixed(2) || '0.00'} value=€${(b.estimatedValue ?? 0).toFixed(2)}`).join('\n')}
+              </pre>
+            </div>
+          </div>
+        )}
         
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full text-xs text-slate-500 hover:text-slate-700 py-1 rounded border border-slate-300 hover:border-slate-400 transition"
-        >
-          {expanded ? '▼ Details' : '▶ Toon details'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex-1 text-xs text-slate-500 hover:text-slate-700 py-1 rounded border border-slate-300 hover:border-slate-400 transition"
+          >
+            {expanded ? '▼ Details' : '▶ Details'}
+          </button>
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-xs text-amber-600 hover:text-amber-700 py-1 px-3 rounded border border-amber-300 hover:border-amber-400 transition font-medium"
+          >
+            {showDebug ? '✕ Debug' : '🐛 Debug'}
+          </button>
+        </div>
       </div>
     </Card>
   );
