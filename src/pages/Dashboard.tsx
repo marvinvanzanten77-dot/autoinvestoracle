@@ -439,7 +439,7 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
     {} as Record<string, Balance[]>
   );
 
-  const totalValue = cryptoBalances.reduce((sum, bal) => sum + (bal.total ?? 0), 0);
+  const totalValue = cryptoBalances.reduce((sum, bal) => sum + (bal.estimatedValue ?? 0), 0);
 
   return (
     <Card title="Jouw Portfolio" subtitle={`${cryptoBalances.length} crypto assets | Total: €${(totalValue ?? 0).toFixed(2)}`}>
@@ -466,7 +466,7 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-800">€{(bal.total ?? 0).toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-slate-800">€{(bal.estimatedValue ?? 0).toFixed(2)}</p>
                       {hasChange ? (
                         <p className={`text-xs font-medium ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {isPositive ? '📈' : '📉'} {Math.abs(changePercent ?? 0).toFixed(2)}%
