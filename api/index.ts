@@ -213,6 +213,8 @@ type Balance = {
   total: number;
   available?: number;
   locked?: number;
+  priceEUR?: number;  // Current EUR price per unit
+  estimatedValue?: number;  // total * priceEUR in EUR
   updatedAt: string;
 };
 
@@ -558,6 +560,51 @@ class BitvavoConnector implements ExchangeConnector {
           available: Number(bal.available),
           updatedAt: new Date().toISOString()
         }));
+      
+      // Fetch prices for non-EUR assets to calculate EUR value
+      const pricesMap: Record<string, number> = {};
+      try {
+        for (const bal of balances) {
+          if (bal.asset === 'EUR') {
+            pricesMap[bal.asset] = 1.0; // EUR = 1 EUR
+            continue;
+          }
+          try {
+            const tickerResp = await fetch(`${EXCHANGE_CONFIG.bitvavo.baseUrl}/${bal.asset}-EUR/ticker24h`, {
+              signal: AbortSignal.timeout(5000)
+            });
+            if (tickerResp.ok) {
+              const ticker = await tickerResp.json();
+              const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '0');
+              pricesMap[bal.asset] = lastPrice;
+              console.log(`[Bitvavo] Fetched price for ${bal.asset}-EUR: €${lastPrice}`);
+            }
+          } catch (err) {
+            console.warn(`[Bitvavo] Failed to fetch price for ${bal.asset}-EUR:`, err);
+            pricesMap[bal.asset] = 0; // Default to 0 if price fetch fails
+          }
+        }
+      } catch (err) {
+        console.warn('[Bitvavo] Error fetching prices:', err);
+      }
+      
+      // Enhance balances with EUR values
+      const enhancedBalances = balances.map(bal => {
+        const price = pricesMap[bal.asset] || 0;
+        const eurValue = bal.total * price;
+        return {
+          ...bal,
+          priceEUR: price,
+          estimatedValue: eurValue
+        } as Balance;
+      });
+      
+      console.log('[Bitvavo API] Final fetchBalances with prices:', {
+        count: enhancedBalances.length,
+        assets: enhancedBalances.map(b => `${b.asset}: €${(b.estimatedValue || 0).toFixed(2)} (${b.total} @ €${b.priceEUR || 0})`)
+      });
+      
+      return enhancedBalances;
         
       console.log('[Bitvavo API] Final fetchBalances result:', {
         count: balances.length,
