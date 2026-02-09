@@ -2279,7 +2279,8 @@ const routes: Record<string, Handler> = {
                 market,
                 side,
                 orderType: 'market',
-                amount
+                amount,
+                operatorId: userId  // Required by Bitvavo API for order tracking
               };
               
               const bodyStr = JSON.stringify(payload);
