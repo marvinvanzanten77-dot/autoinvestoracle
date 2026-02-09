@@ -2146,6 +2146,37 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon chat niet ophalen.' });
     }
   },
+  'trading/policy': async (req, res) => {
+    if (req.method === 'GET') {
+      res.status(200).json({
+        version: '1.0',
+        status: 'coming-soon',
+        message: 'Trading policy documentation is coming soon.',
+        policies: {
+          riskManagement: {
+            title: 'Risk Management',
+            description: 'Coming soon',
+            maxDrawdown: 'TBD',
+            positionSizing: 'TBD'
+          },
+          orderExecution: {
+            title: 'Order Execution',
+            description: 'Coming soon',
+            minOrderSize: 'TBD',
+            maxOrderSize: 'TBD'
+          },
+          compliance: {
+            title: 'Compliance',
+            description: 'Coming soon',
+            requirements: []
+          }
+        },
+        lastUpdated: new Date().toISOString()
+      });
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
+  },
   'trading/proposals': async (req, res) => {
     if (req.method === 'GET') {
       // GET: List pending proposals
