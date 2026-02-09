@@ -2272,15 +2272,18 @@ const routes: Record<string, Handler> = {
             const action = proposal.action;
             const params = action.params || {};
             
+            // Get operatorId from credentials or use default
+            const operatorId = credentials.operatorId ? parseInt(credentials.operatorId, 10) : 101;
+            
             // Helper function to execute Bitvavo order
             const executeBitvavoOrder = async (market: string, side: 'buy' | 'sell', amount: string) => {
               const timestamp = Date.now();
-              // Bitvavo market order requires: market, side, amount
+              // Bitvavo order payload: market, side, amount, operatorId (all must be in body for signing)
               const payload = {
                 market,
                 side,
-                amount
-                // Note: orderType is not required for market orders in Bitvavo API v2
+                amount,
+                operatorId  // Required by Bitvavo since 2025 (64-bit integer)
               };
               
               const bodyStr = JSON.stringify(payload);
@@ -2311,21 +2314,32 @@ const routes: Record<string, Handler> = {
               
               if (!response.ok) {
                 const errText = await response.text();
+                let parsedError: any = {};
+                try {
+                  parsedError = JSON.parse(errText);
+                } catch {
+                  parsedError = { raw: errText };
+                }
                 console.error('[trading/proposals] Bitvavo API error:', {
                   status: response.status,
-                  error: errText,
+                  statusText: response.statusText,
+                  errorCode: parsedError.errorCode,
+                  error: parsedError.error || errText,
                   market,
                   side,
-                  amount
+                  amount,
+                  operatorId
                 });
                 return null;
               }
               
               const data = await response.json();
-              console.log('[trading/proposals] Bitvavo API success response:', {
+              console.log('[trading/proposals] Bitvavo order placed successfully:', {
                 market,
                 side,
                 amount,
+                operatorId,
+                orderId: data.orderId || data.id,
                 response: data
               });
               return data;
