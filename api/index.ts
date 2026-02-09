@@ -2275,12 +2275,12 @@ const routes: Record<string, Handler> = {
             // Helper function to execute Bitvavo order
             const executeBitvavoOrder = async (market: string, side: 'buy' | 'sell', amount: string) => {
               const timestamp = Date.now();
+              // Bitvavo market order requires: market, side, amount
               const payload = {
                 market,
                 side,
-                orderType: 'market',
-                amount,
-                operatorId: userId  // Required by Bitvavo API for order tracking
+                amount
+                // Note: orderType is not required for market orders in Bitvavo API v2
               };
               
               const bodyStr = JSON.stringify(payload);
