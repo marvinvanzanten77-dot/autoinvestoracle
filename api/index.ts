@@ -1862,10 +1862,23 @@ function fallbackSummary(input: {
 // Agent execution logging functions
 async function logAgentExecution(log: AgentExecutionLog): Promise<void> {
   try {
-    if (!kv) return;
+    if (!kv) {
+      console.warn('[agent/execution-log] KV not available, skipping log');
+      return;
+    }
+    
+    console.log('[agent/execution-log] Attempting to save log:', {
+      userId: log.userId,
+      exchange: log.exchange,
+      type: log.type,
+      logId: log.id
+    });
     
     const historyKey = `agent:history:${log.userId}:${log.exchange}`;
-    const logsArray = ((await kv.get(historyKey)) as AgentExecutionLog[]) || [];
+    const existing = (await kv.get(historyKey)) as any;
+    const logsArray = (Array.isArray(existing) ? existing : []) as AgentExecutionLog[];
+    
+    console.log('[agent/execution-log] Current logs count:', logsArray.length);
     
     // Add new log
     logsArray.unshift(log);
@@ -1874,14 +1887,16 @@ async function logAgentExecution(log: AgentExecutionLog): Promise<void> {
     const cutoffTime = Date.now() - 24 * 60 * 60 * 1000;
     const filtered = logsArray.filter(l => new Date(l.timestamp).getTime() > cutoffTime);
     
+    console.log('[agent/execution-log] Filtered logs count:', filtered.length);
+    
     // Store with 24h expiry
     await kv.set(historyKey, filtered, { ex: 86400 });
     
-    console.log('[agent/execution-log] Logged:', {
+    console.log('[agent/execution-log] ✓ Successfully saved log:', {
       userId: log.userId,
       exchange: log.exchange,
       type: log.type,
-      status: log.status
+      totalLogsNow: filtered.length
     });
   } catch (err) {
     console.error('[agent/execution-log] Error logging execution:', err);
@@ -1890,14 +1905,34 @@ async function logAgentExecution(log: AgentExecutionLog): Promise<void> {
 
 async function getAgentHistory(userId: string, exchange: string, hoursBack: number = 24): Promise<AgentExecutionLog[]> {
   try {
-    if (!kv) return [];
+    if (!kv) {
+      console.warn('[agent/history] KV not available');
+      return [];
+    }
     
     const historyKey = `agent:history:${userId}:${exchange}`;
-    const logs = ((await kv.get(historyKey)) as AgentExecutionLog[]) || [];
+    console.log('[agent/history] Fetching from key:', historyKey);
+    
+    const rawData = await kv.get(historyKey);
+    console.log('[agent/history] Raw data from KV:', {
+      type: typeof rawData,
+      isArray: Array.isArray(rawData),
+      value: rawData
+    });
+    
+    const logs = (Array.isArray(rawData) ? rawData : []) as AgentExecutionLog[];
+    console.log('[agent/history] Parsed logs count:', logs.length);
     
     // Filter by time window
     const cutoffTime = Date.now() - hoursBack * 60 * 60 * 1000;
-    return logs.filter(l => new Date(l.timestamp).getTime() > cutoffTime);
+    const filtered = logs.filter(l => {
+      const logTime = new Date(l.timestamp).getTime();
+      return logTime > cutoffTime;
+    });
+    
+    console.log('[agent/history] Filtered logs (past', hoursBack, 'hours):', filtered.length);
+    
+    return filtered;
   } catch (err) {
     console.error('[agent/history] Error fetching history:', err);
     return [];
