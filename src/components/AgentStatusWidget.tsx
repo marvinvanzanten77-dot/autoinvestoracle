@@ -37,11 +37,25 @@ export function AgentStatusWidget() {
         throw new Error(`HTTP ${resp.status}`);
       }
       
-      const blob = await resp.blob();
+      const data = await resp.json() as any;
+      
+      // Determine what to download
+      const content = format === 'json' 
+        ? JSON.stringify(data, null, 2)
+        : data.content;
+      
+      const filename = format === 'json'
+        ? `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.json`
+        : `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`;
+      
+      // Create blob and download
+      const blob = new Blob([content], {
+        type: format === 'json' ? 'application/json' : 'text/plain'
+      });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.${format === 'json' ? 'json' : 'txt'}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(downloadUrl);

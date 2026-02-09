@@ -3316,9 +3316,8 @@ const routes: Record<string, Handler> = {
       // If format is 'download', return as file attachment
       if (format === 'download') {
         const filename = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.json`;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.send(JSON.stringify({
+        res.status(200).json({
+          filename,
           metadata: {
             userId,
             exchange,
@@ -3328,16 +3327,12 @@ const routes: Record<string, Handler> = {
             totalLogs: logs.length
           },
           logs: logs
-        }, null, 2));
+        });
         return;
       }
       
       // If format is 'text', return readable format
       if (format === 'text') {
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        const filename = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`;
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        
         let text = `=== AGENT EXECUTION HISTORY ===\n`;
         text += `Exchange: ${exchange}\n`;
         text += `Hours Back: ${hoursBack}\n`;
@@ -3358,7 +3353,11 @@ const routes: Record<string, Handler> = {
           text += `\n`;
         });
         
-        res.send(text);
+        // Return as text in JSON response
+        res.status(200).json({
+          filename: `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`,
+          content: text
+        });
         return;
       }
       
