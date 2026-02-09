@@ -1505,6 +1505,19 @@ type Proposal = {
   exchange?: string;
 };
 
+type AgentExecutionLog = {
+  id: string;
+  userId: string;
+  exchange: string;
+  type: 'monitoring' | 'analysis' | 'alert' | 'decision' | 'execution';
+  status: 'success' | 'warning' | 'error';
+  title: string;
+  description: string;
+  details?: Record<string, any>;
+  timestamp: string;
+  duration: number; // milliseconds
+};
+
 type ChatContext = {
   profile?: {
     displayName?: string;
@@ -1754,6 +1767,51 @@ function fallbackSummary(input: {
   const stable = input.changes.stablecoins;
   const alt = input.changes.altcoins;
   return `In de afgelopen ${input.range} zien we beperkte bewegingen. Bitcoin ${btc >= 0 ? 'stijgt' : 'daalt'} licht (${btc}%), Ethereum ${eth >= 0 ? 'stijgt' : 'daalt'} met ${Math.abs(eth)}%, stablecoins blijven vrijwel stabiel (${stable}%) en altcoins bewegen ${alt >= 0 ? 'licht omhoog' : 'licht omlaag'} (${alt}%).`;
+}
+
+// Agent execution logging functions
+async function logAgentExecution(log: AgentExecutionLog): Promise<void> {
+  try {
+    if (!kv) return;
+    
+    const historyKey = `agent:history:${log.userId}:${log.exchange}`;
+    const logsArray = ((await kv.get(historyKey)) as AgentExecutionLog[]) || [];
+    
+    // Add new log
+    logsArray.unshift(log);
+    
+    // Keep only last 24 hours worth of logs
+    const cutoffTime = Date.now() - 24 * 60 * 60 * 1000;
+    const filtered = logsArray.filter(l => new Date(l.timestamp).getTime() > cutoffTime);
+    
+    // Store with 24h expiry
+    await kv.set(historyKey, filtered, { ex: 86400 });
+    
+    console.log('[agent/execution-log] Logged:', {
+      userId: log.userId,
+      exchange: log.exchange,
+      type: log.type,
+      status: log.status
+    });
+  } catch (err) {
+    console.error('[agent/execution-log] Error logging execution:', err);
+  }
+}
+
+async function getAgentHistory(userId: string, exchange: string, hoursBack: number = 24): Promise<AgentExecutionLog[]> {
+  try {
+    if (!kv) return [];
+    
+    const historyKey = `agent:history:${userId}:${exchange}`;
+    const logs = ((await kv.get(historyKey)) as AgentExecutionLog[]) || [];
+    
+    // Filter by time window
+    const cutoffTime = Date.now() - hoursBack * 60 * 60 * 1000;
+    return logs.filter(l => new Date(l.timestamp).getTime() > cutoffTime);
+  } catch (err) {
+    console.error('[agent/history] Error fetching history:', err);
+    return [];
+  }
 }
 
 type AllocationItem = {
@@ -3061,60 +3119,97 @@ const routes: Record<string, Handler> = {
       }
       
       const typeFilter = (req.query?.type as string) || '';
-      const exchangeFilter = (req.query?.exchange as string) || '';
+      const exchangeFilter = (req.query?.exchange as string) || 'bitvavo';
       
-      // Generate mock activities for demonstration
-      const activities = [
-        {
-          id: '1',
-          exchange: 'bitvavo',
-          type: 'monitoring',
-          status: 'success',
-          title: 'Monitoring aktief',
-          description: 'Agent scant markt op volatiiliteit',
-          details: { volatility: 2.3, priceChange: '-0.5%' },
-          timestamp: new Date(Date.now() - 300000).toISOString(),
-          executedAt: new Date(Date.now() - 299000).toISOString(),
-          duration: 1000
-        },
-        {
-          id: '2',
-          exchange: 'bitvavo',
-          type: 'analysis',
-          status: 'success',
-          title: 'Technische analyse voltooid',
-          description: 'BTC analyse: bearish signal',
-          details: { symbol: 'BTC-EUR', signal: 'bearish', confidence: 65 },
-          timestamp: new Date(Date.now() - 600000).toISOString(),
-          executedAt: new Date(Date.now() - 599000).toISOString(),
-          duration: 1500
-        },
-        {
-          id: '3',
-          exchange: 'bitvavo',
-          type: 'alert',
-          status: 'success',
-          title: 'Volatiliteit alert',
-          description: 'Volatiliteit overschrijdt drempel (5%)',
-          details: { threshold: 5, current: 6.2 },
-          timestamp: new Date(Date.now() - 900000).toISOString(),
-          executedAt: new Date(Date.now() - 899000).toISOString(),
-          duration: 500
-        }
-      ];
+      // Get real agent execution history
+      let activities = await getAgentHistory(userId, exchangeFilter, 24);
+      
+      // If no real data, use mock data for demo
+      if (activities.length === 0) {
+        activities = [
+          {
+            id: '1',
+            userId,
+            exchange: exchangeFilter,
+            type: 'monitoring',
+            status: 'success',
+            title: 'Monitoring aktief',
+            description: 'Agent scant markt op volatiiliteit',
+            details: { volatility: 2.3, priceChange: '-0.5%' },
+            timestamp: new Date(Date.now() - 300000).toISOString(),
+            duration: 1000
+          },
+          {
+            id: '2',
+            userId,
+            exchange: exchangeFilter,
+            type: 'analysis',
+            status: 'success',
+            title: 'Technische analyse voltooid',
+            description: 'BTC analyse: bearish signal',
+            details: { symbol: 'BTC-EUR', signal: 'bearish', confidence: 65 },
+            timestamp: new Date(Date.now() - 600000).toISOString(),
+            duration: 1500
+          },
+          {
+            id: '3',
+            userId,
+            exchange: exchangeFilter,
+            type: 'alert',
+            status: 'success',
+            title: 'Volatiliteit alert',
+            description: 'Volatiliteit overschrijdt drempel (5%)',
+            details: { threshold: 5, current: 6.2 },
+            timestamp: new Date(Date.now() - 900000).toISOString(),
+            duration: 500
+          }
+        ];
+      }
       
       let filtered = activities;
       if (typeFilter && typeFilter !== 'all') {
         filtered = filtered.filter(a => a.type === typeFilter);
-      }
-      if (exchangeFilter && exchangeFilter !== 'all') {
-        filtered = filtered.filter(a => a.exchange === exchangeFilter);
       }
       
       res.status(200).json({ activities: filtered });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Kon activiteiten niet ophalen.' });
+    }
+  },
+  'agent/history': async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      
+      const exchange = (req.query?.exchange as string) || 'bitvavo';
+      const hoursBack = parseInt((req.query?.hours as string) || '24', 10);
+      const typeFilter = (req.query?.type as string) || '';
+      
+      // Fetch agent execution history
+      let logs = await getAgentHistory(userId, exchange, hoursBack);
+      
+      // Filter by type if specified
+      if (typeFilter && typeFilter !== 'all') {
+        logs = logs.filter(log => log.type === typeFilter);
+      }
+      
+      res.status(200).json({
+        exchange,
+        hoursBack,
+        count: logs.length,
+        logs: logs
+      });
+    } catch (err) {
+      console.error('[agent/history] Error:', err);
+      res.status(500).json({ error: 'Kon geschiedenis niet ophalen.' });
     }
   },
   'agent/state': async (req, res) => {
