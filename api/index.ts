@@ -2802,7 +2802,7 @@ const routes: Record<string, Handler> = {
         }
       }
       
-      // Get snapshots from localStorage key pattern
+      // Get snapshots from KV storage
       const allSnapshots: Array<PriceSnapshot & { change24h?: number }> = [];
       
       // Calculate performance per asset
@@ -2821,15 +2821,17 @@ const routes: Record<string, Handler> = {
           timestamp: new Date().toISOString()
         };
         
-        // For now, store current snapshot
+        // For now, store current snapshot in KV
         try {
-          localStorage.setItem(snapshotKey, JSON.stringify(currentSnap));
-        } catch {
-          // localStorage might be unavailable in some environments
+          if (kv) {
+            await kv.set(snapshotKey, currentSnap, { ex: 86400 }); // 24h expiry
+          }
+        } catch (err) {
+          console.error('[exchanges/performance] KV snapshot save failed:', err);
         }
 
-        const previousSnapStr = localStorage.getItem(`${snapshotKey}:previous`);
-        const previousSnap = previousSnapStr ? JSON.parse(previousSnapStr) as PriceSnapshot : null;
+        const previousSnapStr = kv ? await kv.get(`${snapshotKey}:previous`) : null;
+        const previousSnap = previousSnapStr ? (previousSnapStr as PriceSnapshot) : null;
 
         if (previousSnap) {
           const change = currentSnap.quantity - previousSnap.quantity;
