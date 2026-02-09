@@ -1205,8 +1205,8 @@ async function syncExchange(userId: string, exchange: ExchangeId): Promise<SyncR
       withRetry(() => connector.fetchAccounts(), 2, 800),
       withRetry(() => connector.fetchBalances(), 2, 800),
       withRetry(() => connector.fetchPositions(), 2, 800),
-      withRetry(() => connector.fetchTransactions(), 2, 800),
-      withRetry(() => connector.fetchOrders(), 2, 800),
+      withRetry(async () => connector.fetchTransactions({}), 2, 800),
+      withRetry(async () => connector.fetchOrders({}), 2, 800),
     ]);
 
     const accountsWithUserId = accounts.map((a) => ({ ...a, userId }));
@@ -2757,7 +2757,7 @@ const routes: Record<string, Handler> = {
         try {
           const connector = createConnector(connection.exchange);
           const creds = decryptSecrets(connection.encryptedSecrets);
-          connector.setCredentials(creds);
+          connector.setCredentials({ apiKey: creds.apiKey, apiSecret: creds.apiSecret });
           const balances = await connector.fetchBalances();
           allBalances.push(
             ...balances.map((b) => ({

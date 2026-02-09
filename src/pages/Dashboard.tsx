@@ -104,7 +104,7 @@ function ChatCard({ context }: { context?: ChatContext }) {
   const handleSend = async () => {
     const text = input.trim();
     if (!text) return;
-    const nextMessages = [...messages, { role: 'user', content: text }];
+    const nextMessages = [...messages, { role: 'user' as const, content: text }];
     setMessages(nextMessages);
     setInput('');
     setLoading(true);
@@ -761,9 +761,11 @@ export function Dashboard() {
   const [userId, setUserId] = useState<string>('');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [lastScan, setLastScan] = useState('Nog geen check');
-  const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>(
-    volatilityStatus
-  );
+  const [volatility, setVolatility] = useState<MarketScanResponse['volatility']>({
+    level: volatilityStatus.level as 'rustig' | 'matig' | 'hoog',
+    label: volatilityStatus.label,
+    detail: volatilityStatus.detail
+  });
   const [scanChanges, setScanChanges] = useState<MarketScanResponse['changes'] | null>(null);
   const [connectedExchanges, setConnectedExchanges] = useState<string[]>([]);
   const [activePlatform, setActivePlatform] = useState<string>(() => {

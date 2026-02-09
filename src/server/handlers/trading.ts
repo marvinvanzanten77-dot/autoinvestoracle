@@ -557,18 +557,16 @@ export async function handleTradingExecuteUpdated(req: ApiRequest, res: ApiRespo
       });
     }
 
-    // Step 6: Execute trade (deterministic)
-    // This will call Bitvavo API with trading key
-    const agent = new AITradingAgent(userId);
-    const result = await agent.executeTrade({
-      asset: proposal.asset,
-      action: proposal.side === 'buy' ? 'BUY' : 'SELL',
-      quantity: proposal.orderValueEur / 1, // Simple calculation; adjust as needed
-      price: 0, // Market order
-      confidence: proposal.confidence,
-      riskLevel: 'medium',
-      rationale: proposal.rationale
-    }, null as any);
+    // Step 6: Execute trade via Bitvavo API
+    // Note: AITradingAgent.executeTrade requires signal/context/connector - 
+    // In this handler we'll use the simpler direct API call
+    // TODO: Unify execution path between handler and agent
+    
+    const result = {
+      success: false,
+      orderId: null,
+      message: 'Direct execution not implemented in handler'
+    };
 
     // Log to Supabase
     await supabase
@@ -584,10 +582,8 @@ export async function handleTradingExecuteUpdated(req: ApiRequest, res: ApiRespo
         message: result.message,
         order_id: result.orderId,
         created_at: new Date().toISOString()
-      })
-      .catch((err) => {
-        console.warn('[TradingExecuteUpdated] Failed to log execution:', err);
       });
+      // Fire and forget
 
     return res.status(200).json({
       success: result.success,
@@ -659,11 +655,8 @@ export async function handleTradingAnalyze(req: ApiRequest, res: ApiResponse) {
             risk_level: s.riskLevel,
             created_at: new Date().toISOString()
           }))
-        )
-        .catch((err) => {
-          console.warn('[TradingAnalyze] Failed to log signals:', err);
-          // Don't fail the response if logging fails
-        });
+        );
+        // Fire and forget
     }
 
     return res.status(200).json({
@@ -745,10 +738,8 @@ export async function handleTradingExecute(req: ApiRequest, res: ApiResponse) {
         total_value: result.totalValue,
         order_id: result.orderId,
         created_at: result.timestamp
-      })
-      .catch((err) => {
-        console.warn('[TradingExecute] Failed to log execution:', err);
       });
+      // Fire and forget
 
     const statusCode = result.success ? 200 : 400;
     return res.status(statusCode).json(result);

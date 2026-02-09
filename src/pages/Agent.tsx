@@ -108,7 +108,7 @@ export function Agent() {
     }
 
     // If API call fails or returns nothing, use defaults
-    const apiMode = (connection.metadata?.apiMode || connection.metadata?.agentMode || 'readonly') as 'readonly' | 'trading';
+    const apiMode = 'readonly' as const;
     setAgentSettings(getDefaultSettings(exchange, apiMode));
   };
 

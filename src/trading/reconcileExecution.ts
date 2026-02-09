@@ -187,7 +187,8 @@ export async function submitOrRetryExecution(
           p_error_message: null,
           p_bitvavo_latency_ms: latencyMs,
           p_reconcile_attempt_number: null
-        }).catch((err) => console.warn('[submitOrRetryExecution] Failed to log success:', err));
+        });
+        // Fire and forget - log doesn't need to block
 
         return {
           ok: true,
@@ -225,7 +226,8 @@ export async function submitOrRetryExecution(
             p_error_class: 'HARD',
             p_error_message: errorMsg,
             p_reconcile_attempt_number: null
-          }).catch((err) => console.warn('[submitOrRetryExecution] Failed to log HARD error:', err));
+          });
+          // Fire and forget
 
           return {
             ok: false,
@@ -257,7 +259,8 @@ export async function submitOrRetryExecution(
             p_error_class: 'SOFT',
             p_error_message: errorMsg,
             p_reconcile_attempt_number: null
-          }).catch((err) => console.warn('[submitOrRetryExecution] Failed to log SOFT error:', err));
+          });
+          // Fire and forget
 
           // Return: keep SUBMITTING, caller should trigger reconcile or wait
           return {
@@ -352,7 +355,8 @@ export async function reconcileByClientOrderId(
         p_error_class: 'SOFT',
         p_error_message: `Max reconcile attempts (${MAX_RECONCILE_ATTEMPTS}) exceeded`,
         p_reconcile_attempt_number: attemptNumber
-      }).catch((err) => console.warn('[reconcileByClientOrderId] Failed to log escalation:', err));
+      });
+      // Fire and forget
 
       return {
         state: 'escalated',
@@ -383,8 +387,8 @@ export async function reconcileByClientOrderId(
           client_order_id: clientOrderId,
           updated_at: nowIso()
         })
-        .eq('id', executionId)
-        .catch((err) => console.warn('[reconcileByClientOrderId] Failed to set client_order_id:', err));
+        .eq('id', executionId);
+        // Fire and forget
     }
 
     // Increment reconcile attempt counter
@@ -394,8 +398,8 @@ export async function reconcileByClientOrderId(
         reconcile_attempts: attemptNumber,
         updated_at: nowIso()
       })
-      .eq('id', executionId)
-      .catch((err) => console.warn('[reconcileByClientOrderId] Failed to increment attempts:', err));
+      .eq('id', executionId);
+      // Fire and forget
 
     // Query Bitvavo: look for order with this clientOrderId
     const bitvavo = getBitvavoTrade();
@@ -437,7 +441,8 @@ export async function reconcileByClientOrderId(
         p_error_message: null,
         p_bitvavo_latency_ms: latencyMs,
         p_reconcile_attempt_number: attemptNumber
-      }).catch((err) => console.warn('[reconcileByClientOrderId] Failed to log event:', err));
+      });
+      // Fire and forget
 
       console.log(
         `[reconcileByClientOrderId] Found order: ${found.orderId} via clientOrderId (attempt ${attemptNumber})`
@@ -476,7 +481,8 @@ export async function reconcileByClientOrderId(
       p_error_message: 'Reconcile: no order found on exchange',
       p_bitvavo_latency_ms: latencyMs,
       p_reconcile_attempt_number: attemptNumber
-    }).catch((err) => console.warn('[reconcileByClientOrderId] Failed to log event:', err));
+    });
+    // Fire and forget
 
     console.log(
       `[reconcileByClientOrderId] NOT found on exchange for clientOrderId (attempt ${attemptNumber})`

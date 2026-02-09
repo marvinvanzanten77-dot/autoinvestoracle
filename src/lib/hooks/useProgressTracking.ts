@@ -1,5 +1,11 @@
 import { useState, useCallback } from 'react';
-import type { ProgressUpdate } from '../components/ProgressIndicator';
+export type ProgressUpdate = {
+  stage: string;
+  progress: number;
+  message: string;
+  status: 'processing' | 'success' | 'error';
+  details?: string;
+};
 
 export function useProgressTracking() {
   const [updates, setUpdates] = useState<ProgressUpdate[]>([]);
@@ -11,7 +17,7 @@ export function useProgressTracking() {
         stage: title || 'Voortgang',
         progress: 0,
         message: 'Voorbereiding...',
-        status: 'pending'
+        status: 'processing'
       }
     ]);
     setIsVisible(true);
@@ -21,7 +27,7 @@ export function useProgressTracking() {
     stage: string,
     message: string,
     progress: number,
-    status: 'pending' | 'processing' | 'success' | 'error' = 'processing',
+    status: 'processing' | 'success' | 'error' = 'processing',
     details?: string
   ) => {
     setUpdates((prev) => [

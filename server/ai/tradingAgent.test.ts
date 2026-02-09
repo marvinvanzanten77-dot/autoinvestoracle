@@ -31,9 +31,9 @@ const mockContext: AgentContext = {
   portfolio: {
     totalValue: 10000,
     balances: [
-      { asset: 'EUR', total: 5000 },
-      { asset: 'BTC', total: 0.05 },
-      { asset: 'ETH', total: 1.2 }
+      { id: '1', userId: 'test', exchange: 'bitvavo', asset: 'EUR', total: 5000, updatedAt: new Date().toISOString() },
+      { id: '2', userId: 'test', exchange: 'bitvavo', asset: 'BTC', total: 0.05, updatedAt: new Date().toISOString() },
+      { id: '3', userId: 'test', exchange: 'bitvavo', asset: 'ETH', total: 1.2, updatedAt: new Date().toISOString() }
     ],
     openOrders: [],
     openPositions: [

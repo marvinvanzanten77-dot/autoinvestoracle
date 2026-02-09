@@ -224,14 +224,14 @@ export async function promoteToNextLevel(
           metrics
         },
         created_at: new Date().toISOString()
-      })
-      .catch((err) => console.warn('[promoteToNextLevel] Failed to log audit:', err));
+      });
+      // Fire and forget
 
     console.log(`[promoteToNextLevel] ${logMessage}`);
 
     return {
       success: true,
-      newLevel,
+      newLevel: nextLevel,
       newLimit,
       message: logMessage
     };

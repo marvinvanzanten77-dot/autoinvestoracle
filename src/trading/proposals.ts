@@ -262,14 +262,15 @@ export async function expireProposals(userId: string): Promise<number> {
     .update({ status: 'EXPIRED' })
     .eq('user_id', userId)
     .eq('status', 'PROPOSED')
-    .lt('expires_at', new Date().toISOString());
+    .lt('expires_at', new Date().toISOString())
+    .select('id');
 
   if (error) {
     console.error('[ProposalService] expireProposals error:', error);
     return 0;
   }
 
-  return (data ? data.length : 0);
+  return Array.isArray(data) ? data.length : 0;
 }
 
 // ============================================================================

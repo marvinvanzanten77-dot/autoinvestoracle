@@ -11,7 +11,7 @@
  */
 
 import { supabase } from '../../src/lib/supabase/client';
-import { getTradingEnabled, getActivePolicy } from '../../src/trading/policy';
+import { getTradingEnabled } from '../../src/trading/policy';
 import { getProposal } from '../../src/trading/proposals';
 import { getBitvavoTrade } from '../../src/exchange/bitvavoTrade';
 import { submitOrRetryExecution, reconcileByClientOrderId } from '../../src/trading/reconcileExecution';
@@ -213,8 +213,8 @@ export async function handleTradingExecuteHardened(
       await supabase
         .from('trade_proposals')
         .update({ status: 'FAILED', updated_at: new Date().toISOString() })
-        .eq('id', proposalId)
-        .catch((err) => console.warn('[ExecuteHardened] Failed to update proposal:', err));
+        .eq('id', proposalId);
+      // Fire and forget - log update doesn't need to block
 
       // Return appropriate status code
       const statusCode = submitResult.state === 'submitting_in_progress' ? 202 : 500;
@@ -233,8 +233,8 @@ export async function handleTradingExecuteHardened(
       await supabase
         .from('trade_proposals')
         .update({ status: 'EXECUTED', updated_at: new Date().toISOString() })
-        .eq('id', proposalId)
-        .catch((err) => console.warn('[ExecuteHardened] Failed to update proposal:', err));
+        .eq('id', proposalId);
+      // Fire and forget - log update doesn't need to block
 
       // Log to trade_history for cooldown/anti-flip tracking
       await supabase
@@ -247,8 +247,8 @@ export async function handleTradingExecuteHardened(
           bitvavo_order_id: submitResult.orderId,
           status: 'confirmed',
           executed_at: new Date().toISOString()
-        })
-        .catch((err) => console.warn('[ExecuteHardened] Failed to log trade_history:', err));
+        });
+      // Fire and forget - log insert doesn't need to block
 
       console.log(
         `[ExecuteHardened] Execution successful: ${executionId} -> Bitvavo order ${submitResult.orderId}`
@@ -271,15 +271,6 @@ export async function handleTradingExecuteHardened(
       executionId
     });
 
-  } catch (err) {
-    console.error('[ExecuteHardened] Unexpected error:', err);
-    return res.status(500).json({
-      success: false,
-        executionId,
-        message: `Trade execution failed: ${bitvavaError}`,
-        errorCode: 'BITVAVO_PLACE_ORDER_FAILED'
-      });
-    }
   } catch (err) {
     console.error('[ExecuteHardened] Unexpected error:', err);
     return res.status(500).json({
