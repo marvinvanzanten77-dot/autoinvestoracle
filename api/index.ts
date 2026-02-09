@@ -2275,15 +2275,16 @@ const routes: Record<string, Handler> = {
             // Get operatorId from credentials or use default
             const operatorId = credentials.operatorId ? parseInt(credentials.operatorId, 10) : 101;
             
-            // Helper function to execute Bitvavo order
-            const executeBitvavoOrder = async (market: string, side: 'buy' | 'sell', amount: string) => {
+            // Helper function to execute Bitvavo market order with EUR amount
+            const executeBitvavoOrder = async (market: string, side: 'buy' | 'sell', amountQuote: string) => {
               const timestamp = Date.now();
-              // Bitvavo order payload: market, side, amount, operatorId (all must be in body for signing)
+              // Bitvavo market order payload: market, side, orderType, amountQuote (EUR), operatorId
               const payload = {
                 market,
                 side,
-                amount,
-                operatorId  // Required by Bitvavo since 2025 (64-bit integer)
+                orderType: 'market',
+                amountQuote,  // EUR amount (quote currency)
+                operatorId    // Required by Bitvavo since 2025 (64-bit integer)
               };
               
               const bodyStr = JSON.stringify(payload);
@@ -2294,11 +2295,15 @@ const routes: Record<string, Handler> = {
                 .update(message)
                 .digest('hex');
               
-              console.log('[trading/proposals] Placing order on Bitvavo:', {
+              const timestampISO = new Date(timestamp).toISOString();
+              console.log('[trading/proposals] Placing market order on Bitvavo:', {
                 market,
                 side,
-                amount,
-                timestamp
+                amountQuote,
+                orderType: 'market',
+                operatorId,
+                timestamp,
+                timestampISO
               });
               
               const response = await fetch('https://api.bitvavo.com/v2/order', {
@@ -2327,19 +2332,22 @@ const routes: Record<string, Handler> = {
                   error: parsedError.error || errText,
                   market,
                   side,
-                  amount,
-                  operatorId
+                  amountQuote,
+                  orderType: 'market',
+                  operatorId,
+                  timestamp: timestampISO
                 });
                 return null;
               }
               
               const data = await response.json();
-              console.log('[trading/proposals] Bitvavo order placed successfully:', {
+              console.log('[trading/proposals] Bitvavo market order placed successfully:', {
                 market,
                 side,
-                amount,
+                amountQuote,
                 operatorId,
                 orderId: data.orderId || data.id,
+                timestamp: timestampISO,
                 response: data
               });
               return data;
@@ -2347,33 +2355,20 @@ const routes: Record<string, Handler> = {
             
             // Handle different action types
             if (action.type === 'buy' || action.type === 'BUY') {
-              // params should have: asset (e.g., 'BTC'), amount (EUR)
-              const asset = params.asset || 'BTC';
-              const amountEur = parseFloat(params.amount || params.amountEur || '10'); // Default 10 EUR
+              // params should have: asset (e.g., 'BTC'), amount (EUR), currency, to_currency
+              const asset = params.to_currency || params.asset || 'BTC';
+              const amountEur = (params.amount || params.amountEur || '10').toString(); // EUR amount for market order
               const market = `${asset}-EUR`;
               
-              // Get current price to calculate quantity
-              let estimatedQuantity = '0.001'; // Default estimate
+              console.log('[trading/proposals] Buy order params:', {
+                asset,
+                amountEur,
+                market,
+                paramsReceived: params
+              });
               
-              try {
-                const tickerResp = await fetch(`https://api.bitvavo.com/v2/${market}/ticker24h`);
-                if (tickerResp.ok) {
-                  const ticker = await tickerResp.json();
-                  const lastPrice = parseFloat(ticker.lastPrice || ticker.price || '50000');
-                  estimatedQuantity = (amountEur / lastPrice).toFixed(8);
-                  console.log('[trading/proposals] Calculated quantity:', {
-                    asset,
-                    amountEur,
-                    lastPrice,
-                    quantity: estimatedQuantity
-                  });
-                }
-              } catch (err) {
-                console.warn('[trading/proposals] Failed to fetch ticker:', err);
-              }
-              
-              // Place market buy order
-              const orderData = await executeBitvavoOrder(market, 'buy', estimatedQuantity);
+              // Place market buy order with EUR amount (amountQuote)
+              const orderData = await executeBitvavoOrder(market, 'buy', amountEur);
               
               console.log('[trading/proposals] Bitvavo order response:', orderData);
               
@@ -2397,12 +2392,20 @@ const routes: Record<string, Handler> = {
                 return res.status(500).json({ error: 'Order kon niet geplaatst worden - geen order ID in response' });
               }
             } else if (action.type === 'sell' || action.type === 'SELL') {
-              // Sell order
+              // Sell order - note: for sell orders, amount is typically in base currency (BTC qty), 
+              // but for market orders we might need amountQuote (EUR). Using amount as fallback.
               const asset = params.asset || 'BTC';
-              const amount = params.amount || params.quantity || '0.001';
+              const amountQuote = params.amountQuote || params.amount || '10'; // EUR amount or fallback
               const market = `${asset}-EUR`;
               
-              const orderData = await executeBitvavoOrder(market, 'sell', amount);
+              console.log('[trading/proposals] Sell order params:', {
+                asset,
+                amountQuote,
+                market,
+                paramsReceived: params
+              });
+              
+              const orderData = await executeBitvavoOrder(market, 'sell', amountQuote);
               
               console.log('[trading/proposals] Bitvavo sell order response:', orderData);
               
