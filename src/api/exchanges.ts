@@ -7,6 +7,8 @@ export type Balance = {
   asset: string;
   total: number;
   available: number;
+  priceEUR?: number;
+  estimatedValue?: number;
   updatedAt: string;
 };
 
