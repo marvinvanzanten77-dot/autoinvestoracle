@@ -13,6 +13,7 @@ type AgentStatus = {
 export function AgentStatusWidget() {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -24,6 +25,32 @@ export function AgentStatusWidget() {
       console.error('Error fetching agent status:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadHistory = async (exchange: string, format: 'json' | 'text') => {
+    try {
+      setDownloading(`${exchange}-${format}`);
+      const url = `/api/agent/history?exchange=${exchange}&hours=24&format=download`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      
+      const blob = await resp.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.${format === 'json' ? 'json' : 'txt'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('Kon geschiedenis niet downloaden');
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -150,6 +177,24 @@ export function AgentStatusWidget() {
                   <p className="opacity-75">{agent.errorMessage}</p>
                 </div>
               )}
+
+              {/* Download buttons */}
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => downloadHistory(agent.exchange, 'json')}
+                  disabled={downloading === `${agent.exchange}-json`}
+                  className="flex-1 text-xs py-1 px-2 rounded border border-current/30 hover:bg-black/5 transition disabled:opacity-50"
+                >
+                  {downloading === `${agent.exchange}-json` ? '⬇️ JSON...' : '📥 JSON'}
+                </button>
+                <button
+                  onClick={() => downloadHistory(agent.exchange, 'text')}
+                  disabled={downloading === `${agent.exchange}-text`}
+                  className="flex-1 text-xs py-1 px-2 rounded border border-current/30 hover:bg-black/5 transition disabled:opacity-50"
+                >
+                  {downloading === `${agent.exchange}-text` ? '⬇️ TXT...' : '📄 TXT'}
+                </button>
+              </div>
             </div>
           );
         })}

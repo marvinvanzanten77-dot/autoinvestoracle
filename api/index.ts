@@ -3303,6 +3303,7 @@ const routes: Record<string, Handler> = {
       const exchange = (req.query?.exchange as string) || 'bitvavo';
       const hoursBack = parseInt((req.query?.hours as string) || '24', 10);
       const typeFilter = (req.query?.type as string) || '';
+      const format = (req.query?.format as string) || 'json'; // json or text
       
       // Fetch agent execution history
       let logs = await getAgentHistory(userId, exchange, hoursBack);
@@ -3312,6 +3313,56 @@ const routes: Record<string, Handler> = {
         logs = logs.filter(log => log.type === typeFilter);
       }
       
+      // If format is 'download', return as file attachment
+      if (format === 'download') {
+        const filename = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.json`;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify({
+          metadata: {
+            userId,
+            exchange,
+            hoursBack,
+            typeFilter: typeFilter || 'all',
+            exportedAt: new Date().toISOString(),
+            totalLogs: logs.length
+          },
+          logs: logs
+        }, null, 2));
+        return;
+      }
+      
+      // If format is 'text', return readable format
+      if (format === 'text') {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        const filename = `agent-history-${exchange}-${new Date().toISOString().split('T')[0]}.txt`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        
+        let text = `=== AGENT EXECUTION HISTORY ===\n`;
+        text += `Exchange: ${exchange}\n`;
+        text += `Hours Back: ${hoursBack}\n`;
+        text += `Type Filter: ${typeFilter || 'all'}\n`;
+        text += `Exported: ${new Date().toISOString()}\n`;
+        text += `Total Logs: ${logs.length}\n`;
+        text += `\n${'='.repeat(60)}\n\n`;
+        
+        logs.forEach((log, idx) => {
+          text += `[${idx + 1}] ${log.title}\n`;
+          text += `    Status: ${log.status} | Type: ${log.type}\n`;
+          text += `    Time: ${new Date(log.timestamp).toLocaleString('nl-NL')}\n`;
+          text += `    Duration: ${log.duration}ms\n`;
+          text += `    Description: ${log.description}\n`;
+          if (log.details && Object.keys(log.details).length > 0) {
+            text += `    Details: ${JSON.stringify(log.details)}\n`;
+          }
+          text += `\n`;
+        });
+        
+        res.send(text);
+        return;
+      }
+      
+      // Default: return JSON response
       res.status(200).json({
         exchange,
         hoursBack,
