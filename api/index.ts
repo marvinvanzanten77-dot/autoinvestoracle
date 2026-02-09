@@ -612,6 +612,13 @@ class BitvavoConnector implements ExchangeConnector {
       const enhancedBalances = balances.map(bal => {
         const price = pricesMap[bal.asset] ?? 0;
         const eurValue = isNaN(bal.total) ? 0 : bal.total * price;
+        console.log(`[Bitvavo] Balance calculation for ${bal.asset}:`, {
+          quantity: bal.total,
+          priceEUR: price,
+          calculation: `${bal.total} * ${price}`,
+          estimatedValue: eurValue,
+          isValid: !isNaN(eurValue) && eurValue >= 0
+        });
         return {
           ...bal,
           priceEUR: price,
@@ -632,11 +639,6 @@ class BitvavoConnector implements ExchangeConnector {
       });
       
       return enhancedBalances;
-        
-      console.log('[Bitvavo API] Final fetchBalances result:', {
-        count: balances.length,
-        assets: balances.map(b => `${b.asset}:${b.available}/${b.total}`)
-      });
       
       return balances;
     } catch (err) {
