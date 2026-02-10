@@ -3434,10 +3434,13 @@ const routes: Record<string, Handler> = {
         
         const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
         
-        // Calculate portfolio metrics
-        const totalValue = balances.reduce((sum, b) => sum + (b.total || 0), 0);
-        const topAssets = balances
-          .sort((a, b) => (b.total || 0) - (a.total || 0))
+        // Filter out stablecoins/EUR - they're cash, not assets
+        const cryptoBalances = balances.filter(b => !['EUR', 'USDT', 'USDC', 'EURC'].includes(b.asset));
+        
+        // Calculate portfolio metrics (crypto only, not fiat)
+        const totalValue = cryptoBalances.reduce((sum, b) => sum + (b.estimatedValue || 0), 0);
+        const topAssets = cryptoBalances
+          .sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0))
           .slice(0, 3);
         
         console.log('[/api/agent/state] Top assets:', {
@@ -3448,7 +3451,7 @@ const routes: Record<string, Handler> = {
           exchange,
           timestamp: new Date().toISOString(),
           portfolio: {
-            totalAssets: balances.length,
+            totalAssets: cryptoBalances.length,
             totalValue,
             topAssets: topAssets.map(b => ({
               asset: b.asset,
