@@ -497,8 +497,9 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
             <button
               onClick={() => {
                 console.log('=== PORTFOLIO DEBUG ===');
-                console.log('Raw balances:', balances);
-                console.log('Crypto balances only:', cryptoBalances);
+                console.log('Raw balances (all):', balances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
+                console.log('Filtered (crypto only):', cryptoBalances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
+                console.log('Cash balances (EUR/USDT/USDC):', cashBalances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
                 cryptoBalances.forEach(b => {
                   console.log(`${b.asset}:`, {
                     total: b.total,
@@ -515,6 +516,7 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
             </button>
             <div className="bg-slate-950 p-2 rounded border border-slate-700 max-h-60 overflow-auto">
               <pre className="text-xs whitespace-pre-wrap break-words">
+Raw: {balances.length} | Crypto: {cryptoBalances.length} | Cash: {cashBalances.length}
 {cryptoBalances.map(b => `${b.asset}: qty=${b.total.toFixed(8)} price=€${b.priceEUR?.toFixed(2) || '0.00'} value=€${(b.estimatedValue ?? 0).toFixed(2)}`).join('\n')}
               </pre>
             </div>
