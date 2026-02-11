@@ -43,6 +43,69 @@ export type RawMarketData = {
 };
 
 /**
+ * Genereer observatie uit portfolio (SELL, REBALANCE, STOP-LOSS signalen).
+ */
+export async function generatePortfolioObservation(
+  userId: string,
+  portfolio: Array<{ asset: string; balance: number; priceEUR: number; change24h: number; entryPrice?: number }>,
+  assetCategory: AssetCategory = 'BTC'
+): Promise<Partial<MarketObservation> | undefined> {
+  if (!portfolio || portfolio.length === 0) return undefined;
+  
+  const now = new Date();
+  const observations: string[] = [];
+  
+  // Voor elk asset in portfolio: kijk naar SELL signals
+  for (const asset of portfolio) {
+    if (asset.entryPrice && asset.priceEUR) {
+      const sellSignal = generateSellObservation(asset.asset as AssetCategory, asset.entryPrice, asset.priceEUR, asset.balance);
+      if (sellSignal) observations.push(sellSignal);
+      
+      const stopLoss = generateStopLossObservation(asset.asset as AssetCategory, asset.entryPrice, asset.priceEUR, asset.balance);
+      if (stopLoss) observations.push(stopLoss);
+    }
+  }
+  
+  // Genereer REBALANCE observatie
+  const rebalanceSignal = generateRebalanceObservation(portfolio, assetCategory);
+  if (rebalanceSignal) observations.push(rebalanceSignal);
+  
+  // Als geen observaties, return undefined
+  if (observations.length === 0) return undefined;
+  
+  const combinedObservation = observations.join(' | ');
+  
+  return {
+    userId,
+    timestamp: now.toISOString(),
+    range: '24h',
+    assetCategory,
+    exchanges: ['portfolio-monitor'],
+    marketContext: 'matig-volatiel',
+    volatilityLevel: 'matig',
+    observedBehavior: combinedObservation,
+    relativeMomentum: {
+      btcVsEth: 0,
+      priceVsStable: 0,
+    },
+    dataSources: {
+      sources: ['portfolio-monitor'],
+      priceData: {
+        usd: 0,
+        change24h: 0,
+        change7d: 0,
+      },
+      sentiment: {
+        fearGreedValue: 50,
+        classification: 'Portfolio-based',
+      },
+      quality: 100,
+    },
+    source: 'api-monitor',
+  };
+}
+
+/**
  * Genereer observatie uit marktdata + multi-source aggregatie.
  * Dit is ZUIVER beschrijvend, geen predictie.
  */
@@ -153,6 +216,93 @@ export async function generateObservation(
       source: 'api-monitor'
     };
   }
+}
+
+/**
+ * Genereer SELL observatie wanneer positie winstgevend is.
+ */
+function generateSellObservation(
+  assetCategory: AssetCategory,
+  entryPrice: number,
+  currentPrice: number,
+  assetBalance: number
+): string | undefined {
+  if (assetBalance <= 0 || entryPrice <= 0 || currentPrice <= 0) return undefined;
+  
+  const profitPercentage = ((currentPrice - entryPrice) / entryPrice) * 100;
+  const totalValue = assetBalance * currentPrice;
+  
+  // Genereer SELL observatie als winst >= 10%
+  if (profitPercentage >= 10) {
+    const profitTarget = Math.floor(profitPercentage / 5) * 5; // Rond af naar dichtstbijzijnde 5%
+    return `SELL_SIGNAL: ${assetCategory} heeft ${profitTarget}% winst bereikt. Waarde: €${totalValue.toFixed(2)}. Kans op take-profit: 85%`;
+  }
+  
+  // Milde sell signal voor positieve beweging
+  if (profitPercentage > 3) {
+    return `SELL_CONSIDERATION: ${assetCategory} toont ${profitPercentage.toFixed(1)}% positieve beweging. Potentieel voor winst nemen.`;
+  }
+  
+  return undefined;
+}
+
+/**
+ * Genereer REBALANCE observatie wanneer assets beter in balans kunnen.
+ */
+function generateRebalanceObservation(
+  portfolio: Array<{ asset: string; balance: number; priceEUR: number; change24h: number }>,
+  assetCategory: AssetCategory
+): string | undefined {
+  if (!portfolio || portfolio.length < 2) return undefined;
+  
+  // Vind best en worst performer
+  const performers = portfolio.map(p => ({
+    asset: p.asset,
+    change: p.change24h,
+    value: p.balance * p.priceEUR,
+    momentum: p.change24h,
+  }));
+  
+  const bestPerformer = performers.reduce((a, b) => a.momentum > b.momentum ? a : b);
+  const worstPerformer = performers.reduce((a, b) => a.momentum < b.momentum ? a : b);
+  
+  const momentumDiff = bestPerformer.momentum - worstPerformer.momentum;
+  
+  // Rebalance signal als verschil > 8% en waarde > €5
+  if (momentumDiff > 8 && worstPerformer.value > 5) {
+    const rebalanceAmount = Math.min(worstPerformer.value * 0.3, 20); // Max 30% of €20
+    return `REBALANCE_SIGNAL: Verschuif €${rebalanceAmount.toFixed(2)} van ${worstPerformer.asset} (${worstPerformer.momentum.toFixed(1)}%) naar ${bestPerformer.asset} (${bestPerformer.momentum.toFixed(1)}%). Momentum diff: ${momentumDiff.toFixed(1)}%`;
+  }
+  
+  return undefined;
+}
+
+/**
+ * Genereer STOP-LOSS observatie bij significant verlies.
+ */
+function generateStopLossObservation(
+  assetCategory: AssetCategory,
+  entryPrice: number,
+  currentPrice: number,
+  assetBalance: number
+): string | undefined {
+  if (assetBalance <= 0 || entryPrice <= 0 || currentPrice <= 0) return undefined;
+  
+  const lossPercentage = ((currentPrice - entryPrice) / entryPrice) * 100;
+  const totalValue = assetBalance * currentPrice;
+  
+  // Stop-loss warning bij -5% verlies
+  if (lossPercentage <= -5) {
+    const lossAmount = Math.abs(lossPercentage);
+    return `STOP_LOSS_ALERT: ${assetCategory} op ${lossAmount.toFixed(1)}% verlies. Beschermende stop-loss: €${totalValue.toFixed(2)}. Risico mitigation: 70%`;
+  }
+  
+  // Milde stop-loss warning bij -2%
+  if (lossPercentage < -2) {
+    return `STOP_LOSS_WATCH: ${assetCategory} toont ${Math.abs(lossPercentage).toFixed(1)}% negatieve beweging. Monitor voor verdere dalingen.`;
+  }
+  
+  return undefined;
 }
 
 /**
