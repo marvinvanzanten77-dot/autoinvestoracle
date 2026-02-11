@@ -21,7 +21,7 @@
  * - Allocaties optimaliseren
  */
 
-import type { MarketObservation, AssetCategory, MarketContext } from './types';
+import type { MarketObservation, AssetCategory, MarketContext, ActionSuggestion, AgentReport } from './types';
 import { getAggregator } from '../dataSources/aggregator';
 
 export type RawMarketData = {
@@ -303,6 +303,167 @@ function generateStopLossObservation(
   }
   
   return undefined;
+}
+
+/**
+ * Genereer action suggestions op basis van observaties.
+ * Dit zijn SUGGESTIES, niet automatische execution.
+ */
+function generateActionSuggestions(
+  portfolio: Array<{ asset: string; balance: number; priceEUR: number; change24h: number; entryPrice?: number }>,
+  assetCategory: AssetCategory
+): ActionSuggestion[] {
+  const suggestions: ActionSuggestion[] = [];
+  const now = new Date().toISOString();
+  
+  for (const asset of portfolio) {
+    if (asset.balance <= 0 || asset.priceEUR <= 0) continue;
+    
+    const totalValue = asset.balance * asset.priceEUR;
+    
+    // SELL suggestion: +10% profit
+    if (asset.entryPrice && asset.priceEUR > asset.entryPrice) {
+      const profitPercentage = ((asset.priceEUR - asset.entryPrice) / asset.entryPrice) * 100;
+      if (profitPercentage >= 10) {
+        suggestions.push({
+          id: `action-${Date.now()}-${Math.random()}`,
+          userId: 'system',
+          timestamp: now,
+          action: 'SELL',
+          asset: asset.asset,
+          suggestedPercentage: 30, // Sell 30% to take profits
+          reasoning: `${asset.asset} reached ${profitPercentage.toFixed(1)}% profit. Take partial profits.`,
+          confidence: profitPercentage > 20 ? 'hoog' : 'middel',
+          riskLevel: 'laag',
+          priceTarget: asset.priceEUR,
+          timeWindow: 'within 24h',
+          status: 'suggested',
+          source: 'observation',
+        });
+      }
+    }
+    
+    // STOP-LOSS suggestion: -5% loss
+    if (asset.entryPrice && asset.priceEUR < asset.entryPrice) {
+      const lossPercentage = ((asset.priceEUR - asset.entryPrice) / asset.entryPrice) * 100;
+      if (lossPercentage <= -5) {
+        suggestions.push({
+          id: `action-${Date.now()}-${Math.random()}`,
+          userId: 'system',
+          timestamp: now,
+          action: 'SELL',
+          asset: asset.asset,
+          suggestedPercentage: 100, // Sell all to protect capital
+          reasoning: `${asset.asset} at ${Math.abs(lossPercentage).toFixed(1)}% loss. Protect capital with stop-loss.`,
+          confidence: 'hoog',
+          riskLevel: 'hoog',
+          priceTarget: asset.priceEUR,
+          stopLoss: asset.entryPrice * 0.95,
+          timeWindow: 'within 6h',
+          status: 'suggested',
+          source: 'observation',
+        });
+      }
+    }
+    
+    // REBALANCE suggestion: underperformer
+    if (asset.change24h < -2 && totalValue > 5) {
+      suggestions.push({
+        id: `action-${Date.now()}-${Math.random()}`,
+        userId: 'system',
+        timestamp: now,
+        action: 'REBALANCE',
+        asset: asset.asset,
+        suggestedPercentage: 25, // Move 25% to better performer
+        reasoning: `${asset.asset} underperforming (${asset.change24h.toFixed(1)}% 24h). Consider rebalancing.`,
+        confidence: 'middel',
+        riskLevel: 'laag',
+        timeWindow: 'within 48h',
+        status: 'suggested',
+        source: 'observation',
+      });
+    }
+    
+    // HOLD/MONITOR suggestion: good performer
+    if (asset.change24h >= 2 && totalValue > 5) {
+      suggestions.push({
+        id: `action-${Date.now()}-${Math.random()}`,
+        userId: 'system',
+        timestamp: now,
+        action: 'MONITOR',
+        asset: asset.asset,
+        reasoning: `${asset.asset} performing well (${asset.change24h.toFixed(1)}% 24h). Monitor for exit signals.`,
+        confidence: 'middel',
+        riskLevel: 'laag',
+        status: 'suggested',
+        source: 'observation',
+      });
+    }
+  }
+  
+  return suggestions;
+}
+
+/**
+ * Genereer hourly agent report met observaties en suggesties.
+ */
+export async function generateAgentReport(
+  userId: string,
+  portfolio: Array<{ asset: string; balance: number; priceEUR: number; change24h: number; entryPrice?: number }>,
+  observations: string[],
+  assetCategory: AssetCategory = 'BTC'
+): Promise<AgentReport> {
+  const now = new Date();
+  const suggestions = generateActionSuggestions(portfolio, assetCategory);
+  
+  // Bepaal agent mood
+  const avgChange = portfolio.reduce((sum, p) => sum + p.change24h, 0) / portfolio.length;
+  const agentMood = avgChange > 3 ? 'bullish' : avgChange < -3 ? 'bearish' : avgChange > 0 ? 'bullish' : 'cautious';
+  
+  // Bepaal recommended action
+  const sellSuggestions = suggestions.filter(s => s.action === 'SELL');
+  const rebalanceSuggestions = suggestions.filter(s => s.action === 'REBALANCE');
+  let recommendedAction = 'Wait and monitor';
+  
+  if (sellSuggestions.some(s => s.riskLevel === 'hoog')) {
+    recommendedAction = 'URGENT: Execute STOP-LOSS on at-risk assets';
+  } else if (sellSuggestions.some(s => s.confidence === 'hoog')) {
+    recommendedAction = 'Consider executing SELL for profit-taking';
+  } else if (rebalanceSuggestions.length > 0) {
+    recommendedAction = 'Rebalance portfolio for better momentum alignment';
+  }
+  
+  // Overall confidence (average of all suggestions)
+  const avgConfidence = suggestions.length > 0
+    ? suggestions.reduce((sum, s) => sum + (s.confidence === 'hoog' ? 100 : s.confidence === 'middel' ? 70 : 50), 0) / suggestions.length
+    : 50;
+  
+  return {
+    id: `report-${Date.now()}`,
+    userId,
+    reportedAt: now.toISOString(),
+    period: {
+      from: new Date(now.getTime() - 3600000).toISOString(),
+      to: now.toISOString(),
+      durationMinutes: 60,
+    },
+    summary: {
+      observationsCount: observations.length,
+      suggestionsCount: suggestions.length,
+      executionsCount: 0,
+      mainTheme: agentMood === 'bullish' ? 'Bullish momentum' : agentMood === 'bearish' ? 'Risk management' : 'Neutral consolidation',
+    },
+    observations: observations.map((obs, i) => ({
+      asset: assetCategory,
+      observation: obs,
+      timestamp: now.toISOString(),
+    })),
+    suggestions,
+    agentMood,
+    recommendedAction,
+    overallConfidence: Math.round(avgConfidence),
+    shouldNotify: suggestions.length > 0 || suggestions.length > 0,
+  };
 }
 
 /**

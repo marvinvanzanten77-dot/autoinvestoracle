@@ -124,6 +124,85 @@ export type Ticket = {
 };
 
 /**
+ * Action Suggestion — wat zou de bot kunnen doen?
+ * NIET automatisch executie, maar advies in "trading bot mode"
+ */
+export type ActionSuggestion = {
+  id: string;
+  userId: string;
+  timestamp: string;
+  
+  // Wat voorstellen we voor?
+  action: 'BUY' | 'SELL' | 'REBALANCE' | 'HOLD' | 'MONITOR';
+  asset: string; // 'BTC', 'SOL', 'ETH', etc.
+  
+  // Hoeveel zou het moeten zijn?
+  suggestedAmount?: number; // In EUR
+  suggestedPercentage?: number; // % van portfolio
+  
+  // Waarom?
+  reasoning: string; // "SELL because 15% profit reached", "REBALANCE due to momentum divergence"
+  confidence: ConfidenceLevel; // hoe zeker zijn we?
+  riskLevel: 'laag' | 'middel' | 'hoog';
+  
+  // Execution parameters
+  priceTarget?: number; // EUR
+  stopLoss?: number; // EUR
+  timeWindow?: string; // "within 1 hour", "next 24h", "this week"
+  
+  // Status
+  status: 'suggested' | 'acknowledged' | 'executed' | 'expired' | 'declined';
+  executedAt?: string;
+  executionPrice?: number;
+  
+  // Meta
+  source: 'observation' | 'pattern' | 'market-condition';
+  relatedObservationId?: string;
+};
+
+/**
+ * Agent Report — korte samenvatting van agent's observaties en suggesties
+ */
+export type AgentReport = {
+  id: string;
+  userId: string;
+  reportedAt: string;
+  
+  // Periode
+  period: {
+    from: string;
+    to: string;
+    durationMinutes: number;
+  };
+  
+  // Samenvatting
+  summary: {
+    observationsCount: number;
+    suggestionsCount: number;
+    executionsCount: number;
+    mainTheme: string; // "Bullish momentum", "Risk management", etc.
+  };
+  
+  // Details
+  observations: Array<{
+    asset: string;
+    observation: string;
+    timestamp: string;
+  }>;
+  
+  suggestions: ActionSuggestion[];
+  
+  // Status
+  agentMood: 'bullish' | 'neutral' | 'bearish' | 'cautious';
+  recommendedAction: string; // "Wait and monitor", "Execute SELL", etc.
+  overallConfidence: number; // 0-100
+  
+  // Notifications
+  shouldNotify: boolean;
+  notificationSent?: string;
+};
+
+/**
  * Learning Pool — verzamel patronen voor analyse
  * Nadat observaties hun geldigheid verloren hebben,
  * worden ze geclassificeerd.
@@ -157,3 +236,4 @@ export type LearnedPattern = {
   // GEEN trade signal hier
   // Dit is enkel categorisering van wat werkelijk gebeurde
 };
+

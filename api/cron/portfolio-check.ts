@@ -1,14 +1,19 @@
 /**
- * Vercel Cron Job - Portfolio Check
- * Runs every hour, checks for SELL/REBALANCE opportunities
+ * Vercel Cron Job - Portfolio Check & Agent Report
+ * Runs every hour, generates SELL/REBALANCE suggestions and sends agent report
  */
 
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || '',
   process.env.VITE_SUPABASE_ANON_KEY || ''
 );
+
+function generateId(): string {
+  return crypto.randomUUID();
+}
 
 export default async (req: any, res: any) => {
   // Verify Vercel cron secret
@@ -18,7 +23,7 @@ export default async (req: any, res: any) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  console.log('[Cron] Portfolio health check triggered at', new Date().toISOString());
+  console.log('[Cron] Portfolio check triggered at', new Date().toISOString());
 
   try {
     // Fetch all user profiles with active portfolios
@@ -42,6 +47,7 @@ export default async (req: any, res: any) => {
 
     let processedCount = 0;
     let observationsGenerated = 0;
+    let reportsGenerated = 0;
 
     // Process each user's portfolio
     for (const profile of profiles) {
@@ -56,9 +62,9 @@ export default async (req: any, res: any) => {
 
         if (!portfolio || portfolio.length === 0) continue;
 
-        // Generate portfolio observations (SELL, REBALANCE, STOP-LOSS)
-        const { generatePortfolioObservation } = await import('../../src/lib/observation/generator');
+        const { generatePortfolioObservation, generateAgentReport } = await import('../../src/lib/observation/generator');
         
+        // Step 1: Generate portfolio observations (SELL, REBALANCE, STOP-LOSS)
         const observation = await generatePortfolioObservation(
           profile.user_id,
           portfolio,
@@ -66,8 +72,7 @@ export default async (req: any, res: any) => {
         );
 
         if (observation) {
-          // Log the observation
-          const { error: insertError } = await supabase
+          const { error: insertObsError } = await supabase
             .from('market_observations')
             .insert({
               user_id: profile.user_id,
@@ -84,9 +89,82 @@ export default async (req: any, res: any) => {
               source: observation.source || 'api-monitor',
             });
 
-          if (!insertError) {
+          if (!insertObsError) {
             observationsGenerated++;
-            console.log(`[Cron] Generated observation for user ${profile.user_id}: ${observation.observedBehavior?.substring(0, 80)}...`);
+            console.log(`[Cron] Generated observation for ${profile.user_id}: "${observation.observedBehavior?.substring(0, 60)}..."`);
+          }
+        }
+
+        // Step 2: Generate agent report with action suggestions
+        const observationStrings = observation?.observedBehavior 
+          ? observation.observedBehavior.split(' | ')
+          : ['Portfolio under monitoring'];
+        
+        const report = await generateAgentReport(
+          profile.user_id,
+          portfolio,
+          observationStrings,
+          'BTC'
+        );
+
+        if (report) {
+          const { error: insertReportError } = await supabase
+            .from('agent_reports')
+            .insert({
+              id: report.id,
+              user_id: report.userId,
+              reported_at: report.reportedAt,
+              period_from: report.period.from,
+              period_to: report.period.to,
+              period_duration_minutes: report.period.durationMinutes,
+              observations_count: report.summary.observationsCount,
+              suggestions_count: report.summary.suggestionsCount,
+              executions_count: report.summary.executionsCount,
+              main_theme: report.summary.mainTheme,
+              agent_mood: report.agentMood,
+              recommended_action: report.recommendedAction,
+              overall_confidence: report.overallConfidence,
+              observations: report.observations,
+              suggestions: report.suggestions,
+              should_notify: report.shouldNotify,
+              notification_sent: report.shouldNotify ? new Date().toISOString() : null,
+            });
+
+          if (!insertReportError) {
+            reportsGenerated++;
+            
+            // Log the report
+            const logMessage = `[AGENT REPORT ${report.reportedAt}]
+📊 Observations: ${report.summary.observationsCount}
+💡 Suggestions: ${report.summary.suggestionsCount}
+📈 Mood: ${report.agentMood.toUpperCase()}
+🎯 Confidence: ${report.overallConfidence}%
+💬 Action: ${report.recommendedAction}`;
+            
+            console.log(logMessage);
+            
+            // Also create a notification if needed
+            if (report.shouldNotify) {
+              const { error: notifError } = await supabase
+                .from('notifications')
+                .insert({
+                  user_id: report.userId,
+                  type: 'agent-report',
+                  title: `Agent Report: ${report.summary.mainTheme}`,
+                  message: report.recommendedAction,
+                  data: {
+                    report_id: report.id,
+                    confidence: report.overallConfidence,
+                    suggestions_count: report.summary.suggestionsCount,
+                  },
+                  read: false,
+                  created_at: new Date().toISOString(),
+                });
+              
+              if (!notifError) {
+                console.log(`[Cron] Created notification for user ${profile.user_id}`);
+              }
+            }
           }
         }
 
@@ -96,12 +174,16 @@ export default async (req: any, res: any) => {
       }
     }
 
+    const summaryMessage = `[CRON SUMMARY] Processed: ${processedCount}, Observations: ${observationsGenerated}, Reports: ${reportsGenerated}`;
+    console.log(summaryMessage);
+
     return res.status(200).json({
       status: 'success',
       timestamp: new Date().toISOString(),
       message: 'Portfolio check completed',
       processed: processedCount,
       observationsGenerated,
+      reportsGenerated,
     });
   } catch (err) {
     console.error('[Cron] Portfolio check failed:', err);
