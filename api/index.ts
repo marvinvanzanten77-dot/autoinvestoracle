@@ -78,12 +78,51 @@ class BitvavoPriceFallback {
       return this.prices;
     }
 
-    console.log('[Bitvavo] Fetching prices via REST API...');
+    console.log('[Bitvavo] Fetching prices via REST API (public /ticker)...');
 
     try {
-      // Use /markets endpoint
-      const timestamp = now;
-      const message = timestamp + 'GET/v2/markets';
+      // Try public /ticker endpoint (no signature required)
+      const response = await fetch('https://api.bitvavo.com/v2/ticker', {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        console.warn(`[Bitvavo] /ticker returned HTTP ${response.status}, trying /markets...`);
+        return await this.fetchPricesFromMarkets(apiKey, apiSecret);
+      }
+
+      const tickers: any = await response.json();
+      console.log('[Bitvavo] /ticker returned data');
+
+      // Handle both array and object responses
+      const tickerArray = Array.isArray(tickers) ? tickers : Object.values(tickers);
+      
+      for (const ticker of tickerArray) {
+        if (typeof ticker !== 'object' || !ticker.market || !ticker.last) continue;
+        
+        const price = Number(ticker.last);
+        if (price > 0) {
+          this.prices.set(ticker.market, price);
+        }
+      }
+
+      this.lastFetch = now;
+      console.log('[Bitvavo] REST fallback updated from /ticker:', this.prices.size, 'prices');
+
+      return this.prices;
+    } catch (err) {
+      console.error('[Bitvavo] /ticker fetch failed:', err instanceof Error ? err.message : err);
+      return await this.fetchPricesFromMarkets(apiKey, apiSecret);
+    }
+  }
+
+  private async fetchPricesFromMarkets(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
+    console.log('[Bitvavo] Falling back to /markets endpoint...');
+
+    try {
+      // Use /markets endpoint with signature
+      const now = Date.now();
+      const message = now + 'GET/v2/markets';
       const signature = createHmac('sha256', apiSecret)
         .update(message)
         .digest('hex');
@@ -92,7 +131,7 @@ class BitvavoPriceFallback {
         method: 'GET',
         headers: {
           'Bitvavo-Access-Key': apiKey,
-          'Bitvavo-Access-Timestamp': timestamp.toString(),
+          'Bitvavo-Access-Timestamp': now.toString(),
           'Bitvavo-Access-Signature': signature,
         },
       });
@@ -101,22 +140,16 @@ class BitvavoPriceFallback {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const markets: any[] = await response.json();
-      console.log('[Bitvavo] REST API returned', markets.length, 'markets');
+      const markets: any = await response.json();
+      console.log('[Bitvavo] /markets returned', Array.isArray(markets) ? markets.length : Object.keys(markets).length, 'items');
 
-      // Parse market pairs
-      for (const market of markets) {
-        if (market.market && market.price) {
-          this.prices.set(market.market, Number(market.price) || 0);
-        }
-      }
-
-      this.lastFetch = now;
-      console.log('[Bitvavo] REST fallback updated:', this.prices.size, 'prices');
+      // /markets returns trading pair metadata (no prices)
+      // We cannot extract prices from here, so return empty
+      console.warn('[Bitvavo] /markets has no price data, prices unavailable');
 
       return this.prices;
     } catch (err) {
-      console.error('[Bitvavo] REST fallback error:', err instanceof Error ? err.message : err);
+      console.error('[Bitvavo] /markets fallback failed:', err instanceof Error ? err.message : err);
       return this.prices;
     }
   }
