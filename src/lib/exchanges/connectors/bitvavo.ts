@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { EXCHANGE_CONFIG } from '../config';
+import { PriceResolver } from '../resolvers/priceResolver';
 import type {
   Account,
   Balance,
@@ -121,77 +122,36 @@ export class BitvavoConnector implements ExchangeConnector {
 
   async fetchBalances(): Promise<Balance[]> {
     try {
+      // Fetch balances from API
       const data = await this.makeRequest('GET', '/balance');
       if (!Array.isArray(data)) {
         console.log('[Bitvavo] fetchBalances: /balance endpoint returned non-array:', typeof data);
         return [];
       }
       
-      console.log('[Bitvavo] fetchBalances: Raw API response - FULL DATA:', {
+      console.log('[Bitvavo] fetchBalances: Raw API response:', {
         count: data.length,
-        all: data.map(b => ({
+        sample: data.slice(0, 3).map(b => ({
           symbol: b.symbol,
           available: b.available,
-          held: b.held,
-          inOrder: b.inOrder,
-          all_fields: Object.keys(b)
+          held: b.held
         }))
       });
       
-      // Fetch all market prices from Bitvavo
-      let priceMap: Record<string, number> = {};
-      let usdtToEurRate = 1.0; // fallback 1:1 if USDT pair not found
-      
+      // Fetch ALL market pairs for price resolution
+      let priceResolver: PriceResolver | null = null;
       try {
         const marketsData = await this.makeRequest('GET', '/markets');
         if (Array.isArray(marketsData)) {
-          console.log('[Bitvavo] /markets endpoint returned:', {
-            total_markets: marketsData.length,
-            sample: marketsData.slice(0, 3).map(m => ({
-              market: m.market,
-              price: m.price,
-              status: m.status
-            }))
-          });
-          
-          // First pass: find EUR pairs and USDT/EUR rate
-          marketsData.forEach((market: any) => {
-            if (market.market?.endsWith('-EUR') && market.price) {
-              const asset = market.market.split('-')[0];
-              const price = Number(market.price);
-              priceMap[asset] = price;
-              console.log(`[Bitvavo] Price for ${asset}: €${price} (from ${market.market})`);
-              
-              // Track USDT-EUR rate for later conversions
-              if (asset === 'USDT') {
-                usdtToEurRate = price;
-                console.log(`[Bitvavo] USDT/EUR rate: ${usdtToEurRate}`);
-              }
-            }
-          });
-          
-          // Second pass: find USDT pairs for assets without EUR pair
-          marketsData.forEach((market: any) => {
-            if (market.market?.endsWith('-USDT') && market.price) {
-              const asset = market.market.split('-')[0];
-              // Only add if we don't already have EUR price
-              if (!priceMap[asset]) {
-                const priceUsdt = Number(market.price);
-                const priceEur = priceUsdt * usdtToEurRate;
-                priceMap[asset] = priceEur;
-                console.log(`[Bitvavo] Converted ${asset}: ${priceUsdt} USDT × ${usdtToEurRate} = €${priceEur} (from ${market.market})`);
-              }
-            }
-          });
-          
-          console.log('[Bitvavo] FINAL PRICE MAP:', {
-            total_assets: Object.keys(priceMap).length,
-            assets: Object.keys(priceMap),
-            prices: Object.entries(priceMap).map(([k, v]) => `${k}=€${v.toFixed(4)}`)
-          });
+          priceResolver = new PriceResolver(marketsData);
         }
       } catch (err) {
-        console.error('[Bitvavo] CRITICAL: Could not fetch market prices:', err);
+        console.error('[Bitvavo] CRITICAL: Could not fetch market data for price resolution:', err);
+      }
+
+      if (!priceResolver) {
+        console.error('[Bitvavo] No price resolver available - cannot price assets');
+        return [];
       }
       
       // Filter balances: include only those with available > 0 OR held > 0
@@ -210,22 +170,17 @@ export class BitvavoConnector implements ExchangeConnector {
           const held = Number(bal.held ?? 0);
           const total = available + held;
           
-          // Get price from market data
-          const priceEUR = priceMap[bal.symbol] || 0;
+          // Use PriceResolver to get price in EUR (handles all conversions automatically)
+          const priceEUR = priceResolver!.getPrice(bal.symbol);
           const estimatedValue = total * priceEUR;
           
-          if (priceEUR === 0) {
-            console.warn(`[Bitvavo] ⚠️ NO PRICE FOUND for ${bal.symbol} - searched in EUR and USDT pairs`);
-          } else {
-            console.log(`[Bitvavo] ✓ MAP ${bal.symbol}:`, {
-              total_qty: total,
-              available: available,
-              held: held,
-              price_from_market: priceEUR,
-              value_calculation: `${total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)}`,
-              estimated_value: estimatedValue
-            });
-          }
+          console.log(`[Bitvavo] MAP ${bal.symbol}:`, {
+            total_qty: total,
+            available: available,
+            held: held,
+            price_eur: priceEUR,
+            value: `${total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)}`
+          });
           
           return {
             id: crypto.randomUUID(),
@@ -240,8 +195,8 @@ export class BitvavoConnector implements ExchangeConnector {
           };
         });
       
-      console.log(`[Bitvavo] fetchBalances: Final result - ${balances.length} assets with balance`, {
-        assets: balances.map(b => `${b.asset}:€${b.priceEUR} (€${b.estimatedValue})`)
+      console.log(`[Bitvavo] fetchBalances: Returning ${balances.length} assets with prices:`, {
+        assets: balances.map(b => `${b.asset}=€${b.priceEUR.toFixed(4)}`)
       });
       return balances;
     } catch (err) {
