@@ -548,10 +548,16 @@ class BitvavoConnector implements ExchangeConnector {
   }
 
   async fetchBalances(): Promise<Balance[]> {
-    // This is now handled by the real connector in src/lib/exchanges/connectors/bitvavo.ts
-    // which uses PriceResolver for intelligent price fetching
-    console.error('[Bitvavo API] fetchBalances should not be called - use connector directly');
-    return [];
+    try {
+      // Import the real connector with PriceResolver support
+      const { BitvavoConnector: RealBitvavo } = await import('../src/lib/exchanges/connectors/bitvavo');
+      const realConnector = new RealBitvavo();
+      realConnector.setCredentials({ apiKey: this.apiKey, apiSecret: this.apiSecret });
+      return await realConnector.fetchBalances();
+    } catch (err) {
+      console.error('[Bitvavo API] fetchBalances error:', err);
+      return [];
+    }
   }
 
   async fetchPositions(): Promise<Position[]> {
