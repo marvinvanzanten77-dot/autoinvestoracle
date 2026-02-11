@@ -102,6 +102,18 @@ class BitvavoPriceFallback {
 
       const markets: any = await marketsResponse.json();
       const marketArray = Array.isArray(markets) ? markets : Object.values(markets);
+      
+      // DEBUG: Check what fields are in markets response
+      if (marketArray.length > 0) {
+        const sampleFields = Object.keys(marketArray[0]);
+        console.log('[Bitvavo] /markets sample object fields:', sampleFields.join(', '));
+        const hasPriceFields = sampleFields.some(f => f.includes('price') || f.includes('last') || f.includes('tick'));
+        console.log('[Bitvavo] Has price fields:', hasPriceFields);
+        if (hasPriceFields) {
+          console.log('[Bitvavo] Sample market:', JSON.stringify(marketArray[0]).substring(0, 300));
+        }
+      }
+      
       const eurMarkets = marketArray
         .map((m: any) => m.market)
         .filter((s: string) => s.includes('-EUR'))
