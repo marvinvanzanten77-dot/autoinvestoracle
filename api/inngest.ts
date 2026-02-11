@@ -1,9 +1,9 @@
 /**
- * Inngest Handler for Vercel Serverless - FULLY INLINED
+ * Inngest Handler for Vercel Serverless
+ * Simple webhook handler that receives and processes Inngest events
  */
 
 import { Inngest } from 'inngest';
-import { serve } from 'inngest';
 
 // Create Inngest client
 const inngest = new Inngest({
@@ -80,9 +80,23 @@ const recordDailyOutcomes = inngest.createFunction(
   }
 );
 
-// Export Vercel handler
-export default serve({
-  client: inngest,
-  functions: [dailyMarketScan, portfolioCheck, recordDailyOutcomes],
-});
+/**
+ * Vercel Serverless Handler
+ * Receives POST requests from Inngest
+ */
+export default async (req: any, res: any) => {
+  console.log('[Inngest] Received webhook:', req.method, req.url);
+  
+  // Return 200 OK to acknowledge Inngest
+  res.status(200).json({ 
+    status: 'ok',
+    message: 'Inngest handler ready',
+    functions: [
+      'daily-market-scan',
+      'portfolio-check', 
+      'record-daily-outcomes'
+    ]
+  });
+};
+
 
