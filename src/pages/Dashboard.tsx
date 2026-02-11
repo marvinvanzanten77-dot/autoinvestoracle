@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { AgentStatusWidget } from '../components/AgentStatusWidget';
+import { AgentActivityWidget } from '../components/AgentActivityWidget';
 import { dashboardUpdates, volatilityStatus } from '../data/marketUpdates';
 import { educationSnippets } from '../data/educationSnippets';
 import { fetchMarketScan, type MarketScanResponse } from '../api/marketScan';
@@ -1016,6 +1017,9 @@ export function Dashboard() {
 
       {/* Agent Status */}
       <AgentStatusWidget />
+
+      {/* Agent Activity Control */}
+      <AgentActivityWidget userId={userId} />
 
       {/* Platform Selector */}
       {connectedExchanges.length > 1 && (
