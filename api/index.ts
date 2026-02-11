@@ -621,36 +621,61 @@ class BitvavoConnector implements ExchangeConnector {
         }));
 
       // Step 2: Get prices from cache (populated via WebSocket subscriptions)
-      // Note: REST /ticker endpoint is unreliable (returns 404), using cached prices instead
-      // This is the correct Bitvavo architecture: REST for state, WebSocket for prices
+      // Fallback to REST polling if WebSocket unavailable
       
-      // Dynamically import price cache from api directory (available in production)
       let priceMap: Record<string, number> = {};
+      let pricesFromWebSocket = false;
+      
       try {
-        // Try to get cached prices from WebSocket updates
+        // Try to get prices from WebSocket cache first
         const { getBitvavoPriceCache } = await import('./bitvavo-priceCache');
         const cache = getBitvavoPriceCache();
         const cachedPrices = cache.getAllPrices();
         
-        // Convert Map to record
-        for (const [market, price] of cachedPrices) {
-          const [base, quote] = market.split('-');
-          if (quote === 'EUR') {
-            priceMap[base] = price;
+        if (cachedPrices.size > 0) {
+          // Convert Map to record
+          for (const [market, price] of cachedPrices) {
+            const [base, quote] = market.split('-');
+            if (quote === 'EUR') {
+              priceMap[base] = price;
+            }
           }
+          pricesFromWebSocket = true;
+          
+          console.log('[Bitvavo] Using prices from WebSocket cache:', {
+            cachedMarkets: Array.from(cachedPrices.keys()).length,
+            cacheAge: cache.getAge(),
+            isFresh: cache.isFresh()
+          });
         }
-        
-        console.log('[Bitvavo] Using cached prices from WebSocket:', {
-          cachedMarkets: Array.from(cachedPrices.keys()),
-          cacheAge: cache.getAge(),
-          isFresh: cache.isFresh()
-        });
       } catch (err) {
-        console.warn('[Bitvavo] Could not load price cache:', err);
-        priceMap = {};
+        console.warn('[Bitvavo] WebSocket cache unavailable:', err instanceof Error ? err.message : err);
       }
 
-      // Step 3: Handle currency conversion (cached USDT→EUR rates)
+      // Fallback to REST polling if WebSocket cache empty
+      if (Object.keys(priceMap).length === 0) {
+        try {
+          console.log('[Bitvavo] WebSocket cache empty, using REST fallback...');
+          const { getBitvavoPriceFallback } = await import('./bitvavo-priceFallback');
+          const fallback = getBitvavoPriceFallback();
+          const fallbackPrices = await fallback.fetchPrices(this.apiKey, this.apiSecret);
+          
+          // Convert Map to record
+          for (const [market, price] of fallbackPrices) {
+            const [base, quote] = market.split('-');
+            if (quote === 'EUR') {
+              priceMap[base] = price;
+            }
+          }
+          
+          console.log('[Bitvavo] Using prices from REST fallback:', Object.keys(priceMap).length, 'markets');
+        } catch (err) {
+          console.error('[Bitvavo] REST fallback failed:', err instanceof Error ? err.message : err);
+          priceMap = {};
+        }
+      }
+
+      // Step 3: Handle currency conversion
       let usdtToEurRate = priceMap['USDT'] || 1.0;
 
       // Step 4: Enhance balances with prices
@@ -659,9 +684,10 @@ class BitvavoConnector implements ExchangeConnector {
         const estimatedValue = bal.total * priceEUR;
         
         if (priceEUR === 0) {
-          console.warn(`[Bitvavo] No cached price for ${bal.asset} - awaiting WebSocket update`);
+          console.warn(`[Bitvavo] No price available for ${bal.asset}`);
         } else {
-          console.log(`[Bitvavo] ${bal.asset}: qty=${bal.total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)}`);
+          const source = pricesFromWebSocket ? 'WebSocket' : 'REST fallback';
+          console.log(`[Bitvavo] ${bal.asset}: qty=${bal.total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)} (from ${source})`);
         }
 
         return {
@@ -674,6 +700,7 @@ class BitvavoConnector implements ExchangeConnector {
       console.log('[Bitvavo] fetchBalances complete:', {
         count: enhancedBalances.length,
         pricesAvailable: Object.keys(priceMap).length,
+        source: pricesFromWebSocket ? 'WebSocket' : 'REST fallback',
         assets: enhancedBalances.map(b => `${b.asset}=€${b.priceEUR}`)
       });
 

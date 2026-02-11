@@ -86,15 +86,30 @@ export class BitvavaWebSocket {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // For server-side, use ws package instead of browser WebSocket
-        // In browser context, this will use native WebSocket
+        console.log('[Bitvavo WS] Attempting to connect to', this.url);
+        
+        // For server-side, use ws package if available
+        let WSConstructor: any = null;
+        
+        // Try browser WebSocket first
         if (typeof WebSocket !== 'undefined') {
-          this.ws = new WebSocket(this.url);
+          console.log('[Bitvavo WS] Using browser WebSocket');
+          WSConstructor = WebSocket;
         } else {
-          // Server-side requires 'ws' package
-          const WebSocketModule = require('ws');
-          this.ws = new WebSocketModule(this.url);
+          // Try to load ws package for server-side
+          try {
+            const WebSocketModule = require('ws');
+            console.log('[Bitvavo WS] Using ws package');
+            WSConstructor = WebSocketModule;
+          } catch (err) {
+            console.warn('[Bitvavo WS] ws package not available, WebSocket will not work on server');
+            // Don't reject here - we'll use price fallback instead
+            resolve();
+            return;
+          }
         }
+
+        this.ws = new WSConstructor(this.url);
 
         this.ws.onopen = () => {
           console.log('[Bitvavo WS] Connected');
