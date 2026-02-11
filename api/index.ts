@@ -74,18 +74,21 @@ class BitvavoPriceFallback {
     
     // Don't fetch too frequently
     if (now - this.lastFetch < this.fetchInterval) {
-      console.log('[Bitvavo] Using cached REST prices');
+      console.log('[Bitvavo] Using cached REST prices, cache age:', Math.round((now - this.lastFetch) / 1000), 'sec, prices:', this.prices.size);
       return this.prices;
     }
 
-    console.log('[Bitvavo] Fetching prices via REST API (/markets endpoint)...');
+    console.log('[Bitvavo] Fetching prices via REST API (discovering markets from /markets)...');
 
     try {
       // Fetch /markets to get all market symbols
+      console.log('[Bitvavo] Calling GET https://api.bitvavo.com/v2/markets...');
       const marketsResponse = await fetch('https://api.bitvavo.com/v2/markets', {
         method: 'GET',
       });
 
+      console.log('[Bitvavo] /markets response status:', marketsResponse.status, marketsResponse.ok ? 'OK' : 'ERROR');
+      
       if (!marketsResponse.ok) {
         console.warn(`[Bitvavo] /markets public fetch returned HTTP ${marketsResponse.status}`);
         return await this.fetchPricesFromMarketsAuth(apiKey, apiSecret);
@@ -95,34 +98,44 @@ class BitvavoPriceFallback {
       const marketArray = Array.isArray(markets) ? markets : Object.values(markets);
       console.log('[Bitvavo] /markets returned', marketArray.length, 'markets');
 
-      // Extract market symbols and fetch individual prices
-      const symbols = marketArray.map((m: any) => m.market).slice(0, 20); // Limit to 20 to avoid rate limiting
+      // Extract market symbols - prioritize major coins (BTC, ETH, SOL, etc)
+      const allSymbols = marketArray.map((m: any) => m.market).filter((s: string) => s.includes('-EUR'));
+      const prioritySymbols = allSymbols.filter((s: string) => /^(BTC|ETH|SOL|XRP|ADA|USDT|DOT|LINK|DOGE|MATIC)-EUR$/.test(s));
+      const symbols = [...new Set([...prioritySymbols, ...allSymbols.slice(0, 10)])].slice(0, 20);
       
+      console.log('[Bitvavo] Fetching prices for priority markets:', symbols.join(', '));
+
+      let successCount = 0;
       for (const market of symbols) {
         try {
           // Fetch ticker for specific market
-          const tickerResponse = await fetch(`https://api.bitvavo.com/v2/ticker?market=${market}`, {
+          const tickerUrl = `https://api.bitvavo.com/v2/ticker?market=${market}`;
+          const tickerResponse = await fetch(tickerUrl, {
             method: 'GET',
           });
 
           if (tickerResponse.ok) {
             const ticker: any = await tickerResponse.json();
+            console.log(`[Bitvavo] /ticker?market=${market} returned:`, ticker?.market, ticker?.last ? `€${ticker.last}` : 'no price');
             
             // Handle single object response (when market parameter is used)
             if (ticker && typeof ticker === 'object' && ticker.market && ticker.last) {
               const price = Number(ticker.last);
               if (price > 0) {
                 this.prices.set(ticker.market, price);
+                successCount++;
               }
             }
+          } else {
+            console.warn(`[Bitvavo] /ticker?market=${market} returned HTTP ${tickerResponse.status}`);
           }
         } catch (e) {
-          // Skip individual market fetch errors
+          console.error(`[Bitvavo] /ticker?market=${market} fetch error:`, e instanceof Error ? e.message : e);
         }
       }
 
       this.lastFetch = now;
-      console.log('[Bitvavo] REST fallback updated:', this.prices.size, 'prices from', symbols.length, 'markets');
+      console.log('[Bitvavo] REST fallback complete: successfully fetched', successCount, 'prices, total cache size:', this.prices.size);
 
       return this.prices;
     } catch (err) {
