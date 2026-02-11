@@ -4,6 +4,140 @@ import path from 'path';
 import { kv } from '@vercel/kv';
 import { createClient } from '@supabase/supabase-js';
 
+// ============================================================================
+// BITVAVO PRICE CACHE (Inline for Vercel compatibility)
+// ============================================================================
+
+class BitvavoPriceCache {
+  private prices: Map<string, number> = new Map();
+  private lastUpdate: number = 0;
+  private maxAge = 30 * 60 * 1000; // 30 minutes acceptable
+
+  updatePrice(market: string, price: number): void {
+    this.prices.set(market, price);
+    this.lastUpdate = Date.now();
+  }
+
+  getPrice(market: string): number | null {
+    const price = this.prices.get(market);
+    if (price && Date.now() - this.lastUpdate < this.maxAge) {
+      return price;
+    }
+    return null;
+  }
+
+  getAllPrices(): Map<string, number> {
+    const result = new Map<string, number>();
+    for (const [market, price] of this.prices) {
+      if (Date.now() - this.lastUpdate < this.maxAge) {
+        result.set(market, price);
+      }
+    }
+    return result;
+  }
+
+  getAge(): number {
+    return Date.now() - this.lastUpdate;
+  }
+
+  isFresh(): boolean {
+    return this.getAge() < 5 * 60 * 1000; // 5 minutes
+  }
+
+  clear(): void {
+    this.prices.clear();
+    this.lastUpdate = 0;
+  }
+}
+
+// Singleton price cache
+let priceCacheInstance: BitvavoPriceCache | null = null;
+
+function getBitvavoPriceCache(): BitvavoPriceCache {
+  if (!priceCacheInstance) {
+    priceCacheInstance = new BitvavoPriceCache();
+  }
+  return priceCacheInstance;
+}
+
+// ============================================================================
+// BITVAVO PRICE FALLBACK (Inline for Vercel compatibility)
+// ============================================================================
+
+class BitvavoPriceFallback {
+  private lastFetch = 0;
+  private fetchInterval = 30 * 1000; // 30 seconds
+  private prices: Map<string, number> = new Map();
+
+  async fetchPrices(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
+    const now = Date.now();
+    
+    // Don't fetch too frequently
+    if (now - this.lastFetch < this.fetchInterval) {
+      console.log('[Bitvavo] Using cached REST prices');
+      return this.prices;
+    }
+
+    console.log('[Bitvavo] Fetching prices via REST API...');
+
+    try {
+      // Use /markets endpoint
+      const timestamp = now;
+      const message = timestamp + 'GET/v2/markets';
+      const signature = createHmac('sha256', apiSecret)
+        .update(message)
+        .digest('hex');
+
+      const response = await fetch('https://api.bitvavo.com/v2/markets', {
+        method: 'GET',
+        headers: {
+          'Bitvavo-Access-Key': apiKey,
+          'Bitvavo-Access-Timestamp': timestamp.toString(),
+          'Bitvavo-Access-Signature': signature,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const markets: any[] = await response.json();
+      console.log('[Bitvavo] REST API returned', markets.length, 'markets');
+
+      // Parse market pairs
+      for (const market of markets) {
+        if (market.market && market.price) {
+          this.prices.set(market.market, Number(market.price) || 0);
+        }
+      }
+
+      this.lastFetch = now;
+      console.log('[Bitvavo] REST fallback updated:', this.prices.size, 'prices');
+
+      return this.prices;
+    } catch (err) {
+      console.error('[Bitvavo] REST fallback error:', err instanceof Error ? err.message : err);
+      return this.prices;
+    }
+  }
+
+  getCachedPrices(): Map<string, number> {
+    return this.prices;
+  }
+}
+
+// Singleton fallback instance
+let priceFallbackInstance: BitvavoPriceFallback | null = null;
+
+function getBitvavoPriceFallback(): BitvavoPriceFallback {
+  if (!priceFallbackInstance) {
+    priceFallbackInstance = new BitvavoPriceFallback();
+  }
+  return priceFallbackInstance;
+}
+
+// ============================================================================
+
 type ApiRequest = {
   method?: string;
   url?: string;
@@ -462,43 +596,43 @@ class BitvavoConnector implements ExchangeConnector {
    * Subscribes to major currency pairs (BTC-EUR, ETH-EUR, SOL-EUR, USDT-EUR)
    */
   private initializeWebSocket(): void {
-    // Use dynamic import from api directory (available in production)
-    Promise.all([
-      import('./bitvavo-websocket'),
-      import('./bitvavo-priceCache')
-    ])
-      .then(([{ getBitvavaWebSocket }, { getBitvavoPriceCache }]) => {
-        const ws = getBitvavaWebSocket(this.apiKey, this.apiSecret);
-        const cache = getBitvavoPriceCache();
+    // Try to import WebSocket client from api directory
+    // Gracefully degrade if not available (e.g., on Vercel)
+    Promise.resolve()
+      .then(async () => {
+        try {
+          const { getBitvavaWebSocket } = await import('./bitvavo-websocket');
+          const ws = getBitvavaWebSocket(this.apiKey, this.apiSecret);
+          const cache = getBitvavoPriceCache();
 
-        // Connect and subscribe to ticker channel
-        ws.connect()
-          .then(() => {
-            console.log('[Bitvavo] WebSocket connected, subscribing to ticker channels...');
-            
-            // Subscribe to major markets
-            const markets = ['BTC-EUR', 'ETH-EUR', 'SOL-EUR', 'USDT-EUR', 'XRP-EUR', 'ADA-EUR'];
-            for (const market of markets) {
-              ws.subscribeTicker(market, (update) => {
-                // Update price cache with real-time price
-                cache.updatePrice(market, update.price, update.bid, update.ask);
-                console.log(`[Bitvavo] Price update: ${market} = €${update.price.toFixed(4)}`);
-              });
-            }
+          // Connect and subscribe to ticker channel
+          ws.connect()
+            .then(() => {
+              console.log('[Bitvavo] WebSocket connected, subscribing to ticker channels...');
+              
+              // Subscribe to major markets
+              const markets = ['BTC-EUR', 'ETH-EUR', 'SOL-EUR', 'USDT-EUR', 'XRP-EUR', 'ADA-EUR'];
+              for (const market of markets) {
+                ws.subscribeTicker(market, (update) => {
+                  // Update price cache with real-time price
+                  cache.updatePrice(market, update.price);
+                  console.log(`[Bitvavo] Price update: ${market} = €${update.price.toFixed(4)}`);
+                });
+              }
 
-            console.log('[Bitvavo] WebSocket ticker subscriptions active');
-          })
-          .catch(err => {
-            console.error('[Bitvavo] WebSocket connection failed:', err);
+              console.log('[Bitvavo] WebSocket ticker subscriptions active');
+            })
+            .catch(err => {
+              console.warn('[Bitvavo] WebSocket connection deferred:', err instanceof Error ? err.message : err);
+            });
+
+          // Handle WebSocket errors
+          ws.onError((error) => {
+            console.error('[Bitvavo] WebSocket error:', error.message);
           });
-
-        // Handle WebSocket errors
-        ws.onError((error) => {
-          console.error('[Bitvavo] WebSocket error:', error.message);
-        });
-      })
-      .catch(err => {
-        console.error('[Bitvavo] Failed to initialize WebSocket:', err);
+        } catch (err) {
+          console.warn('[Bitvavo] WebSocket not available, will use REST fallback:', err instanceof Error ? err.message : err);
+        }
       });
   }
 
@@ -628,7 +762,6 @@ class BitvavoConnector implements ExchangeConnector {
       
       try {
         // Try to get prices from WebSocket cache first
-        const { getBitvavoPriceCache } = await import('./bitvavo-priceCache');
         const cache = getBitvavoPriceCache();
         const cachedPrices = cache.getAllPrices();
         
@@ -643,7 +776,7 @@ class BitvavoConnector implements ExchangeConnector {
           pricesFromWebSocket = true;
           
           console.log('[Bitvavo] Using prices from WebSocket cache:', {
-            cachedMarkets: Array.from(cachedPrices.keys()).length,
+            cachedMarkets: cachedPrices.size,
             cacheAge: cache.getAge(),
             isFresh: cache.isFresh()
           });
@@ -656,7 +789,6 @@ class BitvavoConnector implements ExchangeConnector {
       if (Object.keys(priceMap).length === 0) {
         try {
           console.log('[Bitvavo] WebSocket cache empty, using REST fallback...');
-          const { getBitvavoPriceFallback } = await import('./bitvavo-priceFallback');
           const fallback = getBitvavoPriceFallback();
           const fallbackPrices = await fallback.fetchPrices(this.apiKey, this.apiSecret);
           
@@ -668,7 +800,7 @@ class BitvavoConnector implements ExchangeConnector {
             }
           }
           
-          console.log('[Bitvavo] Using prices from REST fallback:', Object.keys(priceMap).length, 'markets');
+          console.log('[Bitvavo] Using prices from REST fallback:', Object.keys(priceMap).length, 'assets with prices');
         } catch (err) {
           console.error('[Bitvavo] REST fallback failed:', err instanceof Error ? err.message : err);
           priceMap = {};
