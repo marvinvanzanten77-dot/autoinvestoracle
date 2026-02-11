@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { mockSignals } from '../src/data/mockSignals';
 import { generateDailyReportAgent, type DashboardSnapshot } from './ai/dailyReportAgent';
 import { generateMarketSummary } from './ai/openaiClient';
 import {
@@ -56,9 +55,19 @@ app.use(
 );
 app.use(express.json());
 
-type DashboardState = typeof mockSignals;
+type DashboardState = DashboardSnapshot;
 
-let currentDashboard: DashboardState = { ...mockSignals };
+let currentDashboard: DashboardState = {
+  currentDate: new Date().toISOString().split('T')[0],
+  scanStatus: 'idle',
+  topChance: null,
+  marketSentiment: null,
+  riskLevel: null,
+  topSetups: [],
+  dailySummary: [],
+  warnings: [],
+  userRiskProfile: null
+};
 
 function clamp(val: number, min: number, max: number) {
   return Math.min(Math.max(val, min), max);

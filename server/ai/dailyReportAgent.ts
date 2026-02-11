@@ -1,6 +1,14 @@
-import { mockSignals } from '../../src/data/mockSignals';
-
-export type DashboardSnapshot = typeof mockSignals;
+export interface DashboardSnapshot {
+  currentDate: string;
+  scanStatus: 'live' | 'idle' | 'paused';
+  topChance: { assetName: string; direction: 'up' | 'down'; confidence: number } | null;
+  marketSentiment: { label: string; percentage: number; explanation: string } | null;
+  riskLevel: { label: string; description: string } | null;
+  topSetups: Array<{ name: string; direction: string; confidence: number; horizonText: string; riskLabel: string }>;
+  dailySummary: string[];
+  warnings: string[];
+  userRiskProfile: { label: string; description: string } | null;
+}
 
 /**
  * TODO: OpenAI integratie voorbeeld (niet actief):
