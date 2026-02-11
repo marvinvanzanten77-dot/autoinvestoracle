@@ -1,6 +1,8 @@
 /**
  * Vercel Cron Job - Portfolio Check & Agent Report
  * Runs every hour, generates SELL/REBALANCE suggestions and sends agent report
+ * 
+ * Respects agent status: running, paused, offline
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -26,10 +28,11 @@ export default async (req: any, res: any) => {
   console.log('[Cron] Portfolio check triggered at', new Date().toISOString());
 
   try {
-    // Fetch all user profiles with active portfolios
+    // Fetch all user profiles with active portfolios AND agent status = running
     const { data: profiles, error: profileError } = await supabase
       .from('profiles')
-      .select('user_id, portfolio_data')
+      .select('user_id, portfolio_data, agent_status')
+      .eq('agent_status', 'running') // Only process running agents
       .not('portfolio_data', 'is', null);
 
     if (profileError) {
@@ -42,16 +45,25 @@ export default async (req: any, res: any) => {
         status: 'success',
         message: 'No active portfolios to check',
         processed: 0,
+        skipped: 'No agents in running status',
       });
     }
 
     let processedCount = 0;
     let observationsGenerated = 0;
     let reportsGenerated = 0;
+    let pausedCount = 0;
 
     // Process each user's portfolio
     for (const profile of profiles) {
       try {
+        // Double-check status (in case it changed during execution)
+        if (profile.agent_status !== 'running') {
+          pausedCount++;
+          console.log(`[Cron] Skipping user ${profile.user_id} - status: ${profile.agent_status}`);
+          continue;
+        }
+
         const portfolio = profile.portfolio_data as Array<{
           asset: string;
           balance: number;
@@ -174,7 +186,7 @@ export default async (req: any, res: any) => {
       }
     }
 
-    const summaryMessage = `[CRON SUMMARY] Processed: ${processedCount}, Observations: ${observationsGenerated}, Reports: ${reportsGenerated}`;
+    const summaryMessage = `[CRON SUMMARY] Processed: ${processedCount}, Paused: ${pausedCount}, Observations: ${observationsGenerated}, Reports: ${reportsGenerated}`;
     console.log(summaryMessage);
 
     return res.status(200).json({
@@ -182,6 +194,7 @@ export default async (req: any, res: any) => {
       timestamp: new Date().toISOString(),
       message: 'Portfolio check completed',
       processed: processedCount,
+      paused: pausedCount,
       observationsGenerated,
       reportsGenerated,
     });
