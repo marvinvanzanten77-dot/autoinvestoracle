@@ -285,22 +285,35 @@ export function Exchanges() {
         <div className="grid gap-4 md:grid-cols-2">
           {EXCHANGES.map((exchange) => {
             const connection = connections.find((item) => item.exchange === exchange.id);
+            const isComingSoon = exchange.id !== 'bitvavo'; // Only Bitvavo is ready
+            
             return (
-              <div key={exchange.id} className="rounded-xl border border-slate-200/70 bg-white/70 p-4">
+              <div key={exchange.id} className={`rounded-xl border border-slate-200/70 bg-white/70 p-4 ${isComingSoon ? 'opacity-70' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-subtitle text-slate-900 font-serif">{exchange.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-subtitle text-slate-900 font-serif">{exchange.name}</p>
+                      {isComingSoon && (
+                        <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          Binnenkort
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">API-koppeling</p>
                   </div>
                   <StatusBadge status={connection?.status || 'disconnected'} />
                 </div>
                 <div className="mt-3 text-xs text-slate-500">
-                  {connection?.lastSyncAt
-                    ? `Laatste sync: ${new Date(connection.lastSyncAt).toLocaleString()}`
-                    : 'Nog geen sync uitgevoerd.'}
+                  {isComingSoon ? (
+                    '🔄 Deze exchange wordt nog geïmplementeerd. Volg de updates!'
+                  ) : connection?.lastSyncAt ? (
+                    `Laatste sync: ${new Date(connection.lastSyncAt).toLocaleString()}`
+                  ) : (
+                    'Nog geen sync uitgevoerd.'
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {connection ? (
+                  {!isComingSoon && connection ? (
                     <>
                       <button
                         type="button"
@@ -317,7 +330,7 @@ export function Exchanges() {
                         Verbreek
                       </button>
                     </>
-                  ) : (
+                  ) : !isComingSoon ? (
                     <button
                       type="button"
                       onClick={() => setActiveExchange(exchange)}
@@ -325,8 +338,16 @@ export function Exchanges() {
                     >
                       Verbinden
                     </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="pill border border-slate-300 bg-slate-50 text-slate-400 cursor-not-allowed"
+                    >
+                      Binnenkort beschikbaar
+                    </button>
                   )}
-                  {exchange.supportsOAuth && (
+                  {!isComingSoon && exchange.supportsOAuth && (
                     <span className="text-xs text-slate-400">OAuth in voorbereiding</span>
                   )}
                 </div>

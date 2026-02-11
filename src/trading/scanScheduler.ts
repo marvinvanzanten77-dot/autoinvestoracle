@@ -262,6 +262,14 @@ export async function executeScan(job: ScanJob): Promise<void> {
   // STEP 4: BUILD AGENT CONTEXT
   // ========================================================================
   
+  // Fetch balances with proper filtering (exclude stablecoins/EUR)
+  const agentState = await fetch('http://localhost:5000/api/agent/state?exchange=bitvavo', {
+    headers: {
+      'x-user-id': userId,
+      'Content-Type': 'application/json'
+    }
+  }).then(r => r.json()).catch(() => ({ balances: [] }));
+  
   const agentContext: AgentContext = {
     userId,
     profile: {
@@ -277,9 +285,9 @@ export async function executeScan(job: ScanJob): Promise<void> {
     },
     portfolio: {
       totalValue: snapshot.portfolioValue,
-      balances: [], // TODO: Fetch actual balances from Bitvavo
-      openOrders: [], // TODO: Fetch actual orders
-      openPositions: [] // TODO: Fetch actual positions
+      balances: agentState.balances || [], // Now fetches filtered balances from /api/agent/state
+      openOrders: [], // Bitvavo is for spot trading only; no open positions/derivatives
+      openPositions: [] // Bitvavo spot trading: no open positions
     }
   };
 

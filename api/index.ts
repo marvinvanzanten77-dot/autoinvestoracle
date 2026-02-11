@@ -152,6 +152,31 @@ async function upsertProfile(userId: string, profile: UserProfile) {
     updatedAt: now,
     onboardingComplete: true
   };
+
+  // IMPORTANT: Also save email to Supabase user_profiles table
+  // This ensures email is persisted and can be fetched by email service
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseAnonKey && profile.email) {
+    try {
+      const supabase = getSupabaseClient();
+      await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          email: profile.email,
+          display_name: profile.displayName,
+          updated_at: now
+        })
+        .eq('user_id', userId);
+      console.log(`[API] Saved email for user ${userId} to Supabase`);
+    } catch (err) {
+      console.warn(`[API] Failed to save email to Supabase for user ${userId}:`, err);
+      // Don't fail the entire operation if Supabase save fails
+    }
+  }
+
   // Parallel writes om race conditions te voorkomen
   await Promise.all([
     kv.set(`user:${userId}:profile`, profile),
@@ -1589,6 +1614,7 @@ type Proposal = {
     params: Record<string, any>;
   };
   reasoning: string;
+  confidence?: number; // Optional: proposal confidence score (0-100)
   createdAt: string;
   status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed';
   executedAt?: string;
@@ -2271,6 +2297,97 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon profiel niet opslaan.' });
     }
   },
+  'user/notification-preferences': async (req, res) => {
+    // GET: Fetch user's notification preferences
+    if (req.method === 'GET') {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      try {
+        const supabase = getSupabaseClient();
+        const { data: prefs, error } = await supabase
+          .from('notification_preferences')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (error) {
+          // Preferences don't exist yet - return defaults
+          if (error.code === 'PGRST116') {
+            return res.status(200).json({
+              user_id: userId,
+              email_on_execution: true,
+              email_on_alert: true,
+              email_on_daily_summary: false,
+              sms_on_execution: false,
+              push_on_execution: false,
+              digest_frequency: 'daily'
+            });
+          }
+          throw error;
+        }
+
+        res.status(200).json(prefs);
+      } catch (err) {
+        console.error('[notification-preferences GET] Error:', err);
+        res.status(500).json({ error: 'Kon voorkeuren niet ophalen.' });
+      }
+    }
+    // POST: Update user's notification preferences
+    else if (req.method === 'POST') {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Geen sessie.' });
+        return;
+      }
+      try {
+        const {
+          email_on_execution,
+          email_on_alert,
+          email_on_daily_summary,
+          sms_on_execution,
+          push_on_execution,
+          digest_frequency
+        } = (req.body || {}) as {
+          email_on_execution?: boolean;
+          email_on_alert?: boolean;
+          email_on_daily_summary?: boolean;
+          sms_on_execution?: boolean;
+          push_on_execution?: boolean;
+          digest_frequency?: string;
+        };
+
+        const supabase = getSupabaseClient();
+        const { data: prefs, error } = await supabase
+          .from('notification_preferences')
+          .upsert({
+            user_id: userId,
+            email_on_execution: email_on_execution !== undefined ? email_on_execution : true,
+            email_on_alert: email_on_alert !== undefined ? email_on_alert : true,
+            email_on_daily_summary: email_on_daily_summary !== undefined ? email_on_daily_summary : false,
+            sms_on_execution: sms_on_execution !== undefined ? sms_on_execution : false,
+            push_on_execution: push_on_execution !== undefined ? push_on_execution : false,
+            digest_frequency: digest_frequency || 'daily',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        console.log(`[notification-preferences POST] Updated for user ${userId}`);
+        res.status(200).json(prefs);
+      } catch (err) {
+        console.error('[notification-preferences POST] Error:', err);
+        res.status(500).json({ error: 'Kon voorkeuren niet opslaan.' });
+      }
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
+  },
   chat: async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
@@ -2562,6 +2679,62 @@ const routes: Record<string, Handler> = {
                 proposal.executedAt = new Date().toISOString();
                 (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
+                
+                // Log execution ticket for user notification
+                try {
+                  // Dynamically import to avoid top-level dependency
+                  const { logExecutionTicket } = await import('../src/lib/observation/logger');
+                  await logExecutionTicket(userId, {
+                    proposalId: proposalId,
+                    action: 'buy',
+                    asset: params.to_currency || params.asset || 'BTC',
+                    amount: parseFloat(amountEur),
+                    currency: 'EUR',
+                    orderId: orderId,
+                    confidence: proposal.confidence || 50, // Use proposal confidence if available, fallback to 50
+                    rationale: `Market buy order placed for ${params.to_currency || params.asset || 'BTC'}`
+                  });
+                  console.log('[trading/proposals] Execution ticket logged for user:', userId);
+                } catch (ticketErr) {
+                  console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
+                  // Don't fail the order if ticket logging fails
+                }
+                
+                // Optionally send email notification (async, fire-and-forget)
+                // This will be sent in the background without blocking the response
+                (async () => {
+                  try {
+                    const { sendExecutionEmail, isEmailNotificationEnabled } = await import('../src/lib/notifications/emailService');
+                    
+                    // Check if user has email notifications enabled
+                    const emailEnabled = await isEmailNotificationEnabled(userId, 'execution');
+                    if (!emailEnabled) {
+                      console.log('[trading/proposals] Email notifications disabled for user:', userId);
+                      return;
+                    }
+                    
+                    // Get user email from session/profile
+                    // TODO: Fetch from Supabase user profile
+                    // For now: use a placeholder (in production, fetch real user email)
+                    const userEmail = connection.metadata?.['userEmail'] || `user+${userId.substring(0, 8)}@auto-invest-oracle.com`;
+                    
+                    await sendExecutionEmail({
+                      userId,
+                      userEmail,
+                      asset: params.to_currency || params.asset || 'BTC',
+                      action: 'buy',
+                      amount: parseFloat(amountEur),
+                      currency: 'EUR',
+                      orderId: orderId,
+                      confidence: proposal.confidence || 50 // Use proposal confidence if available
+                    });
+                    console.log('[trading/proposals] Execution email sent for user:', userId);
+                  } catch (emailErr) {
+                    console.warn('[trading/proposals] Could not send execution email:', emailErr);
+                    // Non-critical: don't fail the order
+                  }
+                })();
+                
                 return res.status(200).json({ 
                   success: true,
                   proposal, 
@@ -2599,6 +2772,54 @@ const routes: Record<string, Handler> = {
                 proposal.executedAt = new Date().toISOString();
                 (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
+                
+                // Log execution ticket for user notification
+                try {
+                  const { logExecutionTicket } = await import('../src/lib/observation/logger');
+                  await logExecutionTicket(userId, {
+                    proposalId: proposalId,
+                    action: 'sell',
+                    asset: params.asset || 'BTC',
+                    amount: parseFloat(amountQuote),
+                    currency: 'EUR',
+                    orderId: orderId,
+                    confidence: proposal.confidence || 50, // Use proposal confidence if available
+                    rationale: `Market sell order placed for ${params.asset || 'BTC'}`
+                  });
+                  console.log('[trading/proposals] Execution ticket logged for user:', userId);
+                } catch (ticketErr) {
+                  console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
+                }
+                
+                // Optionally send email notification (async, fire-and-forget)
+                (async () => {
+                  try {
+                    const { sendExecutionEmail, isEmailNotificationEnabled } = await import('../src/lib/notifications/emailService');
+                    
+                    const emailEnabled = await isEmailNotificationEnabled(userId, 'execution');
+                    if (!emailEnabled) {
+                      console.log('[trading/proposals] Email notifications disabled for user:', userId);
+                      return;
+                    }
+                    
+                    const userEmail = connection.metadata?.['userEmail'] || `user+${userId.substring(0, 8)}@auto-invest-oracle.com`;
+                    
+                    await sendExecutionEmail({
+                      userId,
+                      userEmail,
+                      asset: params.asset || 'BTC',
+                      action: 'sell',
+                      amount: parseFloat(amountQuote),
+                      currency: 'EUR',
+                      orderId: orderId,
+                      confidence: proposal.confidence || 50 // Use proposal confidence if available
+                    });
+                    console.log('[trading/proposals] Execution email sent for user:', userId);
+                  } catch (emailErr) {
+                    console.warn('[trading/proposals] Could not send execution email:', emailErr);
+                  }
+                })();
+                
                 return res.status(200).json({ 
                   success: true,
                   proposal, 
@@ -3012,8 +3233,10 @@ const routes: Record<string, Handler> = {
           const creds = decryptSecrets(connection.encryptedSecrets);
           connector.setCredentials({ apiKey: creds.apiKey, apiSecret: creds.apiSecret });
           const balances = await connector.fetchBalances();
+          // Filter out stablecoins/EUR - they're not crypto assets
+          const cryptoBalances = balances.filter(b => !['EUR', 'USDT', 'USDC', 'EURC'].includes(b.asset));
           allBalances.push(
-            ...balances.map((b) => ({
+            ...cryptoBalances.map((b) => ({
               ...b,
               userId,
               exchange: connection.exchange

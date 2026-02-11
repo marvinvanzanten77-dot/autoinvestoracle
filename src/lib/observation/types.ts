@@ -98,7 +98,7 @@ export type Ticket = {
   userId: string;
   
   // Type ticket
-  type: 'observatie' | 'advies' | 'opportuniteit';
+  type: 'observatie' | 'advies' | 'opportuniteit' | 'execution';
   
   // Inhoud
   title: string;
@@ -112,6 +112,7 @@ export type Ticket = {
   // Tracering
   createdAt: string;
   relatedObservationId?: string;
+  relatedProposalId?: string;
   
   // Wat valt op?
   pattern: string; // "Stablecoins stijgen terwijl BTC daalt = risico-afbouw"

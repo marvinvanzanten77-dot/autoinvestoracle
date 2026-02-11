@@ -51,6 +51,67 @@ export async function logTicket(ticket: Ticket): Promise<string> {
   return id;
 }
 
+/**
+ * Log een trade execution ticket - wanneer een automatisch trade-voorstel
+ * succesvol is uitgevoerd en de gebruiker moet op de hoogte worden gesteld.
+ */
+export async function logExecutionTicket(
+  userId: string,
+  execution: {
+    proposalId: string;
+    action: 'buy' | 'sell' | 'hold' | 'wait' | 'close_position' | 'rebalance';
+    asset: string;
+    amount: number;
+    currency: string;
+    orderId: string;
+    confidence: number;
+    rationale?: string;
+  }
+): Promise<string> {
+  const actionLabel = {
+    buy: '🟢 Koop',
+    sell: '🔴 Verkoop',
+    close_position: '⚫ Positie sluiten',
+    rebalance: '🔄 Herbalanceer',
+    hold: '⏸️ Wacht',
+    wait: '⏸️ Observeer'
+  }[execution.action] || execution.action;
+
+  const ticket: Ticket = {
+    id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    userId,
+    type: 'execution',
+    title: `${actionLabel} ${execution.asset}`,
+    description: `Order ${execution.orderId} is succesvol geplaatst.`,
+    confidence: (
+      execution.confidence === 100 ? 'hoog' :
+      execution.confidence >= 50 ? 'middel' :
+      'laag'
+    ) as 'laag' | 'middel' | 'hoog',
+    priority: execution.confidence === 100 ? 'high' : execution.confidence >= 50 ? 'medium' : 'low',
+    validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+    pattern: `${execution.action.toUpperCase()} ${execution.amount} ${execution.asset}`,
+    context: execution.rationale || 'Automatische agent uitvoering',
+    createdAt: new Date().toISOString(),
+    relatedProposalId: execution.proposalId
+  };
+
+  // Add to ticket log
+  const id = ticket.id;
+  ticketLog.set(id, ticket);
+
+  console.log('✅ EXECUTION TICKET GELOGD:', {
+    id,
+    userId,
+    action: execution.action,
+    asset: execution.asset,
+    orderId: execution.orderId,
+    confidence: execution.confidence
+  });
+
+  return id;
+}
+
 export function getObservations(userId: string): MarketObservation[] {
   return Array.from(observationLog.values()).filter(o => o.userId === userId);
 }

@@ -10,31 +10,47 @@ export function TicketsWidget({ userId }: TicketsWidgetProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  // Load tickets function
+  const loadTickets = async (isPolling = false) => {
+    if (!userId) {
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (!isPolling) setLoading(true);
+      const resp = await fetch(`/api/tickets?userId=${userId}`);
+      if (!resp.ok) throw new Error('Kon tickets niet laden');
+      const data = (await resp.json()) as { tickets: Ticket[] };
+      setTickets(data.tickets || []);
+      setError(null);
+      setLastRefresh(new Date());
+    } catch (err) {
+      console.error(err);
+      if (!isPolling) setError('Kon tickets niet laden');
+    } finally {
+      if (!isPolling) setLoading(false);
+    }
+  };
+
+  // Initial load on mount
   useEffect(() => {
-    const loadTickets = async () => {
-      if (!userId) {
-        setTickets([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const resp = await fetch(`/api/tickets?userId=${userId}`);
-        if (!resp.ok) throw new Error('Kon tickets niet laden');
-        const data = (await resp.json()) as { tickets: Ticket[] };
-        setTickets(data.tickets || []);
-        setError(null);
-      } catch (err) {
-        console.error(err);
-        setError('Kon tickets niet laden');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadTickets();
+  }, [userId]);
+
+  // Auto-refresh polling: refresh every 5 seconds
+  useEffect(() => {
+    if (!userId) return;
+
+    // Set up polling interval
+    const pollInterval = setInterval(() => {
+      loadTickets(true); // true = isPolling, so we don't show loading state
+    }, 5000); // 5 seconds
+
+    return () => clearInterval(pollInterval);
   }, [userId]);
 
   const typeColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -52,6 +68,11 @@ export function TicketsWidget({ userId }: TicketsWidgetProps) {
       bg: 'bg-emerald-50',
       border: 'border-emerald-200',
       text: 'text-emerald-700'
+    },
+    execution: {
+      bg: 'bg-green-50',
+      border: 'border-green-300',
+      text: 'text-green-800'
     }
   };
 
@@ -163,19 +184,30 @@ export function TicketsWidget({ userId }: TicketsWidgetProps) {
 
       {/* Summary */}
       <div className="mt-4 pt-4 border-t border-slate-200/60 text-xs text-slate-600">
-        <div className="flex gap-4 flex-wrap">
-          <div>
-            <span className="font-medium">Totaal:</span> {tickets.length} ticket
-            {tickets.length !== 1 ? 's' : ''}
+        <div className="flex gap-4 flex-wrap justify-between items-start">
+          <div className="flex gap-4 flex-wrap">
+            <div>
+              <span className="font-medium">Totaal:</span> {tickets.length} ticket
+              {tickets.length !== 1 ? 's' : ''}
+            </div>
+            <div>
+              <span className="font-medium">Hoog:</span>{' '}
+              {tickets.filter((t) => t.priority === 'high').length}
+            </div>
+            <div>
+              <span className="font-medium">Verlopen:</span>{' '}
+              {tickets.filter((t) => new Date(t.validUntil) < new Date()).length}
+            </div>
           </div>
-          <div>
-            <span className="font-medium">Hoog:</span>{' '}
-            {tickets.filter((t) => t.priority === 'high').length}
-          </div>
-          <div>
-            <span className="font-medium">Verlopen:</span>{' '}
-            {tickets.filter((t) => new Date(t.validUntil) < new Date()).length}
-          </div>
+          {lastRefresh && (
+            <div className="text-slate-400 text-xs">
+              ↻ Vernieuwd op {lastRefresh.toLocaleTimeString('nl-NL', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+              })}
+            </div>
+          )}
         </div>
       </div>
     </Card>

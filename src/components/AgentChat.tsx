@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import type { UnifiedContext } from '../lib/unifiedContextService';
+import { buildUnifiedContextWithCache } from '../lib/unifiedContextService';
+import { parseSettingsIntent, executeSettingsUpdate, describeSettingChange } from '../lib/chatSettingsManager';
+import { triggerMarketScan } from '../lib/marketScanScheduler';
 
 type ChatMessage = {
   id: string;
@@ -15,20 +19,28 @@ interface AgentChatProps {
 
 export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
   const [userId, setUserId] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
+  const [unifiedContext, setUnifiedContext] = useState<UnifiedContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load user session and restore chat history from localStorage
+  // Load user session and build unified context
   useEffect(() => {
     const initSession = async () => {
       try {
         const resp = await fetch('/api/session/init');
         if (resp.ok) {
-          const data = (await resp.json()) as { userId: string };
+          const data = (await resp.json()) as { userId: string; sessionId?: string };
           setUserId(data.userId);
+          const sid = data.sessionId || `session_${Date.now()}`;
+          setSessionId(sid);
+
+          // Build unified context for this user
+          const context = await buildUnifiedContextWithCache(data.userId, sid);
+          setUnifiedContext(context);
 
           // Restore chat history from localStorage
           const storageKey = `agent_chat_${data.userId}_${exchange}`;
@@ -36,11 +48,14 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
           if (storedMessages) {
             try {
               setMessages(JSON.parse(storedMessages));
-              return; // Don't fetch initial analysis if we have stored messages
+              return;
             } catch (e) {
               console.warn('Could not restore agent chat history:', e);
             }
           }
+
+          // Fetch initial analysis
+          await fetchInitialAnalysis();
         }
       } catch (err) {
         console.error('Error initializing session:', err);
@@ -48,12 +63,7 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
     };
 
     if (isOpen) {
-      initSession().then(() => {
-        // Fetch initial analysis only if no stored messages
-        if (messages.length === 0) {
-          fetchInitialAnalysis();
-        }
-      });
+      initSession();
     }
   }, [isOpen]);
 
@@ -95,7 +105,7 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !userId || !unifiedContext) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -109,84 +119,132 @@ export function AgentChat({ exchange, isOpen, onClose }: AgentChatProps) {
     setLoading(true);
 
     try {
-      // SAFETY: Only suggest config changes, never market actions
-      let agentResponse = '';
       const lowerInput = input.toLowerCase();
 
-      // CONFIG_CHAT mode: Parse user intent for parameter suggestions only
-      if (
-        lowerInput.includes('risico') ||
-        lowerInput.includes('risk') ||
-        lowerInput.includes('aggressief') ||
-        lowerInput.includes('voorzichtig')
-      ) {
-        agentResponse =
-          'Je risico-instelling aanpassen: Volgens je huidige instellingen riskeer je momenteel X% per trade. ' +
-          'Je kunt dit verhogen naar 5% voor meer agressief, of verlagen naar 1% voor voorzichtiger. ' +
-          'Welke percentage voorkeur heb je?';
-      } else if (
-        lowerInput.includes('interval') ||
-        lowerInput.includes('check') ||
-        lowerInput.includes('frequentie')
-      ) {
-        agentResponse =
-          'Je check-interval aanpassen: Momenteel check ik je portfolio elke X minuten. ' +
-          'Je kunt dit aanpassen naar 5, 15, 30 minuten of elk uur. ' +
-          'Welke interval past beter voor jou?';
-      } else if (
-        lowerInput.includes('trading') ||
-        lowerInput.includes('auto') ||
-        lowerInput.includes('handel')
-      ) {
-        agentResponse =
-          'Auto-trading instellingen: Ik kan je portefeuille automatisch beheren volgens je regels. ' +
-          'Je kunt instellen hoeveel transacties per dag, risico per trade, en welke strategie. ' +
-          'Wil je meer informatie over trading-instellingen?';
-      } else if (
-        lowerInput.includes('strategie') ||
-        lowerInput.includes('strategy') ||
-        lowerInput.includes('conservatief') ||
-        lowerInput.includes('agressief')
-      ) {
-        agentResponse =
-          'Je handelsstrategie: Momenteel volg je de X strategie. ' +
-          'Je kunt dit wijzigen in conservative (voorzichtig), balanced (gemiddeld), of aggressive (risicovol). ' +
-          'Deze wijziging bepaalt hoe ik je portfolio bewaak.';
-      } else if (lowerInput.includes('status') || lowerInput.includes('wat')) {
-        agentResponse =
-          'Je agent status: Je systeem is actief en functioneert normaal. ' +
-          'Je kunt instellen of je in observatie-modus wilt blijven of trading-modus inschakelen. ' +
-          'Wat wil je aanpassen aan je agent instellingen?';
-      } else if (
-        lowerInput.includes('stop') ||
-        lowerInput.includes('loss') ||
-        lowerInput.includes('veiligheid')
-      ) {
-        agentResponse =
-          'Je veiligheidsmaatregelen: Je hebt dagelijkse verlieslimieten ingesteld, ' +
-          'en je kunt stop-loss aanschakelen om automatisch te stoppen bij bepaalde verliezen. ' +
-          'Welke veiligheidsmaatregel wil je aanpassen?';
-      } else {
-        agentResponse =
-          'Ik kan je helpen met instellingen aanpassen: risico-level, check-interval, ' +
-          'strategie keuze, of veiligheidsmaatregelen. ' +
-          'Wat zou je willen veranderen aan je agent-instellingen?';
+      // ===== HANDLE MARKET SCAN REQUEST =====
+      if (lowerInput.includes('scan') || lowerInput.includes('kijk') || lowerInput.includes('check')) {
+        const scanResult = await triggerMarketScan(userId, exchange);
+        const agentResponse = scanResult
+          ? `✅ Marktcan complete!\nVolatiliteit: ${scanResult.findings.volatility}/100\nSentiment: ${scanResult.findings.sentiment}/100\n${scanResult.findings.observations.join('\n')}`
+          : '❌ Marktscan mislukt. Probeer later opnieuw.';
+        
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            content: agentResponse,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+        setLoading(false);
+        return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
+      // ===== HANDLE SETTINGS CHANGES =====
+      const settingsUpdate = parseSettingsIntent(input, unifiedContext);
+      if (settingsUpdate) {
+        const description = describeSettingChange(settingsUpdate);
+        
+        // Confirm if needed
+        if (settingsUpdate.confirmationRequired) {
+          const confirmMessage = `Wil je dit echt veranderen?\n${description}\n\nReply met "ja" om te bevestigen.`;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              role: 'agent',
+              content: confirmMessage,
+              timestamp: new Date().toISOString()
+            }
+          ]);
+          setLoading(false);
+          return;
+        }
 
-      const agentMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'agent',
-        content: agentResponse,
-        timestamp: new Date().toISOString()
-      };
+        // Execute the update
+        const result = await executeSettingsUpdate(userId, settingsUpdate);
+        const responseMsg = result.success
+          ? `✅ ${result.message}`
+          : `❌ Kon niet bijwerken: ${result.message}`;
 
-      setMessages((prev) => [...prev, agentMessage]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            content: responseMsg,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      // ===== DEFAULT: USE OPENAI CHAT WITH UNIFIED CONTEXT =====
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messages.map((m) => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.content
+          })),
+          context: {
+            profile: unifiedContext.profile,
+            market: unifiedContext.market,
+            exchanges: unifiedContext.exchanges,
+            trading: unifiedContext.trading,
+            dataSources: unifiedContext.dataSources
+          }
+        })
+      });
+
+      if (resp.ok) {
+        const data = (await resp.json()) as { reply: string };
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            content: data.reply,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'agent',
+            content: '❌ Fout bij ophalen van antwoord.',
+            timestamp: new Date().toISOString()
+          }
+        ]);
+      }
     } catch (err) {
       console.error('Error sending message:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'agent',
+          content: '❌ Er is een fout opgetreden.',
+          timestamp: new Date().toISOString()
+        }
+      ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshContext = async () => {
+    if (!userId) return;
+    try {
+      const context = await buildUnifiedContextWithCache(userId, sessionId);
+      setUnifiedContext(context);
+    } catch (err) {
+      console.error('Error refreshing context:', err);
     }
   };
 
