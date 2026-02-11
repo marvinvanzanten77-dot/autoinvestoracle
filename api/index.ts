@@ -452,6 +452,54 @@ class BitvavoConnector implements ExchangeConnector {
     }
     this.apiKey = credentials.apiKey;
     this.apiSecret = credentials.apiSecret;
+    
+    // Initialize WebSocket connection for real-time price updates
+    this.initializeWebSocket();
+  }
+
+  /**
+   * Initialize WebSocket connection for real-time ticker updates
+   * Subscribes to major currency pairs (BTC-EUR, ETH-EUR, SOL-EUR, USDT-EUR)
+   */
+  private initializeWebSocket(): void {
+    // Use dynamic import to avoid circular dependencies
+    Promise.all([
+      import('../src/lib/bitvavo/websocket'),
+      import('../src/lib/bitvavo/priceCache')
+    ])
+      .then(([{ getBitvavaWebSocket }, { getBitvavoPriceCache }]) => {
+        const ws = getBitvavaWebSocket(this.apiKey, this.apiSecret);
+        const cache = getBitvavoPriceCache();
+
+        // Connect and subscribe to ticker channel
+        ws.connect()
+          .then(() => {
+            console.log('[Bitvavo] WebSocket connected, subscribing to ticker channels...');
+            
+            // Subscribe to major markets
+            const markets = ['BTC-EUR', 'ETH-EUR', 'SOL-EUR', 'USDT-EUR', 'XRP-EUR', 'ADA-EUR'];
+            for (const market of markets) {
+              ws.subscribeTicker(market, (update) => {
+                // Update price cache with real-time price
+                cache.updatePrice(market, update.price, update.bid, update.ask);
+                console.log(`[Bitvavo] Price update: ${market} = €${update.price.toFixed(4)}`);
+              });
+            }
+
+            console.log('[Bitvavo] WebSocket ticker subscriptions active');
+          })
+          .catch(err => {
+            console.error('[Bitvavo] WebSocket connection failed:', err);
+          });
+
+        // Handle WebSocket errors
+        ws.onError((error) => {
+          console.error('[Bitvavo] WebSocket error:', error.message);
+        });
+      })
+      .catch(err => {
+        console.error('[Bitvavo] Failed to initialize WebSocket:', err);
+      });
   }
 
   private async makeRequest(method: string, endpoint: string, body?: Record<string, unknown>) {
@@ -572,76 +620,38 @@ class BitvavoConnector implements ExchangeConnector {
           updatedAt: new Date().toISOString()
         }));
 
-      // Step 2: Fetch ticker data using correct /ticker endpoint (not /ticker24h which doesn't exist)
-      let tickerData: any[] = [];
+      // Step 2: Get prices from cache (populated via WebSocket subscriptions)
+      // Note: REST /ticker endpoint is unreliable (returns 404), using cached prices instead
+      // This is the correct Bitvavo architecture: REST for state, WebSocket for prices
+      
+      // Dynamically import price cache (avoid circular deps at top)
+      let priceMap: Record<string, number> = {};
       try {
-        // Fetch all ticker data for price resolution
-        tickerData = await this.makeRequest('GET', '/ticker');
+        // Try to get cached prices from WebSocket updates
+        const { getBitvavoPriceCache } = await import('../src/lib/bitvavo/priceCache');
+        const cache = getBitvavoPriceCache();
+        const cachedPrices = cache.getAllPrices();
         
-        // API returns object with market as key in some cases, convert to array if needed
-        if (tickerData && typeof tickerData === 'object' && !Array.isArray(tickerData)) {
-          tickerData = Object.values(tickerData);
+        // Convert Map to record
+        for (const [market, price] of cachedPrices) {
+          const [base, quote] = market.split('-');
+          if (quote === 'EUR') {
+            priceMap[base] = price;
+          }
         }
         
-        if (!Array.isArray(tickerData)) {
-          console.warn('[Bitvavo] /ticker did not return array, got:', typeof tickerData);
-          tickerData = [];
-        }
-        console.log('[Bitvavo] Raw /ticker response (first 5):', {
-          count: tickerData.length,
-          sample: tickerData.slice(0, 5).map((t: any) => ({
-            market: t.market,
-            last: t.last,
-            bid: t.bid,
-            ask: t.ask
-          }))
+        console.log('[Bitvavo] Using cached prices from WebSocket:', {
+          cachedMarkets: Array.from(cachedPrices.keys()),
+          cacheAge: cache.getAge(),
+          isFresh: cache.isFresh()
         });
       } catch (err) {
-        console.error('[Bitvavo] Could not fetch /ticker:', err);
-        tickerData = [];
+        console.warn('[Bitvavo] Could not load price cache:', err);
+        priceMap = {};
       }
 
-      // Step 3: Build price map from ticker data
-      const priceMap: Record<string, number> = {};
-      let usdtToEurRate = 1.0;
-
-      // First pass: collect EUR prices and USDT rate
-      for (const ticker of tickerData) {
-        if (!ticker.market || !ticker.last) {
-          continue;
-        }
-        const [base, quote] = ticker.market.split('-');
-        const price = Number(ticker.last);
-        
-        if (quote === 'EUR' && price > 0) {
-          priceMap[base] = price;
-          if (base === 'USDT') {
-            usdtToEurRate = price;
-            console.log(`[Bitvavo] Found USDT/EUR rate: ${usdtToEurRate}`);
-          }
-        }
-      }
-
-      // Second pass: convert USDT prices for assets without EUR pair
-      for (const ticker of tickerData) {
-        if (!ticker.market || !ticker.last) {
-          continue;
-        }
-        const [base, quote] = ticker.market.split('-');
-        
-        if (quote === 'USDT' && !priceMap[base]) {
-          const priceUsdt = Number(ticker.last);
-          if (priceUsdt > 0) {
-            priceMap[base] = priceUsdt * usdtToEurRate;
-            console.log(`[Bitvavo] Converted ${base}: ${priceUsdt} USDT × ${usdtToEurRate} = €${priceMap[base].toFixed(4)}`);
-          }
-        }
-      }
-
-      console.log('[Bitvavo] Price map built:', {
-        total_assets: Object.keys(priceMap).length,
-        assets: Object.keys(priceMap).join(', ')
-      });
+      // Step 3: Handle currency conversion (cached USDT→EUR rates)
+      let usdtToEurRate = priceMap['USDT'] || 1.0;
 
       // Step 4: Enhance balances with prices
       const enhancedBalances = balances.map(bal => {
@@ -649,7 +659,7 @@ class BitvavoConnector implements ExchangeConnector {
         const estimatedValue = bal.total * priceEUR;
         
         if (priceEUR === 0) {
-          console.warn(`[Bitvavo] No price found for ${bal.asset}`);
+          console.warn(`[Bitvavo] No cached price for ${bal.asset} - awaiting WebSocket update`);
         } else {
           console.log(`[Bitvavo] ${bal.asset}: qty=${bal.total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)}`);
         }
@@ -663,6 +673,7 @@ class BitvavoConnector implements ExchangeConnector {
 
       console.log('[Bitvavo] fetchBalances complete:', {
         count: enhancedBalances.length,
+        pricesAvailable: Object.keys(priceMap).length,
         assets: enhancedBalances.map(b => `${b.asset}=€${b.priceEUR}`)
       });
 
