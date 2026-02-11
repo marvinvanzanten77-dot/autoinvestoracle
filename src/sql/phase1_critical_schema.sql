@@ -118,8 +118,11 @@ ALTER TABLE execution_outcomes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own outcomes" ON execution_outcomes
   FOR SELECT USING (auth.uid()::text = user_id);
 
-CREATE POLICY "System can insert outcomes" ON execution_outcomes
-  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can insert their own outcomes" ON execution_outcomes
+  FOR INSERT WITH CHECK (auth.uid()::text = user_id);
+
+CREATE POLICY "Users can update their own outcomes" ON execution_outcomes
+  FOR UPDATE USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
 -- =============================================================================
 
@@ -147,10 +150,8 @@ ALTER TABLE pattern_learning ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can view patterns" ON pattern_learning
   FOR SELECT USING (true);
 
-CREATE POLICY "System can update patterns" ON pattern_learning
-  FOR UPDATE USING (true);
-
-CREATE POLICY "System can insert patterns" ON pattern_learning
-  FOR INSERT WITH CHECK (true);
+-- Pattern writes (INSERT/UPDATE) restricted to service-role only
+-- Backend uses SUPABASE_SERVICE_ROLE_KEY to update patterns
+-- This ensures clean, global learning without client-side modifications
 
 -- =============================================================================
