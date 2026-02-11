@@ -572,15 +572,22 @@ class BitvavoConnector implements ExchangeConnector {
           updatedAt: new Date().toISOString()
         }));
 
-      // Step 2: Fetch ticker data (not /markets - that only has metadata, no prices)
+      // Step 2: Fetch ticker data using correct /ticker endpoint (not /ticker24h which doesn't exist)
       let tickerData: any[] = [];
       try {
-        tickerData = await this.makeRequest('GET', '/ticker24h');
+        // Fetch all ticker data for price resolution
+        tickerData = await this.makeRequest('GET', '/ticker');
+        
+        // API returns object with market as key in some cases, convert to array if needed
+        if (tickerData && typeof tickerData === 'object' && !Array.isArray(tickerData)) {
+          tickerData = Object.values(tickerData);
+        }
+        
         if (!Array.isArray(tickerData)) {
-          console.warn('[Bitvavo] /ticker24h did not return array, got:', typeof tickerData);
+          console.warn('[Bitvavo] /ticker did not return array, got:', typeof tickerData);
           tickerData = [];
         }
-        console.log('[Bitvavo] Raw /ticker24h response (first 5):', {
+        console.log('[Bitvavo] Raw /ticker response (first 5):', {
           count: tickerData.length,
           sample: tickerData.slice(0, 5).map((t: any) => ({
             market: t.market,
@@ -590,7 +597,7 @@ class BitvavoConnector implements ExchangeConnector {
           }))
         });
       } catch (err) {
-        console.error('[Bitvavo] Could not fetch /ticker24h:', err);
+        console.error('[Bitvavo] Could not fetch /ticker:', err);
         tickerData = [];
       }
 

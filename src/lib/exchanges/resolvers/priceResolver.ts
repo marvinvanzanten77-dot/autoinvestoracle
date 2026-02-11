@@ -1,7 +1,7 @@
 /**
  * PRICE RESOLVER UTILITY
  * 
- * Intelligently resolves ANY asset to EUR price using available trading pairs.
+ * Intelligently resolves ANY asset to EUR price using real-time ticker data.
  * 
  * Strategy:
  * 1. Build conversion graph from all available pairs (BTC-EUR, SOL-USDT, etc)
@@ -11,19 +11,26 @@
  *    - Multi-hop: XRP-BTC then BTC-EUR ✓
  * 3. Cache all prices (TTL 5 min) for performance
  * 
+ * Integrated with BitvavaDataAggregator for real-time updates via WebSocket.
+ * 
  * Example:
  * ```
- * const resolver = new PriceResolver(marketsData);
+ * const resolver = new PriceResolver(aggregator.getAllData().tickers);
  * const btcPrice = resolver.getPrice('BTC'); // 55699.00 EUR
  * const solPrice = resolver.getPrice('SOL'); // 142.50 EUR (via USDT)
  * ```
  */
 
-export interface MarketData {
+export interface TickerData {
   market: string;      // "BTC-EUR"
-  price: string;       // "55699.00"
-  status: string;
+  price: number;       // 55699.00 (from ticker.last)
+  bid: number;
+  ask: number;
+  timestamp: number;
 }
+
+// Backwards compatibility
+export type MarketData = TickerData;
 
 export interface ConversionPath {
   fromAsset: string;
@@ -40,24 +47,34 @@ export class PriceResolver {
   private conversionGraph: Map<string, Map<string, number>> = new Map(); // base -> quote -> rate
   private targetCurrency = 'EUR';
 
-  constructor(marketsData: MarketData[]) {
-    console.log('[PriceResolver] Initializing with', marketsData.length, 'market pairs');
-    this.buildConversionGraph(marketsData);
+  constructor(tickerData: Map<string, TickerData> | MarketData[]) {
+    let tickers: TickerData[] = [];
+    
+    if (tickerData instanceof Map) {
+      // Convert Map from aggregator to array
+      tickers = Array.from(tickerData.values());
+    } else {
+      // Array format (backwards compatible)
+      tickers = tickerData;
+    }
+    
+    console.log('[PriceResolver] Initializing with', tickers.length, 'market pairs');
+    this.buildConversionGraph(tickers);
     this.logGraphSummary();
   }
 
   /**
-   * Build conversion graph from all available pairs.
+   * Build conversion graph from ticker data.
    * Example: BTC-EUR, SOL-USDT, USDT-EUR creates paths:
    *   BTC -> EUR (direct)
    *   SOL -> USDT -> EUR (indirect)
    */
-  private buildConversionGraph(marketsData: MarketData[]): void {
-    for (const market of marketsData) {
-      if (!market.market || !market.price) continue;
+  private buildConversionGraph(tickerData: TickerData[]): void {
+    for (const ticker of tickerData) {
+      if (!ticker.market || ticker.price === undefined) continue;
 
-      const [base, quote] = market.market.split('-');
-      const rate = Number(market.price);
+      const [base, quote] = ticker.market.split('-');
+      const rate = Number(ticker.price); // Use last price from ticker
 
       // Store bidirectional rates for flexibility
       if (!this.conversionGraph.has(base)) {
