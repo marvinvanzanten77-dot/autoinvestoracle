@@ -71,11 +71,20 @@ class BitvavoPriceFallback {
 
   async fetchPrices(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
     const now = Date.now();
+    const timeSinceLastFetch = now - this.lastFetch;
     
-    // Don't fetch too frequently
-    if (now - this.lastFetch < this.fetchInterval) {
-      console.log('[Bitvavo] Using cached REST prices, cache age:', Math.round((now - this.lastFetch) / 1000), 'sec, prices:', this.prices.size);
+    // Force refresh if cache is empty OR interval has passed
+    const hasValidCache = this.prices.size > 0 && timeSinceLastFetch < this.fetchInterval;
+    
+    if (hasValidCache) {
+      console.log('[Bitvavo] Using cached REST prices, cache age:', Math.round(timeSinceLastFetch / 1000), 'sec, prices:', this.prices.size);
       return this.prices;
+    }
+
+    if (this.prices.size === 0) {
+      console.log('[Bitvavo] Cache empty, forcing refresh...');
+    } else {
+      console.log('[Bitvavo] Cache expired (' + Math.round(timeSinceLastFetch / 1000) + 'sec), refreshing...');
     }
 
     console.log('[Bitvavo] Fetching prices via REST API (discovering markets from /markets)...');
