@@ -580,14 +580,11 @@ class BitvavoConnector implements ExchangeConnector {
           console.warn('[Bitvavo] /markets did not return array');
           marketsData = [];
         }
-        console.log('[Bitvavo] Raw /markets response (first 5):', {
+        console.log('[Bitvavo] Raw /markets response (first 5 with ALL fields):', {
           count: marketsData.length,
           sample: marketsData.slice(0, 5).map((m: any) => ({
             market: m.market,
-            price: m.price,
-            baseAsset: m.baseAsset,
-            quoteAsset: m.quoteAsset,
-            all_keys: Object.keys(m)
+            ...m  // Spread all fields
           }))
         });
       } catch (err) {
