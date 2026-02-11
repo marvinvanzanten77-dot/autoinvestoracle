@@ -462,10 +462,10 @@ class BitvavoConnector implements ExchangeConnector {
    * Subscribes to major currency pairs (BTC-EUR, ETH-EUR, SOL-EUR, USDT-EUR)
    */
   private initializeWebSocket(): void {
-    // Use dynamic import to avoid circular dependencies
+    // Use dynamic import from api directory (available in production)
     Promise.all([
-      import('../src/lib/bitvavo/websocket'),
-      import('../src/lib/bitvavo/priceCache')
+      import('./bitvavo-websocket'),
+      import('./bitvavo-priceCache')
     ])
       .then(([{ getBitvavaWebSocket }, { getBitvavoPriceCache }]) => {
         const ws = getBitvavaWebSocket(this.apiKey, this.apiSecret);
@@ -624,11 +624,11 @@ class BitvavoConnector implements ExchangeConnector {
       // Note: REST /ticker endpoint is unreliable (returns 404), using cached prices instead
       // This is the correct Bitvavo architecture: REST for state, WebSocket for prices
       
-      // Dynamically import price cache (avoid circular deps at top)
+      // Dynamically import price cache from api directory (available in production)
       let priceMap: Record<string, number> = {};
       try {
         // Try to get cached prices from WebSocket updates
-        const { getBitvavoPriceCache } = await import('../src/lib/bitvavo/priceCache');
+        const { getBitvavoPriceCache } = await import('./bitvavo-priceCache');
         const cache = getBitvavoPriceCache();
         const cachedPrices = cache.getAllPrices();
         
