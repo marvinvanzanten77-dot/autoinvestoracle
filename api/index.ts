@@ -549,11 +549,104 @@ class BitvavoConnector implements ExchangeConnector {
 
   async fetchBalances(): Promise<Balance[]> {
     try {
-      // Import the real connector with PriceResolver support
-      const { BitvavoConnector: RealBitvavo } = await import('../src/lib/exchanges/connectors/bitvavo');
-      const realConnector = new RealBitvavo();
-      realConnector.setCredentials({ apiKey: this.apiKey, apiSecret: this.apiSecret });
-      return await realConnector.fetchBalances();
+      // Step 1: Fetch balances
+      const data = await this.makeRequest('GET', '/balance');
+      if (!Array.isArray(data)) {
+        console.error('[Bitvavo] fetchBalances: /balance returned non-array:', typeof data);
+        return [];
+      }
+      
+      const balances = data
+        .filter((bal: any) => {
+          const available = Number(bal.available ?? 0);
+          const held = Number(bal.held ?? 0);
+          return available > 0 || held > 0;
+        })
+        .map((bal: any) => ({
+          id: crypto.randomUUID(),
+          userId: '',
+          exchange: this.id,
+          asset: bal.symbol,
+          total: Number(bal.available ?? 0) + Number(bal.held ?? 0),
+          available: Number(bal.available ?? 0),
+          updatedAt: new Date().toISOString()
+        }));
+
+      // Step 2: Fetch all markets for price resolution
+      let marketsData: any[] = [];
+      try {
+        marketsData = await this.makeRequest('GET', '/markets');
+        if (!Array.isArray(marketsData)) {
+          console.warn('[Bitvavo] /markets did not return array');
+          marketsData = [];
+        }
+      } catch (err) {
+        console.error('[Bitvavo] Could not fetch /markets:', err);
+        marketsData = [];
+      }
+
+      // Step 3: Build price map (simple price resolver inline)
+      const priceMap: Record<string, number> = {};
+      let usdtToEurRate = 1.0;
+
+      // First pass: collect EUR prices and USDT rate
+      for (const market of marketsData) {
+        if (!market.market || !market.price) continue;
+        const [base, quote] = market.market.split('-');
+        const price = Number(market.price);
+        
+        if (quote === 'EUR' && price > 0) {
+          priceMap[base] = price;
+          if (base === 'USDT') {
+            usdtToEurRate = price;
+            console.log(`[Bitvavo] Found USDT/EUR rate: ${usdtToEurRate}`);
+          }
+        }
+      }
+
+      // Second pass: convert USDT prices for assets without EUR pair
+      for (const market of marketsData) {
+        if (!market.market || !market.price) continue;
+        const [base, quote] = market.market.split('-');
+        
+        if (quote === 'USDT' && !priceMap[base]) {
+          const priceUsdt = Number(market.price);
+          if (priceUsdt > 0) {
+            priceMap[base] = priceUsdt * usdtToEurRate;
+            console.log(`[Bitvavo] Converted ${base}: ${priceUsdt} USDT × ${usdtToEurRate} = €${priceMap[base].toFixed(4)}`);
+          }
+        }
+      }
+
+      console.log('[Bitvavo] Price map built:', {
+        total_assets: Object.keys(priceMap).length,
+        assets: Object.keys(priceMap).join(', ')
+      });
+
+      // Step 4: Enhance balances with prices
+      const enhancedBalances = balances.map(bal => {
+        const priceEUR = priceMap[bal.asset] || 0;
+        const estimatedValue = bal.total * priceEUR;
+        
+        if (priceEUR === 0) {
+          console.warn(`[Bitvavo] No price found for ${bal.asset}`);
+        } else {
+          console.log(`[Bitvavo] ${bal.asset}: qty=${bal.total} × €${priceEUR.toFixed(4)} = €${estimatedValue.toFixed(2)}`);
+        }
+
+        return {
+          ...bal,
+          priceEUR,
+          estimatedValue
+        } as Balance;
+      });
+
+      console.log('[Bitvavo] fetchBalances complete:', {
+        count: enhancedBalances.length,
+        assets: enhancedBalances.map(b => `${b.asset}=€${b.priceEUR}`)
+      });
+
+      return enhancedBalances;
     } catch (err) {
       console.error('[Bitvavo API] fetchBalances error:', err);
       return [];
