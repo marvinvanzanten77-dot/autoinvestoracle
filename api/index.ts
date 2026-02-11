@@ -2388,6 +2388,272 @@ const routes: Record<string, Handler> = {
       res.status(405).json({ error: 'Method not allowed' });
     }
   },
+  'user/risk-level': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { riskLevel } = (req.body || {}) as { riskLevel?: string };
+      if (!riskLevel || !['voorzichtig', 'gebalanceerd', 'actief'].includes(riskLevel)) {
+        res.status(400).json({ error: 'Ongeldig risicoprofiel. Gebruik: voorzichtig, gebalanceerd, actief' });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: profile, error: getError } = await supabase
+        .from('user_profiles')
+        .select('risk_profile')
+        .eq('user_id', userId)
+        .single();
+
+      if (getError && getError.code !== 'PGRST116') throw getError;
+
+      const oldValue = profile?.risk_profile || 'gebalanceerd';
+
+      const { data: updated, error } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          risk_profile: riskLevel,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log(`[user/risk-level] Updated for user ${userId}: ${oldValue} → ${riskLevel}`);
+      res.status(200).json({
+        success: true,
+        oldValue,
+        newValue: riskLevel,
+        message: `Risicoprofiel bijgewerkt naar: ${riskLevel}`
+      });
+    } catch (err) {
+      console.error('[user/risk-level] Error:', err);
+      res.status(500).json({ error: 'Kon risicoprofiel niet bijwerken.' });
+    }
+  },
+  'user/scan-interval': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { scanInterval } = (req.body || {}) as { scanInterval?: string };
+      if (!scanInterval || !['1h', '6h', '24h', 'manual'].includes(scanInterval)) {
+        res.status(400).json({ error: 'Ongeldig scan interval. Gebruik: 1h, 6h, 24h, manual' });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: prefs, error: getError } = await supabase
+        .from('notification_preferences')
+        .select('market_scan_interval')
+        .eq('user_id', userId)
+        .single();
+
+      if (getError && getError.code !== 'PGRST116') throw getError;
+
+      const oldValue = prefs?.market_scan_interval || 'manual';
+
+      const { data: updated, error } = await supabase
+        .from('notification_preferences')
+        .upsert({
+          user_id: userId,
+          market_scan_interval: scanInterval,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log(`[user/scan-interval] Updated for user ${userId}: ${oldValue} → ${scanInterval}`);
+      res.status(200).json({
+        success: true,
+        oldValue,
+        newValue: scanInterval,
+        message: `Marktscans ingesteld op: ${scanInterval}`
+      });
+    } catch (err) {
+      console.error('[user/scan-interval] Error:', err);
+      res.status(500).json({ error: 'Kon scan interval niet bijwerken.' });
+    }
+  },
+  'user/strategy': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { strategy } = (req.body || {}) as { strategy?: string };
+      const validStrategies = ['DCA', 'Grid Trading', 'Momentum', 'Buy & Hold'];
+      if (!strategy || !validStrategies.includes(strategy)) {
+        res.status(400).json({ error: `Ongeldig strategie. Kies uit: ${validStrategies.join(', ')}` });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: profile, error: getError } = await supabase
+        .from('user_profiles')
+        .select('strategy')
+        .eq('user_id', userId)
+        .single();
+
+      if (getError && getError.code !== 'PGRST116') throw getError;
+
+      const oldValue = profile?.strategy || 'Buy & Hold';
+
+      const { data: updated, error } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          strategy,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log(`[user/strategy] Updated for user ${userId}: ${oldValue} → ${strategy}`);
+      res.status(200).json({
+        success: true,
+        oldValue,
+        newValue: strategy,
+        message: `Strategie gewijzigd naar: ${strategy}`
+      });
+    } catch (err) {
+      console.error('[user/strategy] Error:', err);
+      res.status(500).json({ error: 'Kon strategie niet bijwerken.' });
+    }
+  },
+  'user/position-size': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { positionSize } = (req.body || {}) as { positionSize?: number };
+      if (positionSize === undefined || positionSize < 1 || positionSize > 100) {
+        res.status(400).json({ error: 'Positiegrootte moet tussen 1 en 100 liggen.' });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: profile, error: getError } = await supabase
+        .from('user_profiles')
+        .select('max_position_size')
+        .eq('user_id', userId)
+        .single();
+
+      if (getError && getError.code !== 'PGRST116') throw getError;
+
+      const oldValue = profile?.max_position_size || 10;
+
+      const { data: updated, error } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          max_position_size: positionSize,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log(`[user/position-size] Updated for user ${userId}: ${oldValue}% → ${positionSize}%`);
+      res.status(200).json({
+        success: true,
+        oldValue,
+        newValue: positionSize,
+        message: `Maximale positiegrootte ingesteld op: ${positionSize}%`
+      });
+    } catch (err) {
+      console.error('[user/position-size] Error:', err);
+      res.status(500).json({ error: 'Kon positiegrootte niet bijwerken.' });
+    }
+  },
+  'user/loss-limit': async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const userId = getSessionUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: 'Geen sessie.' });
+      return;
+    }
+    try {
+      const { lossLimit } = (req.body || {}) as { lossLimit?: number };
+      if (lossLimit === undefined || lossLimit < 0.5 || lossLimit > 10) {
+        res.status(400).json({ error: 'Verliesgrens moet tussen 0.5 en 10 liggen.' });
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const { data: profile, error: getError } = await supabase
+        .from('user_profiles')
+        .select('daily_loss_limit')
+        .eq('user_id', userId)
+        .single();
+
+      if (getError && getError.code !== 'PGRST116') throw getError;
+
+      const oldValue = profile?.daily_loss_limit || 5;
+
+      const { data: updated, error } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          daily_loss_limit: lossLimit,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log(`[user/loss-limit] Updated for user ${userId}: ${oldValue}% → ${lossLimit}%`);
+      res.status(200).json({
+        success: true,
+        oldValue,
+        newValue: lossLimit,
+        message: `Dagelijkse verliesgrens ingesteld op: ${lossLimit}%`
+      });
+    } catch (err) {
+      console.error('[user/loss-limit] Error:', err);
+      res.status(500).json({ error: 'Kon verliesgrens niet bijwerken.' });
+    }
+  },
   chat: async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
