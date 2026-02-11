@@ -572,37 +572,39 @@ class BitvavoConnector implements ExchangeConnector {
           updatedAt: new Date().toISOString()
         }));
 
-      // Step 2: Fetch all markets for price resolution
-      let marketsData: any[] = [];
+      // Step 2: Fetch ticker data (not /markets - that only has metadata, no prices)
+      let tickerData: any[] = [];
       try {
-        marketsData = await this.makeRequest('GET', '/markets');
-        if (!Array.isArray(marketsData)) {
-          console.warn('[Bitvavo] /markets did not return array');
-          marketsData = [];
+        tickerData = await this.makeRequest('GET', '/ticker24h');
+        if (!Array.isArray(tickerData)) {
+          console.warn('[Bitvavo] /ticker24h did not return array, got:', typeof tickerData);
+          tickerData = [];
         }
-        console.log('[Bitvavo] Raw /markets response (first 5 with ALL fields):', {
-          count: marketsData.length,
-          sample: marketsData.slice(0, 5).map((m: any) => ({
-            market: m.market,
-            ...m  // Spread all fields
+        console.log('[Bitvavo] Raw /ticker24h response (first 5):', {
+          count: tickerData.length,
+          sample: tickerData.slice(0, 5).map((t: any) => ({
+            market: t.market,
+            last: t.last,
+            bid: t.bid,
+            ask: t.ask
           }))
         });
       } catch (err) {
-        console.error('[Bitvavo] Could not fetch /markets:', err);
-        marketsData = [];
+        console.error('[Bitvavo] Could not fetch /ticker24h:', err);
+        tickerData = [];
       }
 
-      // Step 3: Build price map (simple price resolver inline)
+      // Step 3: Build price map from ticker data
       const priceMap: Record<string, number> = {};
       let usdtToEurRate = 1.0;
 
       // First pass: collect EUR prices and USDT rate
-      for (const market of marketsData) {
-        if (!market.market || !market.price) {
+      for (const ticker of tickerData) {
+        if (!ticker.market || !ticker.last) {
           continue;
         }
-        const [base, quote] = market.market.split('-');
-        const price = Number(market.price);
+        const [base, quote] = ticker.market.split('-');
+        const price = Number(ticker.last);
         
         if (quote === 'EUR' && price > 0) {
           priceMap[base] = price;
@@ -614,14 +616,14 @@ class BitvavoConnector implements ExchangeConnector {
       }
 
       // Second pass: convert USDT prices for assets without EUR pair
-      for (const market of marketsData) {
-        if (!market.market || !market.price) {
+      for (const ticker of tickerData) {
+        if (!ticker.market || !ticker.last) {
           continue;
         }
-        const [base, quote] = market.market.split('-');
+        const [base, quote] = ticker.market.split('-');
         
         if (quote === 'USDT' && !priceMap[base]) {
-          const priceUsdt = Number(market.price);
+          const priceUsdt = Number(ticker.last);
           if (priceUsdt > 0) {
             priceMap[base] = priceUsdt * usdtToEurRate;
             console.log(`[Bitvavo] Converted ${base}: ${priceUsdt} USDT × ${usdtToEurRate} = €${priceMap[base].toFixed(4)}`);
