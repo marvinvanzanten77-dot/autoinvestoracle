@@ -1,6 +1,6 @@
 /**
  * Vercel Cron Job - Daily Market Scan
- * Runs daily at 8 AM UTC
+ * Runs hourly but respects user's interval setting from database
  */
 
 export default async (req: any, res: any) => {
@@ -12,10 +12,18 @@ export default async (req: any, res: any) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  console.log('[Cron] Daily market scan triggered at', new Date().toISOString());
+  console.log('[Cron] Daily market scan check at', new Date().toISOString());
 
   try {
-    // Fetch market data from CoinGecko
+    // TODO: Fetch user's interval setting from Supabase
+    // const intervalMinutes = await getIntervalFromDatabase();
+    // const lastRun = await getLastRunTimeFromDatabase();
+    // 
+    // if (Date.now() - lastRun < intervalMinutes * 60 * 1000) {
+    //   return res.status(200).json({ status: 'skipped', reason: 'interval not reached' });
+    // }
+
+    // For now: always run
     const resp = await fetch(
       'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana,ethereum&vs_currencies=eur'
     );
@@ -25,9 +33,10 @@ export default async (req: any, res: any) => {
       btc: prices.bitcoin?.eur,
       sol: prices.solana?.eur,
       eth: prices.ethereum?.eur,
+      timestamp: new Date().toISOString(),
     });
 
-    // TODO: Store in database, generate reports, etc
+    // TODO: Store in database, generate reports, update observations
     
     return res.status(200).json({
       status: 'success',
@@ -42,3 +51,4 @@ export default async (req: any, res: any) => {
     });
   }
 };
+
