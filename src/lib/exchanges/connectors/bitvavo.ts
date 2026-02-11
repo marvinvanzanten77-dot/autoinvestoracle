@@ -138,6 +138,23 @@ export class BitvavoConnector implements ExchangeConnector {
         }))
       });
       
+      // Fetch all market prices from Bitvavo
+      let priceMap: Record<string, number> = {};
+      try {
+        const marketsData = await this.makeRequest('GET', '/markets');
+        if (Array.isArray(marketsData)) {
+          marketsData.forEach((market: any) => {
+            if (market.market?.endsWith('-EUR') && market.price) {
+              const asset = market.market.split('-')[0];
+              priceMap[asset] = Number(market.price);
+            }
+          });
+          console.log('[Bitvavo] Fetched prices for assets:', Object.keys(priceMap).join(', '));
+        }
+      } catch (err) {
+        console.warn('[Bitvavo] Could not fetch market prices:', err);
+      }
+      
       // Filter balances: include only those with available > 0 OR held > 0
       const balances = data
         .filter((bal: any) => {
@@ -151,7 +168,12 @@ export class BitvavoConnector implements ExchangeConnector {
           const available = Number(bal.available ?? 0);
           const held = Number(bal.held ?? 0);
           const total = available + held;
-          console.log(`[Bitvavo] Mapped ${bal.symbol}: total=${total}, available=${available}`);
+          
+          // Get price from market data
+          const priceEUR = priceMap[bal.symbol] || 0;
+          const estimatedValue = total * priceEUR;
+          
+          console.log(`[Bitvavo] Mapped ${bal.symbol}: total=${total}, available=${available}, price=€${priceEUR}, value=€${estimatedValue}`);
           return {
             id: crypto.randomUUID(),
             userId: '', // Will be set by caller
@@ -159,12 +181,14 @@ export class BitvavoConnector implements ExchangeConnector {
             asset: bal.symbol,
             total: total,
             available: available,
+            priceEUR: priceEUR,
+            estimatedValue: estimatedValue,
             updatedAt: new Date().toISOString()
           };
         });
       
       console.log(`[Bitvavo] fetchBalances: Final result - ${balances.length} assets with balance`, {
-        assets: balances.map(b => `${b.asset}:${b.available}/${b.total}`)
+        assets: balances.map(b => `${b.asset}:€${b.priceEUR} (€${b.estimatedValue})`)
       });
       return balances;
     } catch (err) {
