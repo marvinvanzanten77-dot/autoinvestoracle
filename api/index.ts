@@ -78,46 +78,61 @@ class BitvavoPriceFallback {
       return this.prices;
     }
 
-    console.log('[Bitvavo] Fetching prices via REST API (public /ticker)...');
+    console.log('[Bitvavo] Fetching prices via REST API (/markets endpoint)...');
 
     try {
-      // Try public /ticker endpoint (no signature required)
-      const response = await fetch('https://api.bitvavo.com/v2/ticker', {
+      // Fetch /markets to get all market symbols
+      const marketsResponse = await fetch('https://api.bitvavo.com/v2/markets', {
         method: 'GET',
       });
 
-      if (!response.ok) {
-        console.warn(`[Bitvavo] /ticker returned HTTP ${response.status}, trying /markets...`);
-        return await this.fetchPricesFromMarkets(apiKey, apiSecret);
+      if (!marketsResponse.ok) {
+        console.warn(`[Bitvavo] /markets public fetch returned HTTP ${marketsResponse.status}`);
+        return await this.fetchPricesFromMarketsAuth(apiKey, apiSecret);
       }
 
-      const tickers: any = await response.json();
-      console.log('[Bitvavo] /ticker returned data');
+      const markets: any = await marketsResponse.json();
+      const marketArray = Array.isArray(markets) ? markets : Object.values(markets);
+      console.log('[Bitvavo] /markets returned', marketArray.length, 'markets');
 
-      // Handle both array and object responses
-      const tickerArray = Array.isArray(tickers) ? tickers : Object.values(tickers);
+      // Extract market symbols and fetch individual prices
+      const symbols = marketArray.map((m: any) => m.market).slice(0, 20); // Limit to 20 to avoid rate limiting
       
-      for (const ticker of tickerArray) {
-        if (typeof ticker !== 'object' || !ticker.market || !ticker.last) continue;
-        
-        const price = Number(ticker.last);
-        if (price > 0) {
-          this.prices.set(ticker.market, price);
+      for (const market of symbols) {
+        try {
+          // Fetch ticker for specific market
+          const tickerResponse = await fetch(`https://api.bitvavo.com/v2/ticker?market=${market}`, {
+            method: 'GET',
+          });
+
+          if (tickerResponse.ok) {
+            const ticker: any = await tickerResponse.json();
+            
+            // Handle single object response (when market parameter is used)
+            if (ticker && typeof ticker === 'object' && ticker.market && ticker.last) {
+              const price = Number(ticker.last);
+              if (price > 0) {
+                this.prices.set(ticker.market, price);
+              }
+            }
+          }
+        } catch (e) {
+          // Skip individual market fetch errors
         }
       }
 
       this.lastFetch = now;
-      console.log('[Bitvavo] REST fallback updated from /ticker:', this.prices.size, 'prices');
+      console.log('[Bitvavo] REST fallback updated:', this.prices.size, 'prices from', symbols.length, 'markets');
 
       return this.prices;
     } catch (err) {
-      console.error('[Bitvavo] /ticker fetch failed:', err instanceof Error ? err.message : err);
-      return await this.fetchPricesFromMarkets(apiKey, apiSecret);
+      console.error('[Bitvavo] /markets fetch failed:', err instanceof Error ? err.message : err);
+      return await this.fetchPricesFromMarketsAuth(apiKey, apiSecret);
     }
   }
 
-  private async fetchPricesFromMarkets(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
-    console.log('[Bitvavo] Falling back to /markets endpoint...');
+  private async fetchPricesFromMarketsAuth(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
+    console.log('[Bitvavo] Falling back to authenticated /markets endpoint...');
 
     try {
       // Use /markets endpoint with signature
