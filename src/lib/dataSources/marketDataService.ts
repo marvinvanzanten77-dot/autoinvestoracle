@@ -56,13 +56,14 @@ export async function getMarketPrices(assets?: string[]): Promise<MarketDataResp
     const cacheData = (await cacheResponse.json()) as any;
     
     if (cacheData.status === 'success' && cacheData.data && Object.keys(cacheData.data).length > 0) {
+      const firstAsset = Object.values(cacheData.data)[0] as any;
       return {
         prices: cacheData.data,
         source: 'cache',
         timestamp: cacheData.timestamp,
         cacheInfo: cacheData.cacheInfo,
-        fearGreedIndex: Object.values(cacheData.data)[0]?.fearGreedIndex as number,
-        fearGreedClassification: Object.values(cacheData.data)[0]?.fearGreedClassification as string,
+        fearGreedIndex: firstAsset?.fearGreedIndex as number,
+        fearGreedClassification: firstAsset?.fearGreedClassification as string,
       };
     }
 
