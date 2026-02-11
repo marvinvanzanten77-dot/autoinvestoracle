@@ -580,6 +580,16 @@ class BitvavoConnector implements ExchangeConnector {
           console.warn('[Bitvavo] /markets did not return array');
           marketsData = [];
         }
+        console.log('[Bitvavo] Raw /markets response (first 5):', {
+          count: marketsData.length,
+          sample: marketsData.slice(0, 5).map((m: any) => ({
+            market: m.market,
+            price: m.price,
+            baseAsset: m.baseAsset,
+            quoteAsset: m.quoteAsset,
+            all_keys: Object.keys(m)
+          }))
+        });
       } catch (err) {
         console.error('[Bitvavo] Could not fetch /markets:', err);
         marketsData = [];
@@ -591,7 +601,9 @@ class BitvavoConnector implements ExchangeConnector {
 
       // First pass: collect EUR prices and USDT rate
       for (const market of marketsData) {
-        if (!market.market || !market.price) continue;
+        if (!market.market || !market.price) {
+          continue;
+        }
         const [base, quote] = market.market.split('-');
         const price = Number(market.price);
         
@@ -606,7 +618,9 @@ class BitvavoConnector implements ExchangeConnector {
 
       // Second pass: convert USDT prices for assets without EUR pair
       for (const market of marketsData) {
-        if (!market.market || !market.price) continue;
+        if (!market.market || !market.price) {
+          continue;
+        }
         const [base, quote] = market.market.split('-');
         
         if (quote === 'USDT' && !priceMap[base]) {
