@@ -5,7 +5,7 @@
  * Inngest calls this to trigger background jobs
  */
 
-import { inngest, dailyMarketScan, portfolioCheck, recordDailyOutcomes } from '@/server/inngest';
+import { inngest, dailyMarketScan, portfolioCheck, recordDailyOutcomes } from '../src/server/inngest';
 import { serve } from 'inngest/vercel';
 
 /**
