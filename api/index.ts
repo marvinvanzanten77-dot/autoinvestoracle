@@ -87,99 +87,67 @@ class BitvavoPriceFallback {
       console.log('[Bitvavo] Cache expired (' + Math.round(timeSinceLastFetch / 1000) + 'sec), refreshing...');
     }
 
-    console.log('[Bitvavo] Fetching prices via REST API (calling /ticker without parameters)...');
+    console.log('[Bitvavo] Fetching prices via /candles endpoint...');
 
     try {
-      // Try calling /ticker without market parameter to get all tickers
-      console.log('[Bitvavo] Calling GET https://api.bitvavo.com/v2/ticker (no parameters)...');
-      const tickerResponse = await fetch('https://api.bitvavo.com/v2/ticker', {
+      // First, get list of markets
+      const marketsResponse = await fetch('https://api.bitvavo.com/v2/markets', {
         method: 'GET',
       });
 
-      console.log('[Bitvavo] /ticker response status:', tickerResponse.status, tickerResponse.ok ? 'OK' : 'ERROR');
+      if (!marketsResponse.ok) {
+        console.warn(`[Bitvavo] /markets returned HTTP ${marketsResponse.status}`);
+        return this.prices;
+      }
+
+      const markets: any = await marketsResponse.json();
+      const marketArray = Array.isArray(markets) ? markets : Object.values(markets);
+      const eurMarkets = marketArray
+        .map((m: any) => m.market)
+        .filter((s: string) => s.includes('-EUR'))
+        .slice(0, 50); // Limit to 50 to avoid too many requests
       
-      if (tickerResponse.ok) {
-        const tickers: any = await tickerResponse.json();
-        const tickerArray = Array.isArray(tickers) ? tickers : Object.values(tickers);
-        console.log('[Bitvavo] /ticker returned array with', tickerArray.length, 'items');
-
-        let successCount = 0;
-        for (const ticker of tickerArray) {
-          if (ticker && typeof ticker === 'object' && ticker.market && ticker.last) {
-            const price = Number(ticker.last);
-            if (price > 0) {
-              this.prices.set(ticker.market, price);
-              successCount++;
-            }
-          }
-        }
-
-        this.lastFetch = now;
-        console.log('[Bitvavo] Successfully parsed', successCount, 'prices from /ticker array, total cache:', this.prices.size);
-
-        if (this.prices.size > 0) {
-          return this.prices;
-        }
-
-        console.warn('[Bitvavo] /ticker returned empty or no valid prices, falling back to authenticated endpoint...');
-      } else {
-        console.warn(`[Bitvavo] /ticker returned HTTP ${tickerResponse.status}, trying authenticated endpoint...`);
-      }
-
-      return await this.fetchPricesAuthenticated(apiKey, apiSecret);
-    } catch (err) {
-      console.error('[Bitvavo] /ticker fetch failed:', err instanceof Error ? err.message : err);
-      return await this.fetchPricesAuthenticated(apiKey, apiSecret);
-    }
-  }
-
-  private async fetchPricesAuthenticated(apiKey: string, apiSecret: string): Promise<Map<string, number>> {
-    console.log('[Bitvavo] Fetching prices via authenticated endpoint...');
-
-    try {
-      // Use authenticated /ticker endpoint
-      const now = Date.now();
-      const message = now + 'GET/v2/ticker';
-      const signature = createHmac('sha256', apiSecret)
-        .update(message)
-        .digest('hex');
-
-      const tickerResponse = await fetch('https://api.bitvavo.com/v2/ticker', {
-        method: 'GET',
-        headers: {
-          'Bitvavo-Access-Key': apiKey,
-          'Bitvavo-Access-Timestamp': now.toString(),
-          'Bitvavo-Access-Signature': signature,
-        },
-      });
-
-      console.log('[Bitvavo] Authenticated /ticker response status:', tickerResponse.status, tickerResponse.ok ? 'OK' : 'ERROR');
-
-      if (!tickerResponse.ok) {
-        throw new Error(`HTTP ${tickerResponse.status}`);
-      }
-
-      const tickers: any = await tickerResponse.json();
-      const tickerArray = Array.isArray(tickers) ? tickers : Object.values(tickers);
-      console.log('[Bitvavo] Authenticated /ticker returned', tickerArray.length, 'tickers');
+      console.log('[Bitvavo] Found', eurMarkets.length, 'EUR markets, fetching latest prices from /candles...');
 
       let successCount = 0;
-      for (const ticker of tickerArray) {
-        if (ticker && typeof ticker === 'object' && ticker.market && ticker.last) {
-          const price = Number(ticker.last);
-          if (price > 0) {
-            this.prices.set(ticker.market, price);
-            successCount++;
+      for (const market of eurMarkets) {
+        try {
+          // Get latest 1-minute candle for this market to get current price
+          const candleResponse = await fetch(
+            `https://api.bitvavo.com/v2/candles?market=${market}&interval=1m&limit=1`,
+            { method: 'GET' }
+          );
+
+          if (candleResponse.ok) {
+            const candles: any = await candleResponse.json();
+            
+            // Candles is an array, get the latest (last) one
+            if (Array.isArray(candles) && candles.length > 0) {
+              const latestCandle = candles[candles.length - 1];
+              const price = Number(latestCandle.close);
+              
+              if (price > 0) {
+                this.prices.set(market, price);
+                successCount++;
+              }
+            }
           }
+        } catch (e) {
+          // Skip individual market errors silently
         }
       }
 
       this.lastFetch = now;
-      console.log('[Bitvavo] Authenticated fallback: successfully fetched', successCount, 'prices, total cache:', this.prices.size);
+      console.log('[Bitvavo] Successfully fetched', successCount, 'prices from /candles, total cache:', this.prices.size);
 
+      if (this.prices.size > 0) {
+        return this.prices;
+      }
+
+      console.warn('[Bitvavo] No prices fetched from /candles, all 50 markets failed');
       return this.prices;
     } catch (err) {
-      console.error('[Bitvavo] Authenticated ticker fallback failed:', err instanceof Error ? err.message : err);
+      console.error('[Bitvavo] /candles fetch failed:', err instanceof Error ? err.message : err);
       return this.prices;
     }
   }
