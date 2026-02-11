@@ -3,7 +3,7 @@
  */
 
 import { Inngest } from 'inngest';
-import { serve } from 'inngest/vercel';
+import { serve } from 'inngest';
 
 // Create Inngest client
 const inngest = new Inngest({
