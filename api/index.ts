@@ -77,91 +77,38 @@ class BitvavoPriceFallback {
     const hasValidCache = this.prices.size > 0 && timeSinceLastFetch < this.fetchInterval;
     
     if (hasValidCache) {
-      console.log('[Bitvavo] Using cached REST prices, cache age:', Math.round(timeSinceLastFetch / 1000), 'sec, prices:', this.prices.size);
       return this.prices;
     }
-
-    if (this.prices.size === 0) {
-      console.log('[Bitvavo] Cache empty, forcing refresh...');
-    } else {
-      console.log('[Bitvavo] Cache expired (' + Math.round(timeSinceLastFetch / 1000) + 'sec), refreshing...');
-    }
-
-    console.log('[Bitvavo] Fetching prices via /candles endpoint...');
 
     try {
-      // First, get list of markets
-      const marketsResponse = await fetch('https://api.bitvavo.com/v2/markets', {
-        method: 'GET',
-      });
+      // Use CoinGecko - simple, reliable, no auth needed
+      const resp = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana,ethereum,ripple,cardano,polkadot,chainlink,dogecoin&vs_currencies=eur'
+      );
 
-      if (!marketsResponse.ok) {
-        console.warn(`[Bitvavo] /markets returned HTTP ${marketsResponse.status}`);
-        return this.prices;
-      }
+      if (resp.ok) {
+        const data: any = await resp.json();
+        
+        // Map CoinGecko to Bitvavo markets
+        const map: Record<string, string> = {
+          bitcoin: 'BTC-EUR', solana: 'SOL-EUR', ethereum: 'ETH-EUR',
+          ripple: 'XRP-EUR', cardano: 'ADA-EUR', polkadot: 'DOT-EUR',
+          chainlink: 'LINK-EUR', dogecoin: 'DOGE-EUR'
+        };
 
-      const markets: any = await marketsResponse.json();
-      const marketArray = Array.isArray(markets) ? markets : Object.values(markets);
-      
-      // DEBUG: Check what fields are in markets response
-      if (marketArray.length > 0) {
-        const sampleFields = Object.keys(marketArray[0]);
-        console.log('[Bitvavo] /markets sample object fields:', sampleFields.join(', '));
-        const hasPriceFields = sampleFields.some(f => f.includes('price') || f.includes('last') || f.includes('tick'));
-        console.log('[Bitvavo] Has price fields:', hasPriceFields);
-        if (hasPriceFields) {
-          console.log('[Bitvavo] Sample market:', JSON.stringify(marketArray[0]).substring(0, 300));
-        }
-      }
-      
-      const eurMarkets = marketArray
-        .map((m: any) => m.market)
-        .filter((s: string) => s.includes('-EUR'))
-        .slice(0, 50); // Limit to 50 to avoid too many requests
-      
-      console.log('[Bitvavo] Found', eurMarkets.length, 'EUR markets, fetching latest prices from /candles...');
-
-      let successCount = 0;
-      for (const market of eurMarkets) {
-        try {
-          // Get latest 1-minute candle for this market to get current price
-          const candleResponse = await fetch(
-            `https://api.bitvavo.com/v2/candles?market=${market}&interval=1m&limit=1`,
-            { method: 'GET' }
-          );
-
-          if (candleResponse.ok) {
-            const candles: any = await candleResponse.json();
-            
-            // Candles is an array, get the latest (last) one
-            if (Array.isArray(candles) && candles.length > 0) {
-              const latestCandle = candles[candles.length - 1];
-              const price = Number(latestCandle.close);
-              
-              if (price > 0) {
-                this.prices.set(market, price);
-                successCount++;
-              }
-            }
+        for (const [id, market] of Object.entries(map)) {
+          if (data[id]?.eur) {
+            this.prices.set(market, Number(data[id].eur));
           }
-        } catch (e) {
-          // Skip individual market errors silently
         }
+
+        this.lastFetch = now;
       }
-
-      this.lastFetch = now;
-      console.log('[Bitvavo] Successfully fetched', successCount, 'prices from /candles, total cache:', this.prices.size);
-
-      if (this.prices.size > 0) {
-        return this.prices;
-      }
-
-      console.warn('[Bitvavo] No prices fetched from /candles, all 50 markets failed');
-      return this.prices;
     } catch (err) {
-      console.error('[Bitvavo] /candles fetch failed:', err instanceof Error ? err.message : err);
-      return this.prices;
+      console.error('[Price] CoinGecko error:', err instanceof Error ? err.message : err);
     }
+
+    return this.prices;
   }
 
   getCachedPrices(): Map<string, number> {
