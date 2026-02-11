@@ -143,16 +143,30 @@ export class BitvavoConnector implements ExchangeConnector {
       try {
         const marketsData = await this.makeRequest('GET', '/markets');
         if (Array.isArray(marketsData)) {
+          console.log('[Bitvavo] /markets endpoint returned:', {
+            total_markets: marketsData.length,
+            sample: marketsData.slice(0, 3).map(m => ({
+              market: m.market,
+              price: m.price,
+              status: m.status
+            }))
+          });
+          
           marketsData.forEach((market: any) => {
             if (market.market?.endsWith('-EUR') && market.price) {
               const asset = market.market.split('-')[0];
-              priceMap[asset] = Number(market.price);
+              const price = Number(market.price);
+              priceMap[asset] = price;
+              console.log(`[Bitvavo] Price for ${asset}: €${price} (from ${market.market})`);
             }
           });
-          console.log('[Bitvavo] Fetched prices for assets:', Object.keys(priceMap).join(', '));
+          console.log('[Bitvavo] FINAL PRICE MAP:', {
+            assets: Object.keys(priceMap),
+            prices: Object.entries(priceMap).map(([k, v]) => `${k}=€${v}`)
+          });
         }
       } catch (err) {
-        console.warn('[Bitvavo] Could not fetch market prices:', err);
+        console.error('[Bitvavo] CRITICAL: Could not fetch market prices:', err);
       }
       
       // Filter balances: include only those with available > 0 OR held > 0
@@ -161,7 +175,9 @@ export class BitvavoConnector implements ExchangeConnector {
           const available = Number(bal.available ?? 0);
           const held = Number(bal.held ?? 0);
           const hasBalance = available > 0 || held > 0;
-          console.log(`[Bitvavo] ${bal.symbol}: available=${available}, held=${held}, included=${hasBalance}`);
+          if (hasBalance) {
+            console.log(`[Bitvavo] ✓ INCLUDE ${bal.symbol}: available=${available}, held=${held}`);
+          }
           return hasBalance;
         })
         .map((bal: any) => {
@@ -173,7 +189,15 @@ export class BitvavoConnector implements ExchangeConnector {
           const priceEUR = priceMap[bal.symbol] || 0;
           const estimatedValue = total * priceEUR;
           
-          console.log(`[Bitvavo] Mapped ${bal.symbol}: total=${total}, available=${available}, price=€${priceEUR}, value=€${estimatedValue}`);
+          console.log(`[Bitvavo] MAP ${bal.symbol}:`, {
+            total_qty: total,
+            available: available,
+            held: held,
+            price_from_market: priceEUR,
+            value_calculation: `${total} × €${priceEUR} = €${estimatedValue}`,
+            estimated_value: estimatedValue
+          });
+          
           return {
             id: crypto.randomUUID(),
             userId: '', // Will be set by caller
