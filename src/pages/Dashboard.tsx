@@ -211,38 +211,7 @@ function WalletCard({ amount, userId, onRefresh }: { amount: number; userId: str
     }
   };
 
-  const handleDebug = async () => {
-    if (!userId) {
-      setTestResult('❌ Geen userId beschikbaar');
-      return;
-    }
-    setLoading(true);
-    try {
-      console.log('[WalletCard] Requesting debug info for userId:', userId);
-      const response = await fetch(`/api/exchanges/debug?userId=${userId}`);
-      const data = (await response.json()) as any;
-      console.log('[WalletCard] Debug response:', data);
-      
-      if (!response.ok) {
-        setTestResult(`❌ Debug error: ${JSON.stringify(data)}`);
-        return;
-      }
 
-      const info = `
-Connections: ${data.connectionsCount}
-${data.connections.map((c: any) => `  - ${c.exchange}: ${c.status} (encrypted secrets: ${c.encryptedSecretsLength} bytes)`).join('\n')}`;
-      
-      setTestResult(data.connectionsCount === 0 
-        ? `⚠️ GEEN CONNECTIES OPGESLAGEN!\n\n${info}\n\nGa naar "Exchange koppelingen" en verbind Bitvavo.`
-        : `Debug info:\n${info}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setTestResult(`❌ Debug error: ${msg}`);
-      console.error('[WalletCard] Debug error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatted = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
@@ -264,14 +233,7 @@ ${data.connections.map((c: any) => `  - ${c.exchange}: ${c.status} (encrypted se
             disabled={loading}
             className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-60"
           >
-          {loading ? 'Testen...' : '🔄 Saldo testen'}
-        </button>
-          <button
-            onClick={handleDebug}
-            disabled={loading}
-            className="text-xs px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition disabled:opacity-60"
-          >
-            {loading ? 'Debug...' : '🔍 Debug'}
+            {loading ? 'Testen...' : '🔄 Saldo testen'}
           </button>
         </div>
 
@@ -406,7 +368,6 @@ function InsightsCard({
 
 function PortfolioCard({ balances }: { balances: Balance[] }) {
   const [expanded, setExpanded] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
   const [performance, setPerformance] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -491,38 +452,6 @@ function PortfolioCard({ balances }: { balances: Balance[] }) {
             <p><strong>Last Updated:</strong> {new Date().toLocaleTimeString('nl-NL')}</p>
           </div>
         )}
-
-        {showDebug && (
-          <div className="rounded-lg bg-slate-900 p-3 text-xs space-y-2 text-slate-100 border border-slate-700 font-mono max-h-96 overflow-auto">
-            <p><strong className="text-amber-400">🐛 DEBUG INFO - BALANCES</strong></p>
-            <button
-              onClick={() => {
-                console.log('=== PORTFOLIO DEBUG ===');
-                console.log('Raw balances (all):', balances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
-                console.log('Filtered (crypto only):', cryptoBalances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
-                console.log('Cash balances (EUR/USDT/USDC):', cashBalances.map(b => ({ asset: b.asset, total: b.total, exchange: b.exchange })));
-                cryptoBalances.forEach(b => {
-                  console.log(`${b.asset}:`, {
-                    total: b.total,
-                    priceEUR: b.priceEUR,
-                    estimatedValue: b.estimatedValue,
-                    calculation: `${b.total} × ${b.priceEUR} = ${b.estimatedValue}`
-                  });
-                });
-                console.log('Total value:', totalValue);
-              }}
-              className="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded text-xs"
-            >
-              📋 Log to Console
-            </button>
-            <div className="bg-slate-950 p-2 rounded border border-slate-700 max-h-60 overflow-auto">
-              <pre className="text-xs whitespace-pre-wrap break-words">
-Raw: {balances.length} | Crypto: {cryptoBalances.length} | Cash: {cashBalances.length}
-{cryptoBalances.map(b => `${b.asset}: qty=${b.total.toFixed(8)} price=€${b.priceEUR?.toFixed(2) || '0.00'} value=€${(b.estimatedValue ?? 0).toFixed(2)}`).join('\n')}
-              </pre>
-            </div>
-          </div>
-        )}
         
         <div className="flex gap-2">
           <button
@@ -530,12 +459,6 @@ Raw: {balances.length} | Crypto: {cryptoBalances.length} | Cash: {cashBalances.l
             className="flex-1 text-xs text-slate-500 hover:text-slate-700 py-1 rounded border border-slate-300 hover:border-slate-400 transition"
           >
             {expanded ? '▼ Details' : '▶ Details'}
-          </button>
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="text-xs text-amber-600 hover:text-amber-700 py-1 px-3 rounded border border-amber-300 hover:border-amber-400 transition font-medium"
-          >
-            {showDebug ? '✕ Debug' : '🐛 Debug'}
           </button>
         </div>
       </div>
