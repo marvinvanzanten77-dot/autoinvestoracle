@@ -75,53 +75,19 @@ export default async (req: any, res: any) => {
       try {
         console.log(`[Cron] Processing user ${userId} (interval: ${interval}m)`);
         
-        // TODO: Generate observations and action suggestions here
-        // For now: just update last_scan_at
-        
-        // Update last_scan_at
-        await supabase
+        // Fetch user profile with portfolio data
+        const { data: fullProfile, error: profileFetchError } = await supabase
           .from('profiles')
-          .update({ agent_last_scan_at: now.toISOString() })
-          .eq('user_id', userId);
+          .select('*')
+          .eq('user_id', userId)
+          .single();
 
-        processed++;
-      } catch (err) {
-        console.error(`[Cron] Error processing user ${userId}:`, err);
-      }
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      message: 'Portfolio check completed',
-      processed,
-      skipped,
-      timestamp: now.toISOString()
-    });
-  } catch (err) {
-    console.error('[Cron] Fatal error:', err);
-    return res.status(500).json({
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Unknown error',
-    });
-  }
-};
-
-    let processedCount = 0;
-    let observationsGenerated = 0;
-    let reportsGenerated = 0;
-    let pausedCount = 0;
-
-    // Process each user's portfolio
-    for (const profile of profiles) {
-      try {
-        // Double-check status (in case it changed during execution)
-        if (profile.agent_status !== 'running') {
-          pausedCount++;
-          console.log(`[Cron] Skipping user ${profile.user_id} - status: ${profile.agent_status}`);
+        if (profileFetchError || !fullProfile) {
+          console.error(`[Cron] Failed to fetch profile for ${userId}:`, profileFetchError);
           continue;
         }
 
-        const portfolio = profile.portfolio_data as Array<{
+        const portfolio = fullProfile.portfolio_data as Array<{
           asset: string;
           balance: number;
           priceEUR: number;
@@ -129,13 +95,17 @@ export default async (req: any, res: any) => {
           entryPrice?: number;
         }>;
 
-        if (!portfolio || portfolio.length === 0) continue;
+        if (!portfolio || portfolio.length === 0) {
+          console.log(`[Cron] No portfolio data for ${userId}, skipping`);
+          continue;
+        }
 
+        // Import observation generators
         const { generatePortfolioObservation, generateAgentReport } = await import('../../src/lib/observation/generator');
         
         // Step 1: Generate portfolio observations (SELL, REBALANCE, STOP-LOSS)
         const observation = await generatePortfolioObservation(
-          profile.user_id,
+          userId,
           portfolio,
           'BTC'
         );
@@ -144,7 +114,7 @@ export default async (req: any, res: any) => {
           const { error: insertObsError } = await supabase
             .from('market_observations')
             .insert({
-              user_id: profile.user_id,
+              user_id: userId,
               timestamp: observation.timestamp,
               range: observation.range || '24h',
               asset_category: observation.assetCategory || 'BTC',
@@ -159,8 +129,7 @@ export default async (req: any, res: any) => {
             });
 
           if (!insertObsError) {
-            observationsGenerated++;
-            console.log(`[Cron] Generated observation for ${profile.user_id}: "${observation.observedBehavior?.substring(0, 60)}..."`);
+            console.log(`[Cron] Generated observation for ${userId}: "${observation.observedBehavior?.substring(0, 60)}..."`);
           }
         }
 
@@ -170,7 +139,7 @@ export default async (req: any, res: any) => {
           : ['Portfolio under monitoring'];
         
         const report = await generateAgentReport(
-          profile.user_id,
+          userId,
           portfolio,
           observationStrings,
           'BTC'
@@ -200,21 +169,16 @@ export default async (req: any, res: any) => {
             });
 
           if (!insertReportError) {
-            reportsGenerated++;
-            
-            // Log the report
-            const logMessage = `[AGENT REPORT ${report.reportedAt}]
+            console.log(`[AGENT REPORT]
 📊 Observations: ${report.summary.observationsCount}
 💡 Suggestions: ${report.summary.suggestionsCount}
 📈 Mood: ${report.agentMood.toUpperCase()}
 🎯 Confidence: ${report.overallConfidence}%
-💬 Action: ${report.recommendedAction}`;
+💬 Action: ${report.recommendedAction}`);
             
-            console.log(logMessage);
-            
-            // Also create a notification if needed
+            // Create notification if needed
             if (report.shouldNotify) {
-              const { error: notifError } = await supabase
+              await supabase
                 .from('notifications')
                 .insert({
                   user_id: report.userId,
@@ -230,36 +194,38 @@ export default async (req: any, res: any) => {
                   created_at: new Date().toISOString(),
                 });
               
-              if (!notifError) {
-                console.log(`[Cron] Created notification for user ${profile.user_id}`);
-              }
+              console.log(`[Cron] Created notification for user ${userId}`);
             }
           }
         }
 
-        processedCount++;
-      } catch (userError) {
-        console.error(`[Cron] Error processing user portfolio:`, userError);
+        // Step 3: Update last_scan_at timestamp
+        await supabase
+          .from('profiles')
+          .update({ agent_last_scan_at: now.toISOString() })
+          .eq('user_id', userId);
+
+        processed++;
+        console.log(`[Cron] ✅ Completed for user ${userId}`);
+      } catch (err) {
+        console.error(`[Cron] Error processing user ${userId}:`, err);
       }
     }
 
-    const summaryMessage = `[CRON SUMMARY] Processed: ${processedCount}, Paused: ${pausedCount}, Observations: ${observationsGenerated}, Reports: ${reportsGenerated}`;
-    console.log(summaryMessage);
+    console.log(`[CRON SUMMARY] Processed: ${processed}, Skipped: ${skipped}`);
 
     return res.status(200).json({
       status: 'success',
-      timestamp: new Date().toISOString(),
       message: 'Portfolio check completed',
-      processed: processedCount,
-      paused: pausedCount,
-      observationsGenerated,
-      reportsGenerated,
+      processed,
+      skipped,
+      timestamp: now.toISOString()
     });
   } catch (err) {
-    console.error('[Cron] Portfolio check failed:', err);
+    console.error('[Cron] Fatal error:', err);
     return res.status(500).json({
       status: 'error',
-      error: err instanceof Error ? err.message : 'Unknown error',
+      message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 };
