@@ -4310,7 +4310,7 @@ const routes: Record<string, Handler> = {
   },
   'agent/settings': async (req, res) => {
     if (req.method === 'GET') {
-      // GET - Retrieve current settings
+      // GET - Retrieve current settings from Supabase
       try {
         const userId = getSessionUserId(req);
         if (!userId) {
@@ -4318,38 +4318,57 @@ const routes: Record<string, Handler> = {
           return;
         }
         
-        const exchange = (req.query?.exchange as string) || 'bitvavo';
-        let settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
-        
-        if (!settings) {
-          // Return default settings if none exist
-          settings = {
-            exchange,
-            apiMode: 'readonly',
-            enabled: true,
-            monitoringInterval: 5,
-            alertOnVolatility: false,
-            volatilityThreshold: 5,
-            analysisDepth: 'basic',
-            autoTrade: false,
-            riskPerTrade: 2,
-            maxDailyLoss: 5,
-            confidenceThreshold: 70,
-            orderLimit: 100,
-            tradingStrategy: 'balanced',
-            enableStopLoss: false,
-            stopLossPercent: 5
-          };
-          console.log('[agent/settings GET] Returning default settings for', exchange);
+        const supabase = getSupabaseClient();
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select(
+            'agent_monitoring_interval,' +
+            'agent_alert_on_volatility,' +
+            'agent_volatility_threshold,' +
+            'agent_analysis_depth,' +
+            'agent_auto_trade,' +
+            'agent_risk_per_trade,' +
+            'agent_max_daily_loss,' +
+            'agent_confidence_threshold,' +
+            'agent_order_limit,' +
+            'agent_trading_strategy,' +
+            'agent_enable_stop_loss,' +
+            'agent_stop_loss_percent'
+          )
+          .eq('user_id', userId)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          throw error;
         }
+
+        // Build settings object from profile or defaults
+        const settings = {
+          exchange: 'bitvavo',
+          apiMode: 'readonly',
+          enabled: true,
+          monitoringInterval: profile?.agent_monitoring_interval ?? 60,
+          alertOnVolatility: profile?.agent_alert_on_volatility ?? false,
+          volatilityThreshold: profile?.agent_volatility_threshold ?? 5,
+          analysisDepth: profile?.agent_analysis_depth ?? 'basic',
+          autoTrade: profile?.agent_auto_trade ?? false,
+          riskPerTrade: profile?.agent_risk_per_trade ?? 2,
+          maxDailyLoss: profile?.agent_max_daily_loss ?? 5,
+          confidenceThreshold: profile?.agent_confidence_threshold ?? 70,
+          orderLimit: profile?.agent_order_limit ?? 100,
+          tradingStrategy: profile?.agent_trading_strategy ?? 'balanced',
+          enableStopLoss: profile?.agent_enable_stop_loss ?? false,
+          stopLossPercent: profile?.agent_stop_loss_percent ?? 5
+        };
         
+        console.log('[agent/settings GET] Retrieved settings for user', userId, 'interval:', settings.monitoringInterval);
         res.status(200).json({ settings });
       } catch (err) {
         console.error('[agent/settings GET] Error:', err);
         res.status(500).json({ error: 'Kon instellingen niet ophalen.' });
       }
     } else if (req.method === 'POST') {
-      // POST - Update settings
+      // POST - Update settings in Supabase
       try {
         const userId = getSessionUserId(req);
         if (!userId) {
@@ -4357,95 +4376,107 @@ const routes: Record<string, Handler> = {
           return;
         }
         
-        console.log('[agent/settings POST] Body received:', req.body);
+        const supabase = getSupabaseClient();
+        const updates = req.body || {};
         
-        const { exchange, ...updates } = (req.body || {}) as {
-          exchange: string;
-          [key: string]: any;
+        console.log('[agent/settings POST] Updating settings for user', userId, 'updates:', Object.keys(updates));
+        
+        // Map frontend field names to database column names
+        const dbUpdates: Record<string, any> = {
+          agent_settings_updated_at: new Date().toISOString()
         };
         
-        console.log('[agent/settings POST] Extracted exchange:', exchange, 'updates:', Object.keys(updates));
-        
-        if (!exchange) {
-          console.error('[agent/settings POST] Missing exchange in body');
-          res.status(400).json({ error: 'exchange is verplicht.' });
-          return;
+        if (updates.monitoringInterval !== undefined) {
+          dbUpdates.agent_monitoring_interval = Math.max(1, Math.min(1440, updates.monitoringInterval));
         }
-        
-        // Get current settings or create defaults if they don't exist
-        const settingsKey = `user:${userId}:agent:${exchange}:settings`;
-        let currentSettings = (await kv.get(settingsKey)) as any;
-        
-        if (!currentSettings) {
-          // Create default settings if they don't exist
-          const defaultSettings = {
-            exchange,
-            apiMode: 'readonly' as const,
-            enabled: true,
-            monitoringInterval: 5,
-            alertOnVolatility: false,
-            volatilityThreshold: 5,
-            analysisDepth: 'basic' as const,
-            autoTrade: false,
-            riskPerTrade: 2,
-            maxDailyLoss: 5,
-            confidenceThreshold: 70,
-            orderLimit: 100,
-            tradingStrategy: 'balanced' as const,
-            enableStopLoss: false,
-            stopLossPercent: 5
-          };
-          await kv.set(settingsKey, defaultSettings);
-          currentSettings = defaultSettings;
-          console.log('[agent/settings POST] Created default settings:', defaultSettings);
+        if (updates.alertOnVolatility !== undefined) {
+          dbUpdates.agent_alert_on_volatility = updates.alertOnVolatility;
         }
-        
-        // VALIDATION: If trying to switch to trading mode, check permissions
-        if (updates.apiMode === 'trading' && currentSettings.apiMode !== 'trading') {
-          // Check if connection has sufficient scopes for trading
-          const storage = getStorageAdapter();
-          const connections = await storage.listConnections(userId);
-          const connection = connections.find(c => c.exchange === exchange && c.status === 'connected');
-          
-          if (!connection) {
-            res.status(400).json({ 
-              error: 'Exchange niet verbonden.',
-              requiresReconnect: true 
-            });
-            return;
-          }
-          
-          // Check if connection was set up with trading mode
-          const connApiMode = connection.metadata?.apiMode || connection.metadata?.agentMode;
-          if (connApiMode === 'readonly') {
-            res.status(403).json({ 
-              error: 'Je API keys hebben onvoldoende rechten voor trading mode. Reconnecteer met keys die trading-rechten hebben.',
-              requiresReconnect: true,
-              hint: 'Zorg dat je API keys BEIDE deze rechten hebben: Account Read, Account Manage (of Trading)'
-            });
-            return;
-          }
+        if (updates.volatilityThreshold !== undefined) {
+          dbUpdates.agent_volatility_threshold = updates.volatilityThreshold;
         }
-        
-        // Merge updates (prevent unsafe changes)
-        const newSettings = {
-          ...currentSettings,
-          ...updates,
-          exchange,  // Always preserve exchange
-          // Ensure autoTrade is consistent with apiMode
-          autoTrade: updates.apiMode === 'trading' ? (updates.autoTrade !== false) : false
+        if (updates.analysisDepth !== undefined) {
+          dbUpdates.agent_analysis_depth = updates.analysisDepth;
+        }
+        if (updates.autoTrade !== undefined) {
+          dbUpdates.agent_auto_trade = updates.autoTrade;
+        }
+        if (updates.riskPerTrade !== undefined) {
+          dbUpdates.agent_risk_per_trade = updates.riskPerTrade;
+        }
+        if (updates.maxDailyLoss !== undefined) {
+          dbUpdates.agent_max_daily_loss = updates.maxDailyLoss;
+        }
+        if (updates.confidenceThreshold !== undefined) {
+          dbUpdates.agent_confidence_threshold = updates.confidenceThreshold;
+        }
+        if (updates.orderLimit !== undefined) {
+          dbUpdates.agent_order_limit = updates.orderLimit;
+        }
+        if (updates.tradingStrategy !== undefined) {
+          dbUpdates.agent_trading_strategy = updates.tradingStrategy;
+        }
+        if (updates.enableStopLoss !== undefined) {
+          dbUpdates.agent_enable_stop_loss = updates.enableStopLoss;
+        }
+        if (updates.stopLossPercent !== undefined) {
+          dbUpdates.agent_stop_loss_percent = updates.stopLossPercent;
+        }
+
+        // Update profile
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update(dbUpdates)
+          .eq('user_id', userId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        // Fetch updated profile to return
+        const { data: profile, error: fetchError } = await supabase
+          .from('profiles')
+          .select(
+            'agent_monitoring_interval,' +
+            'agent_alert_on_volatility,' +
+            'agent_volatility_threshold,' +
+            'agent_analysis_depth,' +
+            'agent_auto_trade,' +
+            'agent_risk_per_trade,' +
+            'agent_max_daily_loss,' +
+            'agent_confidence_threshold,' +
+            'agent_order_limit,' +
+            'agent_trading_strategy,' +
+            'agent_enable_stop_loss,' +
+            'agent_stop_loss_percent'
+          )
+          .eq('user_id', userId)
+          .single();
+
+        if (fetchError) {
+          throw fetchError;
+        }
+
+        const settings = {
+          exchange: 'bitvavo',
+          apiMode: 'readonly',
+          enabled: true,
+          monitoringInterval: profile?.agent_monitoring_interval ?? 60,
+          alertOnVolatility: profile?.agent_alert_on_volatility ?? false,
+          volatilityThreshold: profile?.agent_volatility_threshold ?? 5,
+          analysisDepth: profile?.agent_analysis_depth ?? 'basic',
+          autoTrade: profile?.agent_auto_trade ?? false,
+          riskPerTrade: profile?.agent_risk_per_trade ?? 2,
+          maxDailyLoss: profile?.agent_max_daily_loss ?? 5,
+          confidenceThreshold: profile?.agent_confidence_threshold ?? 70,
+          orderLimit: profile?.agent_order_limit ?? 100,
+          tradingStrategy: profile?.agent_trading_strategy ?? 'balanced',
+          enableStopLoss: profile?.agent_enable_stop_loss ?? false,
+          stopLossPercent: profile?.agent_stop_loss_percent ?? 5
         };
-        
-        // Save updated settings
-        await kv.set(settingsKey, newSettings);
-        
-        // Invalidate cache
-        const stateCache = `agent:state:${userId}:${exchange}`;
-        const intentCache = `agent:intent:${userId}:${exchange}`;
-        await kv.del(stateCache);
-        await kv.del(intentCache);
-        
-        res.status(200).json({ settings: newSettings });
+
+        console.log('[agent/settings POST] Saved settings for user', userId, 'new interval:', settings.monitoringInterval);
+        res.status(200).json({ settings });
       } catch (err) {
         console.error('[agent/settings POST] Error:', err);
         console.error('[agent/settings POST] Error details:', {

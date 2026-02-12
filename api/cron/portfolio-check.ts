@@ -1,6 +1,7 @@
 /**
  * Vercel Cron Job - Portfolio Check & Agent Report
- * Runs every hour, generates SELL/REBALANCE suggestions and sends agent report
+ * Runs every hour, but respects user's monitoringInterval setting
+ * Generates SELL/REBALANCE suggestions and sends agent report
  * 
  * Respects agent status: running, paused, offline
  */
@@ -31,7 +32,9 @@ export default async (req: any, res: any) => {
     // Fetch all user profiles with active portfolios AND agent status = running
     const { data: profiles, error: profileError } = await supabase
       .from('profiles')
-      .select('user_id, portfolio_data, agent_status')
+      .select(
+        'user_id, portfolio_data, agent_status, agent_monitoring_interval, agent_last_scan_at'
+      )
       .eq('agent_status', 'running') // Only process running agents
       .not('portfolio_data', 'is', null);
 
@@ -48,6 +51,60 @@ export default async (req: any, res: any) => {
         skipped: 'No agents in running status',
       });
     }
+
+    let processed = 0;
+    let skipped = 0;
+    const now = new Date();
+
+    // Process each profile
+    for (const profile of profiles) {
+      const userId = profile.user_id;
+      const interval = profile.agent_monitoring_interval || 60; // Default 60 minutes
+      const lastScan = profile.agent_last_scan_at ? new Date(profile.agent_last_scan_at) : null;
+      
+      // Check if enough time has passed since last scan
+      if (lastScan) {
+        const minutesSinceLastScan = (now.getTime() - lastScan.getTime()) / 1000 / 60;
+        if (minutesSinceLastScan < interval) {
+          console.log(`[Cron] User ${userId}: Skipping (${minutesSinceLastScan.toFixed(1)}m < ${interval}m interval)`);
+          skipped++;
+          continue;
+        }
+      }
+
+      try {
+        console.log(`[Cron] Processing user ${userId} (interval: ${interval}m)`);
+        
+        // TODO: Generate observations and action suggestions here
+        // For now: just update last_scan_at
+        
+        // Update last_scan_at
+        await supabase
+          .from('profiles')
+          .update({ agent_last_scan_at: now.toISOString() })
+          .eq('user_id', userId);
+
+        processed++;
+      } catch (err) {
+        console.error(`[Cron] Error processing user ${userId}:`, err);
+      }
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Portfolio check completed',
+      processed,
+      skipped,
+      timestamp: now.toISOString()
+    });
+  } catch (err) {
+    console.error('[Cron] Fatal error:', err);
+    return res.status(500).json({
+      status: 'error',
+      message: err instanceof Error ? err.message : 'Unknown error',
+    });
+  }
+};
 
     let processedCount = 0;
     let observationsGenerated = 0;

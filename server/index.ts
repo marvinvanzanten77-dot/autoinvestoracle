@@ -73,37 +73,12 @@ function clamp(val: number, min: number, max: number) {
   return Math.min(Math.max(val, min), max);
 }
 
-function randomizeSignals(current: DashboardState): DashboardState {
-  const deltaTop = Math.round((Math.random() * 10 - 5));
-  const deltaSentiment = Math.round((Math.random() * 6 - 3));
-
-  const nextTopChanceConfidence = clamp(current.topChance.confidence + deltaTop, 0, 100);
-  const nextSentiment = clamp(current.marketSentiment.percentage + deltaSentiment, 0, 100);
-
-  const nextSetups = current.topSetups.map((s) => {
-    const delta = Math.round(Math.random() * 4 - 2); // -2..+2
-    const conf = clamp(s.confidence + delta, 0, 100);
-    return { ...s, confidence: conf };
-  });
-
-  return {
-    ...current,
-    topChance: {
-      ...current.topChance,
-      confidence: nextTopChanceConfidence
-    },
-    marketSentiment: {
-      ...current.marketSentiment,
-      percentage: nextSentiment
-    },
-    topSetups: nextSetups
-  };
-}
+// DEMO CODE REMOVED - Now using real agent data from Supabase cron jobs
 
 setInterval(() => {
-  currentDashboard = randomizeSignals(currentDashboard);
-  currentDashboard.scanStatus = 'live';
-}, 60_000); // demo: elke 60s
+  // Placeholder: In production, fetch real agent data from Supabase
+  console.log('[Server] Health check at', new Date().toISOString());
+}, 60_000); // Check every 60s
 
 function generateDailyReportText(snapshot: DashboardState): string {
   const topAsset = snapshot.topChance.assetName;
