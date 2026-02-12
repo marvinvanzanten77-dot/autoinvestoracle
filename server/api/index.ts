@@ -12,6 +12,7 @@ import { setupPortfolioRoutes } from './portfolio';
 import { setupMarketRoutes } from './market';
 import { setupExchangeRoutes } from './exchanges';
 import { setupChatRoutes } from './chat';
+import { setupAcademyRoutes } from './academy';
 
 // Import type
 import type { Express } from 'express';
@@ -37,4 +38,7 @@ export function setupApiRoutes(app: Express) {
   
   // Chat routes
   setupChatRoutes(app);
+  
+  // Academy routes
+  setupAcademyRoutes(app);
 }
