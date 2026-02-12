@@ -4,10 +4,10 @@
  */
 
 // UI Components
-export { default as Card } from './ui/Card';
+export { Card } from './ui/Card';
 
 // Layout Components
-export { default as Sidebar } from './layout/Sidebar';
+export { Sidebar } from './layout/Sidebar';
 
 // Common Components
-export { default as ProgressIndicator } from './common/ProgressIndicator';
+export { ProgressIndicator } from './common/ProgressIndicator';

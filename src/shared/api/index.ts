@@ -5,18 +5,18 @@
 
 // Agent
 export * from './agentStatus';
-export * from './agentReports';
+export { setupAgentReportsRoutes } from './agentReports';
 
 // Market
-export * from './marketData';
-export * from './marketScan';
-export * from './marketSummary';
+export { setupMarketDataRoutes } from './marketData';
+export { setupMarketScanRoutes } from './marketScan';
+export { setupMarketSummaryRoutes } from './marketSummary';
 
 // Portfolio
-export * from './portfolioAllocate';
+export { setupPortfolioAllocateRoutes } from './portfolioAllocate';
 
 // Exchanges
-export * from './exchanges';
+export { setupExchangesRoutes } from './exchanges';
 
 // Chat
 export * from './chat';
