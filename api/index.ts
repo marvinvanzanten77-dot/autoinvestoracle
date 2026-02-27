@@ -4168,12 +4168,14 @@ const routes: Record<string, Handler> = {
         return;
       }
 
+      const supabase = getSupabaseClient();
+
       if (req.method === 'GET') {
         const action = req.query?.action as string;
 
         if (action === 'activity-log') {
           const limit = parseInt((req.query?.limit as string) || '20', 10);
-          const { data, error } = await supabaseService.from('agent_activity_log')
+          const { data, error } = await supabase.from('agent_activity_log')
             .select('*')
             .eq('user_id', userId)
             .order('changed_at', { ascending: false })
@@ -4190,7 +4192,7 @@ const routes: Record<string, Handler> = {
         }
 
         // Get current status
-        const { data, error } = await supabaseService
+        const { data, error } = await supabase
           .from('profiles')
           .select('agent_status')
           .eq('user_id', userId)
@@ -4211,7 +4213,7 @@ const routes: Record<string, Handler> = {
 
         if (action === 'toggle') {
           // Toggle between running and paused
-          const { data, error: fetchError } = await supabaseService
+          const { data, error: fetchError } = await supabase
             .from('profiles')
             .select('agent_status')
             .eq('user_id', userId)
@@ -4234,7 +4236,7 @@ const routes: Record<string, Handler> = {
             toggledStatus = 'running';
           }
 
-          const { error: updateError } = await supabaseService
+          const { error: updateError } = await supabase
             .from('profiles')
             .update({
               agent_status: toggledStatus,
@@ -4249,7 +4251,7 @@ const routes: Record<string, Handler> = {
           }
 
           // Log the change
-          await supabaseService
+          await supabase
             .from('agent_activity_log')
             .insert({
               user_id: userId,
@@ -4262,7 +4264,7 @@ const routes: Record<string, Handler> = {
           res.status(200).json({ status: 'success', data: { agentStatus: toggledStatus, action: 'toggled' } });
         } else if (newStatus && ['running', 'paused', 'offline'].includes(newStatus)) {
           // Set specific status
-          const { data: currentData, error: fetchError } = await supabaseService
+          const { data: currentData, error: fetchError } = await supabase
             .from('profiles')
             .select('agent_status')
             .eq('user_id', userId)
@@ -4276,7 +4278,7 @@ const routes: Record<string, Handler> = {
 
           const previousStatus = currentData?.agent_status || 'running';
 
-          const { error: updateError } = await supabaseService
+          const { error: updateError } = await supabase
             .from('profiles')
             .update({
               agent_status: newStatus,
@@ -4291,7 +4293,7 @@ const routes: Record<string, Handler> = {
           }
 
           // Log the change
-          await supabaseService
+          await supabase
             .from('agent_activity_log')
             .insert({
               user_id: userId,
