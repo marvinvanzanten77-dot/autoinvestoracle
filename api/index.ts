@@ -2903,12 +2903,22 @@ const routes: Record<string, Handler> = {
         const pendingKey = `user:${userId}:proposals:pending`;
         const pendingIds = ((await kv.get(pendingKey)) as string[]) || [];
         
+        console.log(`[trading/proposals GET] User: ${userId}, Pending IDs: ${pendingIds.length}`);
+        
         const proposals: Proposal[] = [];
         for (const id of pendingIds) {
           const proposal = (await kv.get(`user:${userId}:proposal:${id}`)) as Proposal | null;
-          if (proposal) proposals.push(proposal);
+          if (proposal) {
+            proposals.push(proposal);
+            console.log(`[trading/proposals GET] Found proposal: ${proposal.asset} ${proposal.action}`);
+          }
         }
         
+        console.log(`[trading/proposals GET] Returning ${proposals.length} proposals for user ${userId}`);
+        
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.status(200).json({ proposals: proposals.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )});
@@ -4724,7 +4734,10 @@ const pushRoutes = {
     }
     try {
       const { userId, subscription } = req.body;
+      console.log(`[Push] Subscribe request from user: ${userId}, subscription endpoint: ${subscription?.endpoint?.substring(0, 50)}...`);
+      
       if (!userId || !subscription) {
+        console.warn('[Push] Missing userId or subscription in request body');
         return res.status(400).json({ error: 'Missing userId or subscription' });
       }
       
@@ -4733,6 +4746,8 @@ const pushRoutes = {
         process.env.VITE_SUPABASE_URL || '',
         process.env.VITE_SUPABASE_ANON_KEY || ''
       );
+      
+      console.log(`[Push] Attempting to save subscription to DB for user: ${userId}`);
       
       const { error } = await supabase
         .from('push_subscriptions')
@@ -4765,7 +4780,7 @@ const pushRoutes = {
         });
       }
 
-      console.log('[Push] Subscription saved for user:', userId);
+      console.log('[Push] ✅ Subscription saved for user:', userId);
       res.status(200).json({ message: 'Subscribed successfully' });
     } catch (err) {
       console.error('[Push] Subscribe error:', err);
