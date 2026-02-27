@@ -4748,8 +4748,21 @@ const pushRoutes = {
         });
 
       if (error) {
-        console.error('[Push] DB error:', error);
-        return res.status(500).json({ error: 'Failed to save subscription' });
+        console.error('[Push] DB error - Full error:', JSON.stringify(error));
+        console.warn('[Push] Hint: The push_subscriptions table may not exist. Run: src/sql/add_push_subscriptions.sql');
+        
+        // Check if it's a table not found error
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          return res.status(500).json({ 
+            error: 'Push subscriptions table not found - database migration needed',
+            hint: 'Execute: src/sql/add_push_subscriptions.sql in Supabase'
+          });
+        }
+        
+        return res.status(500).json({ 
+          error: 'Failed to save subscription',
+          details: error.message 
+        });
       }
 
       console.log('[Push] Subscription saved for user:', userId);
