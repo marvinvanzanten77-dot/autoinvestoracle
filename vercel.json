@@ -12,15 +12,15 @@
   "crons": [
     {
       "path": "/api/cron/market-data-cache",
-      "schedule": "0 2 * * *"
+      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/cron/daily-scan",
-      "schedule": "0 3 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/portfolio-check",
-      "schedule": "0 4 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
