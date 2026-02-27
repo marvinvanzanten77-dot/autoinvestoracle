@@ -355,6 +355,30 @@ export function Trading() {
       }
 
       const data = await resp.json();
+      
+      // Log scan results
+      console.log('📊 SCAN ANALYSIS RESULTS:', {
+        timestamp: data.timestamp,
+        message: data.message
+      });
+      
+      if (data.analysis) {
+        console.log('🎯 MARKET ANALYSIS:');
+        console.log('  Volatility Level:', data.analysis.volatilityLevel);
+        console.log('  Signals:', data.analysis.signals || 'No signals');
+        console.log('  Recommendation:', data.analysis.recommendation);
+      }
+      
+      if (data.market) {
+        console.log('📈 MARKET DATA (24h):');
+        console.log('  Bitcoin:', `${data.market.changes.bitcoin > 0 ? '+' : ''}${data.market.changes.bitcoin.toFixed(2)}%`);
+        console.log('  Ethereum:', `${data.market.changes.ethereum > 0 ? '+' : ''}${data.market.changes.ethereum.toFixed(2)}%`);
+        console.log('  Stablecoins:', `${data.market.changes.stablecoins > 0 ? '+' : ''}${data.market.changes.stablecoins.toFixed(2)}%`);
+        console.log('  Altcoins:', `${data.market.changes.altcoins > 0 ? '+' : ''}${data.market.changes.altcoins.toFixed(2)}%`);
+        console.log('  Volatility:', data.market.volatility.label, '-', data.market.volatility.detail);
+        console.log('  Data Points:', data.market.series?.length || 0);
+      }
+      
       progress.addUpdate('Analyse voltooid', 'Voorstellen genereren...', 75, 'processing');
 
       // Fetch proposals to see what was generated

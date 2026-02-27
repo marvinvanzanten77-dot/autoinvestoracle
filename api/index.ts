@@ -4796,16 +4796,45 @@ const tradingRoutes = {
           series: Array.isArray(market?.series) ? market.series : []
         };
 
-        console.log(`[trading/scan/now] Market scan completed for user ${userId}`, {
-          seriesCount: safeMarket.series.length,
-          volatilityLevel: safeMarket.volatility.level
+        // Analyze market signals
+        const changes = safeMarket.changes;
+        const volatilityLevel = safeMarket.volatility.level;
+        
+        // Generate signals based on price changes
+        const signals = [];
+        if (changes.bitcoin > 2) signals.push('🚀 Bitcoin sterk (> +2%)');
+        if (changes.bitcoin < -2) signals.push('⚠️ Bitcoin zwak (< -2%)');
+        if (changes.ethereum > 2) signals.push('🚀 Ethereum sterk (> +2%)');
+        if (changes.ethereum < -2) signals.push('⚠️ Ethereum zwak (< -2%)');
+        if (volatilityLevel === 'hoog') signals.push('📊 Hoge volatiliteit - risico verhoogd');
+        if (volatilityLevel === 'rustig') signals.push('✅ Rustige markt - stabiele omstandigheden');
+
+        console.log(`[trading/scan/now] Market Analysis for user ${userId}:`, {
+          range: '24h',
+          volatility: {
+            level: volatilityLevel,
+            description: safeMarket.volatility.label
+          },
+          priceChanges: {
+            bitcoin: `${changes.bitcoin > 0 ? '+' : ''}${changes.bitcoin.toFixed(2)}%`,
+            ethereum: `${changes.ethereum > 0 ? '+' : ''}${changes.ethereum.toFixed(2)}%`,
+            stablecoins: `${changes.stablecoins > 0 ? '+' : ''}${changes.stablecoins.toFixed(2)}%`,
+            altcoins: `${changes.altcoins > 0 ? '+' : ''}${changes.altcoins.toFixed(2)}%`
+          },
+          dataPoints: safeMarket.series.length,
+          signals: signals.length > 0 ? signals : ['Geen bijzondere signalen']
         });
         
         res.status(200).json({
           success: true,
           message: 'Manual scan executed successfully',
           timestamp: new Date().toISOString(),
-          market: safeMarket
+          market: safeMarket,
+          analysis: {
+            volatilityLevel,
+            signals: signals.length > 0 ? signals : [],
+            recommendation: generateScanRecommendation(changes, volatilityLevel)
+          }
         });
       } catch (marketErr) {
         console.warn('[trading/scan/now] Market scan failed:', marketErr instanceof Error ? marketErr.message : marketErr);
@@ -4821,6 +4850,11 @@ const tradingRoutes = {
             changes: { bitcoin: 0, ethereum: 0, stablecoins: 0, altcoins: 0 },
             volatility: { level: 'rustig', label: 'Rustig tempo', detail: 'Market data unavailable' },
             series: []
+          },
+          analysis: {
+            volatilityLevel: 'rustig',
+            signals: [],
+            recommendation: 'Market data unavailable - scan could not complete fully'
           }
         });
       }
@@ -4833,6 +4867,28 @@ const tradingRoutes = {
     }
   }
 };
+
+function generateScanRecommendation(changes: any, volatilityLevel: string): string {
+  const avgChange = (Math.abs(changes.bitcoin) + Math.abs(changes.ethereum) + Math.abs(changes.stablecoins) + Math.abs(changes.altcoins)) / 4;
+  
+  if (volatilityLevel === 'hoog') {
+    return 'Hoge volatiliteit gedetecteerd - risicovolle omstandigheden. Voorzichtig benaderen.';
+  }
+  
+  if (avgChange < 0.5) {
+    return 'Stabiele prijzen met minimale beweging - conservatieve trading fase.';
+  }
+  
+  if (changes.bitcoin > 2 || changes.ethereum > 2) {
+    return 'Bullish signalen zichtbaar - overweeg defensieve posities.';
+  }
+  
+  if (changes.bitcoin < -2 || changes.ethereum < -2) {
+    return 'Bearish signalen zichtbaar - overwinstuitnames overwegen.';
+  }
+  
+  return 'Neutrale marktomstandigheden - normaal handelsritme.';
+}
 
 // Merge cron, trading, and push routes into main routes
 Object.assign(routes, cronRoutes);
