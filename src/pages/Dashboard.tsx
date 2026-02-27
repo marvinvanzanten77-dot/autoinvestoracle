@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { NotificationManager } from '../components/NotificationManager';
 import { AgentStatusWidget } from '../components/AgentStatusWidget';
 import { AgentActivityWidget } from '../components/AgentActivityWidget';
 import { dashboardUpdates, volatilityStatus } from '../data/marketUpdates';
@@ -15,11 +16,13 @@ import type { UserProfile } from '../lib/profile/types';
 function DashboardHeader({
   onScan,
   lastScan,
-  volatility
+  volatility,
+  userId
 }: {
   onScan: () => void;
   lastScan: string;
   volatility: MarketScanResponse['volatility'];
+  userId: string;
 }) {
   const isHigh = volatility.level === 'hoog';
   const isMid = volatility.level === 'matig';
@@ -57,6 +60,7 @@ function DashboardHeader({
         >
           Korte check
         </button>
+        {userId && <NotificationManager userId={userId} />}
       </div>
     </div>
   );
@@ -936,7 +940,7 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} />
+      <DashboardHeader onScan={handleScan} lastScan={lastScan} volatility={volatility} userId={userId} />
 
       {/* Agent Status */}
       <AgentStatusWidget />

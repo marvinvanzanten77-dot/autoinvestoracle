@@ -9,6 +9,94 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
+// Import notification functions
+async function sendNotifications(userId: string) {
+  try {
+    const { sendMarketUpdateNotification, sendAccountUpdateNotification, sendActionSuggestionNotification } = 
+      await import('../src/lib/notifications/pushSender.ts');
+    
+    // Fetch market context
+    const market = await getMarketContext();
+    
+    // Send market update
+    await sendMarketUpdateNotification(
+      userId,
+      market.context,
+      market.volatility,
+      market.momentum,
+      market.priceChanges
+    );
+
+    // Send account update
+    const portfolio = await getPortfolioForUser(userId);
+    if (portfolio) {
+      await sendAccountUpdateNotification(
+        userId,
+        portfolio.dayChange,
+        portfolio.total,
+        portfolio.dayChangePercent,
+        portfolio.topAsset
+      );
+    }
+
+    // Send action suggestions based on recent observations
+    const suggestions = await getRecentSuggestions(userId);
+    for (const suggestion of suggestions) {
+      await sendActionSuggestionNotification(
+        userId,
+        suggestion.action,
+        suggestion.asset,
+        suggestion.reason,
+        suggestion.confidence
+      );
+    }
+  } catch (err) {
+    console.error('[Notifications] Error sending notifications:', err);
+  }
+}
+
+async function getMarketContext() {
+  // Simplified market context - in production, fetch from actual market data
+  return {
+    context: 'Stable uptrend forming',
+    volatility: 'matig-volatiel',
+    momentum: 'bullish',
+    priceChanges: {}
+  };
+}
+
+async function getPortfolioForUser(userId: string) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('portfolio_data')
+    .eq('user_id', userId)
+    .single();
+
+  if (!data?.portfolio_data) return null;
+
+  const portfolio = data.portfolio_data;
+  return {
+    dayChange: portfolio.dayChange || 0,
+    total: portfolio.total || 0,
+    dayChangePercent: portfolio.dayChangePercent || 0,
+    topAsset: portfolio.topAsset || null
+  };
+}
+
+async function getRecentSuggestions(userId: string) {
+  const { data } = await supabase
+    .from('agent_reports')
+    .select('suggestions')
+    .eq('user_id', userId)
+    .order('reported_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!data?.suggestions) return [];
+
+  return data.suggestions.slice(0, 2); // Limit to 2 suggestions
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || '',
   process.env.VITE_SUPABASE_ANON_KEY || ''
@@ -196,6 +284,10 @@ export default async (req: any, res: any) => {
               
               console.log(`[Cron] Created notification for user ${userId}`);
             }
+
+            // Send push notifications (market update, account update, action suggestions)
+            console.log(`[Notifications] Sending push notifications for user ${userId}`);
+            await sendNotifications(userId);
           }
         }
 

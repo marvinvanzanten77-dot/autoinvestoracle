@@ -96,23 +96,104 @@ export async function sendPushNotificationBatch(
 }
 
 /**
- * Verzendt trading alert via push notification
+ * Verzendt markt update notification
  */
-export async function sendTradingAlert(userId: string, action: string, asset: string, details?: string) {
+export async function sendMarketUpdateNotification(
+  userId: string,
+  marketContext: string,
+  volatilityLevel: string,
+  momentum: string,
+  priceChanges?: Record<string, number>
+) {
+  const volatilityEmoji = {
+    'laag-volatiel': '😌',
+    'matig-volatiel': '📊',
+    'hoog-volatiel': '⚡'
+  };
+
+  const emoji = volatilityEmoji[volatilityLevel as keyof typeof volatilityEmoji] || '📈';
+
   return sendPushNotification(userId, {
-    title: '📈 Trading Alert',
-    body: `${action} signal detected for ${asset}${details ? ': ' + details : ''}`,
-    tag: `trading-${action}-${asset}`,
+    title: `${emoji} Market Update`,
+    body: `${marketContext} • Volatility: ${volatilityLevel} • Momentum: ${momentum}`,
+    tag: 'market-update',
+    data: {
+      type: 'market-update',
+      marketContext,
+      volatilityLevel,
+      momentum,
+      priceChanges: priceChanges || {},
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+
+/**
+ * Verzendt account analyse notification
+ */
+export async function sendAccountUpdateNotification(
+  userId: string,
+  portfolioChange: number,
+  totalBalance: number,
+  changePercentage: number,
+  topAsset?: string
+) {
+  const trendEmoji = portfolioChange >= 0 ? '📈' : '📉';
+  const direction = portfolioChange >= 0 ? 'up' : 'down';
+  const changeStr = portfolioChange >= 0 ? `+€${portfolioChange.toFixed(2)}` : `€${portfolioChange.toFixed(2)}`;
+
+  return sendPushNotification(userId, {
+    title: `${trendEmoji} Account Update`,
+    body: `Portfolio ${direction} ${changeStr} (${changePercentage >= 0 ? '+' : ''}${changePercentage.toFixed(1)}%) • Total: €${totalBalance.toFixed(2)}${topAsset ? ` • Top: ${topAsset}` : ''}`,
+    tag: 'account-update',
+    data: {
+      type: 'account-update',
+      portfolioChange,
+      totalBalance,
+      changePercentage,
+      topAsset,
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+
+/**
+ * Verzendt action suggestion notification
+ */
+export async function sendActionSuggestionNotification(
+  userId: string,
+  action: 'BUY' | 'SELL' | 'REBALANCE' | 'HOLD' | 'STOP-LOSS',
+  asset: string,
+  reason: string,
+  confidence: number
+) {
+  const actionEmoji = {
+    BUY: '🟢',
+    SELL: '🔴',
+    REBALANCE: '⚖️',
+    HOLD: '⏸️',
+    'STOP-LOSS': '⛔'
+  };
+
+  const emoji = actionEmoji[action];
+  
+  return sendPushNotification(userId, {
+    title: `${emoji} Action Suggested: ${action}`,
+    body: `${asset} - ${reason} (Confidence: ${confidence}%)`,
+    tag: `action-${action}-${asset}`,
     requireInteraction: true,
     data: {
-      type: 'trading-alert',
+      type: 'action-suggestion',
       action,
       asset,
+      reason,
+      confidence,
       timestamp: new Date().toISOString()
     },
     actions: [
-      { action: 'open', title: 'View Details' },
-      { action: 'close', title: 'Dismiss' }
+      { action: 'execute', title: 'Execute' },
+      { action: 'review', title: 'Review' },
+      { action: 'dismiss', title: 'Dismiss' }
     ]
   });
 }
