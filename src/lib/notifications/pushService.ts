@@ -181,8 +181,7 @@ export class PushNotificationService {
         badge: options.badge || '/favicon.png',
         tag: options.tag || 'default',
         requireInteraction: options.requireInteraction || false,
-        data: options.data || {},
-        actions: options.actions || []
+        data: options.data || {}
       });
     } catch (err) {
       console.error('[Push] Show notification error:', err);
