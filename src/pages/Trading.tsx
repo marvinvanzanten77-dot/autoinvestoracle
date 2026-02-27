@@ -366,8 +366,9 @@ export function Trading() {
       const proposalsResp = await fetch(`/api/trading/proposals?userId=${userId}`);
       if (proposalsResp.ok) {
         const proposalsData = await proposalsResp.json();
-        setProposals(proposalsData);
-        progress.addUpdate('Database update', `${proposalsData.length} voorstellen opgeslagen`, 100, 'success');
+        const proposalsArray = proposalsData.proposals || [];
+        setProposals(proposalsArray);
+        progress.addUpdate('Database update', `${proposalsArray.length} voorstellen opgeslagen`, 100, 'success');
       }
 
       progress.finalize(true, 'Scan voltooid');

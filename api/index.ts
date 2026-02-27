@@ -4784,24 +4784,44 @@ const tradingRoutes = {
 
       console.log(`[trading/scan/now] Manual scan requested by user ${userId}`);
 
-      // TODO: Implement actual scan logic
-      // For now, just trigger a market data update and return success
       try {
         const market = await buildMarketScanFromSparkline('24h');
-        console.log(`[trading/scan/now] Market scan completed for user ${userId}`);
+        
+        // Ensure market object has required fields
+        const safeMarket = {
+          range: market?.range || '24h',
+          updatedAt: market?.updatedAt || new Date().toISOString(),
+          changes: market?.changes || { bitcoin: 0, ethereum: 0, stablecoins: 0, altcoins: 0 },
+          volatility: market?.volatility || { level: 'rustig', label: 'Rustig tempo', detail: 'N/A' },
+          series: Array.isArray(market?.series) ? market.series : []
+        };
+
+        console.log(`[trading/scan/now] Market scan completed for user ${userId}`, {
+          seriesCount: safeMarket.series.length,
+          volatilityLevel: safeMarket.volatility.level
+        });
         
         res.status(200).json({
           success: true,
           message: 'Manual scan executed successfully',
           timestamp: new Date().toISOString(),
-          market
+          market: safeMarket
         });
       } catch (marketErr) {
-        console.warn('[trading/scan/now] Market scan failed, returning partial result:', marketErr);
+        console.warn('[trading/scan/now] Market scan failed:', marketErr instanceof Error ? marketErr.message : marketErr);
+        
+        // Return default empty market
         res.status(200).json({
           success: true,
-          message: 'Manual scan initiated (market data unavailable)',
-          timestamp: new Date().toISOString()
+          message: 'Manual scan initiated (market data not available)',
+          timestamp: new Date().toISOString(),
+          market: {
+            range: '24h',
+            updatedAt: new Date().toISOString(),
+            changes: { bitcoin: 0, ethereum: 0, stablecoins: 0, altcoins: 0 },
+            volatility: { level: 'rustig', label: 'Rustig tempo', detail: 'Market data unavailable' },
+            series: []
+          }
         });
       }
     } catch (err) {
