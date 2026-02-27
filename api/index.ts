@@ -4979,6 +4979,73 @@ const tradingRoutes = {
           dataPoints: safeMarket.series.length,
           signals: signals.length > 0 ? signals : ['Geen bijzondere signalen']
         });
+
+        // Generate trading proposals based on market signals
+        const proposals = [];
+        
+        if (changes.bitcoin > 3) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'BTC',
+            action: 'buy',
+            price: 0,
+            amount: 0.01,
+            estimatedValue: 550,
+            confidence: 75,
+            reasoning: 'Bitcoin showing strong bullish momentum (>3%), consider accumulation',
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+        
+        if (changes.ethereum > 2) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'ETH',
+            action: 'buy',
+            price: 0,
+            amount: 0.1,
+            estimatedValue: 350,
+            confidence: 70,
+            reasoning: 'Ethereum showing positive momentum, tactical position suggested',
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        if (volatilityLevel === 'hoog' && (changes.bitcoin < 0 || changes.ethereum < 0)) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'BTC',
+            action: 'sell',
+            price: 0,
+            amount: 0.005,
+            estimatedValue: 275,
+            confidence: 60,
+            reasoning: 'High volatility with negative momentum - risk management suggested',
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        if (proposals.length > 0) {
+          // Save proposals to KV store
+          const pendingIds = proposals.map(p => p.id);
+          await kv.set(`user:${userId}:proposals:pending`, pendingIds);
+          
+          // Save each proposal
+          for (const proposal of proposals) {
+            await kv.set(`user:${userId}:proposal:${proposal.id}`, proposal);
+          }
+          
+          console.log(`[trading/scan/now] Generated ${proposals.length} proposals for user ${userId}`);
+        }
         
         res.status(200).json({
           success: true,
@@ -4989,7 +5056,8 @@ const tradingRoutes = {
             volatilityLevel,
             signals: signals.length > 0 ? signals : [],
             recommendation: generateScanRecommendation(changes, volatilityLevel)
-          }
+          },
+          proposals: proposals.length > 0 ? proposals : []
         });
       } catch (marketErr) {
         console.warn('[trading/scan/now] Market scan failed:', marketErr instanceof Error ? marketErr.message : marketErr);
