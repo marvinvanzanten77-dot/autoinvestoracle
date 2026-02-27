@@ -4160,6 +4160,159 @@ const routes: Record<string, Handler> = {
       res.status(500).json({ error: 'Kon intent niet ophalen.' });
     }
   },
+  'agent-status': async (req, res) => {
+    try {
+      const userId = getSessionUserId(req);
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (req.method === 'GET') {
+        const action = req.query?.action as string;
+
+        if (action === 'activity-log') {
+          const limit = parseInt((req.query?.limit as string) || '20', 10);
+          const { data, error } = await supabaseService.from('agent_activity_log')
+            .select('*')
+            .eq('user_id', userId)
+            .order('changed_at', { ascending: false })
+            .limit(limit);
+
+          if (error) {
+            console.error('[agent-status] Activity log fetch error:', error);
+            res.status(500).json({ error: 'Kon activiteitenlogboek niet ophalen' });
+            return;
+          }
+
+          res.status(200).json({ status: 'success', data: data || [] });
+          return;
+        }
+
+        // Get current status
+        const { data, error } = await supabaseService
+          .from('profiles')
+          .select('agent_status')
+          .eq('user_id', userId)
+          .single();
+
+        if (error) {
+          console.error('[agent-status] Status fetch error:', error);
+          res.status(500).json({ error: 'Kon status niet ophalen' });
+          return;
+        }
+
+        const agentStatus = data?.agent_status || 'running';
+        res.status(200).json({ status: 'success', data: { agentStatus } });
+      } else if (req.method === 'PUT') {
+        const action = req.query?.action as string;
+        const body = req.body as any;
+        const { newStatus, reason } = body;
+
+        if (action === 'toggle') {
+          // Toggle between running and paused
+          const { data, error: fetchError } = await supabaseService
+            .from('profiles')
+            .select('agent_status')
+            .eq('user_id', userId)
+            .single();
+
+          if (fetchError) {
+            console.error('[agent-status] Toggle fetch error:', fetchError);
+            res.status(500).json({ error: 'Kon huidige status niet bepalen' });
+            return;
+          }
+
+          let toggledStatus: string;
+          const current = data?.agent_status || 'running';
+          
+          if (current === 'running') {
+            toggledStatus = 'paused';
+          } else if (current === 'paused') {
+            toggledStatus = 'running';
+          } else {
+            toggledStatus = 'running';
+          }
+
+          const { error: updateError } = await supabaseService
+            .from('profiles')
+            .update({
+              agent_status: toggledStatus,
+              agent_status_changed_at: new Date().toISOString()
+            })
+            .eq('user_id', userId);
+
+          if (updateError) {
+            console.error('[agent-status] Toggle update error:', updateError);
+            res.status(500).json({ error: 'Kon status niet wijzigen' });
+            return;
+          }
+
+          // Log the change
+          await supabaseService
+            .from('agent_activity_log')
+            .insert({
+              user_id: userId,
+              previous_status: current,
+              new_status: toggledStatus,
+              reason: `Toggled from ${current} to ${toggledStatus}`,
+              changed_by: 'user'
+            });
+
+          res.status(200).json({ status: 'success', data: { agentStatus: toggledStatus, action: 'toggled' } });
+        } else if (newStatus && ['running', 'paused', 'offline'].includes(newStatus)) {
+          // Set specific status
+          const { data: currentData, error: fetchError } = await supabaseService
+            .from('profiles')
+            .select('agent_status')
+            .eq('user_id', userId)
+            .single();
+
+          if (fetchError) {
+            console.error('[agent-status] Set fetch error:', fetchError);
+            res.status(500).json({ error: 'Kon huidige status niet bepalen' });
+            return;
+          }
+
+          const previousStatus = currentData?.agent_status || 'running';
+
+          const { error: updateError } = await supabaseService
+            .from('profiles')
+            .update({
+              agent_status: newStatus,
+              agent_status_changed_at: new Date().toISOString()
+            })
+            .eq('user_id', userId);
+
+          if (updateError) {
+            console.error('[agent-status] Set update error:', updateError);
+            res.status(500).json({ error: 'Kon status niet instellen' });
+            return;
+          }
+
+          // Log the change
+          await supabaseService
+            .from('agent_activity_log')
+            .insert({
+              user_id: userId,
+              previous_status: previousStatus,
+              new_status: newStatus,
+              reason: reason || `Changed from ${previousStatus} to ${newStatus}`,
+              changed_by: 'user'
+            });
+
+          res.status(200).json({ status: 'success', data: { agentStatus: newStatus, action: 'set' } });
+        } else {
+          res.status(400).json({ error: 'Invalid newStatus' });
+        }
+      } else {
+        res.status(405).json({ error: 'Method not allowed' });
+      }
+    } catch (err) {
+      console.error('[agent-status] Error:', err);
+      res.status(500).json({ error: 'Agent status error' });
+    }
+  },
   'agent/analyze': async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
