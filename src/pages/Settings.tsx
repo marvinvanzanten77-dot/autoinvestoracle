@@ -31,7 +31,10 @@ export function Settings() {
   });
   const [notifications, setNotifications] = useState({
     dailyEmail: true,
-    volAlerts: true
+    volAlerts: true,
+    marketUpdates: true,
+    accountUpdates: true,
+    actionSuggestions: true
   });
 
   useEffect(() => {
@@ -39,9 +42,12 @@ export function Settings() {
     const stored = localStorage.getItem('aio_settings_v1');
     if (!stored) return;
     try {
-      const parsed = JSON.parse(stored) as { riskProfile?: RiskProfile };
+      const parsed = JSON.parse(stored) as { riskProfile?: RiskProfile; notifications?: typeof notifications };
       if (parsed.riskProfile) {
         setRiskProfile(parsed.riskProfile);
+      }
+      if (parsed.notifications) {
+        setNotifications((current) => ({ ...current, ...parsed.notifications }));
       }
     } catch {
       // ignore invalid storage
@@ -137,10 +143,10 @@ export function Settings() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const payload = JSON.stringify({ riskProfile });
+    const payload = JSON.stringify({ riskProfile, notifications });
     localStorage.setItem('aio_settings_v1', payload);
     window.dispatchEvent(new Event('aio_settings_updated'));
-  }, [riskProfile]);
+  }, [riskProfile, notifications]);
 
   const riskCopy: Record<RiskProfile, string> = {
     Voorzichtig: 'Lage volatiliteit, focus op defensief gedrag en beperkte drawdowns.',
@@ -339,26 +345,70 @@ export function Settings() {
 
       <Card title="Notificaties" subtitle="Blijf op de hoogte">
         <div className="space-y-3 text-sm text-slate-700">
-          <label className="flex items-center justify-between gap-2 cursor-pointer">
-            <span>Dagrapport per e-mail</span>
-            <input
-              type="checkbox"
-              checked={notifications.dailyEmail}
-              onChange={(e) => setNotifications((n) => ({ ...n, dailyEmail: e.target.checked }))}
-              className="h-5 w-10 accent-primary"
-            />
-          </label>
-          <label className="flex items-center justify-between gap-2 cursor-pointer">
-            <span>Waarschuwingen bij hoge volatiliteit</span>
-            <input
-              type="checkbox"
-              checked={notifications.volAlerts}
-              onChange={(e) => setNotifications((n) => ({ ...n, volAlerts: e.target.checked }))}
-              className="h-5 w-10 accent-primary"
-            />
-          </label>
-          <p className="text-xs text-slate-500 pt-1">
-            Notificaties worden lokaal bewaard. Frequentie en tijdstip volgen later.
+          <div className="border-b border-slate-200 pb-3 mb-3">
+            <p className="text-xs font-semibold text-slate-500 mb-2">E-mail notificaties</p>
+            <label className="flex items-center justify-between gap-2 cursor-pointer mb-2">
+              <span>Dagrapport per e-mail</span>
+              <input
+                type="checkbox"
+                checked={notifications.dailyEmail}
+                onChange={(e) => setNotifications((n) => ({ ...n, dailyEmail: e.target.checked }))}
+                className="h-5 w-10 accent-primary"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 cursor-pointer">
+              <span>Waarschuwingen bij hoge volatiliteit</span>
+              <input
+                type="checkbox"
+                checked={notifications.volAlerts}
+                onChange={(e) => setNotifications((n) => ({ ...n, volAlerts: e.target.checked }))}
+                className="h-5 w-10 accent-primary"
+              />
+            </label>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 mb-2">Push notificaties (browser & telefoon)</p>
+            <label className="flex items-center justify-between gap-2 cursor-pointer mb-2">
+              <div>
+                <span>📊 Marktupdate notificaties</span>
+                <p className="text-xs text-slate-500 mt-0.5">Volatiliteit, momentum en prijsveranderingen</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifications.marketUpdates}
+                onChange={(e) => setNotifications((n) => ({ ...n, marketUpdates: e.target.checked }))}
+                className="h-5 w-10 accent-primary flex-shrink-0"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 cursor-pointer mb-2">
+              <div>
+                <span>💼 Accountwijziging notificaties</span>
+                <p className="text-xs text-slate-500 mt-0.5">Portefeuillewijzigingen en saldoupdates</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifications.accountUpdates}
+                onChange={(e) => setNotifications((n) => ({ ...n, accountUpdates: e.target.checked }))}
+                className="h-5 w-10 accent-primary flex-shrink-0"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 cursor-pointer">
+              <div>
+                <span>🎯 Handelingsvoorstel notificaties</span>
+                <p className="text-xs text-slate-500 mt-0.5">BUY/SELL/REBALANCE signalen met betrouwbaarheid</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifications.actionSuggestions}
+                onChange={(e) => setNotifications((n) => ({ ...n, actionSuggestions: e.target.checked }))}
+                className="h-5 w-10 accent-primary flex-shrink-0"
+              />
+            </label>
+          </div>
+
+          <p className="text-xs text-slate-500 pt-2 border-t border-slate-200">
+            💡 Tip: Zet push notificaties aan in Dashboard om ze op je telefoon/browser te ontvangen.
           </p>
         </div>
       </Card>
