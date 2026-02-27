@@ -4196,7 +4196,7 @@ const routes: Record<string, Handler> = {
           .from('profiles')
           .select('agent_status')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error('[agent-status] Status fetch error:', error);
@@ -4217,7 +4217,7 @@ const routes: Record<string, Handler> = {
             .from('profiles')
             .select('agent_status')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
           if (fetchError) {
             console.error('[agent-status] Toggle fetch error:', fetchError);
@@ -4268,7 +4268,7 @@ const routes: Record<string, Handler> = {
             .from('profiles')
             .select('agent_status')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
           if (fetchError) {
             console.error('[agent-status] Set fetch error:', fetchError);
