@@ -4096,6 +4096,27 @@ const routes: Record<string, Handler> = {
         return;
       }
       
+      // Calculate next check time based on hourly cron schedule
+      // Portfolio check runs at minute 0 of each hour
+      const now = new Date();
+      const nextCheckTime = new Date(now);
+      
+      if (now.getMinutes() === 0 && now.getSeconds() < 10) {
+        // If within first 10 seconds of hour, next check is in ~60 minutes
+        nextCheckTime.setHours(nextCheckTime.getHours() + 1);
+      } else if (now.getMinutes() === 0) {
+        // Just missed the check, next one is in ~60 minutes
+        nextCheckTime.setHours(nextCheckTime.getHours() + 1);
+      } else {
+        // Calculate minutes until next hour for user-facing display
+        nextCheckTime.setHours(nextCheckTime.getHours() + 1);
+        nextCheckTime.setMinutes(0);
+        nextCheckTime.setSeconds(0);
+      }
+      
+      // Calculate how many minutes until next check
+      const minutesUntilNext = Math.round((nextCheckTime.getTime() - now.getTime()) / 60000);
+      
       // READONLY ENFORCEMENT: Intent endpoint never modifies settings
       // Determine intent based on configuration (READ-ONLY)
       const intent = {
@@ -4108,7 +4129,7 @@ const routes: Record<string, Handler> = {
           description: 
             !settings.enabled ? 'Agent is uitgeschakeld' :
             settings.autoTrade ? 'Wacht op trading signaal met ' + settings.riskPerTrade + '% risico' :
-            'Bewaakt portfolio met interval van ' + settings.monitoringInterval + ' minuten',
+            'Bewaakt portfolio (uurlijks)',
           reason: 
             !settings.enabled ? 'User heeft agent disabled' :
             settings.autoTrade ? 'Trading modus actief, criteria: ' + settings.tradingStrategy + ' strategie' :
@@ -4121,9 +4142,9 @@ const routes: Record<string, Handler> = {
           enableStopLoss: settings.enableStopLoss || false
         },
         nextCheck: {
-          in: settings.monitoringInterval || 5,
-          unit: 'minutes',
-          estimatedTime: new Date(Date.now() + (settings.monitoringInterval || 5) * 60000).toISOString()
+          in: minutesUntilNext,
+          unit: minutesUntilNext === 1 ? 'minute' : 'minutes',
+          estimatedTime: nextCheckTime.toISOString()
         }
       };
       

@@ -36,6 +36,9 @@ export function Settings() {
     accountUpdates: true,
     actionSuggestions: true
   });
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [notificationsSaved, setNotificationsSaved] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -81,6 +84,13 @@ export function Settings() {
         // ignore profile fetch error
       });
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = JSON.stringify({ riskProfile, notifications });
+    localStorage.setItem('aio_settings_v1', payload);
+    window.dispatchEvent(new Event('aio_settings_updated'));
+  }, [riskProfile, notifications]);
 
   const handleAvatarChange = (file?: File | null) => {
     if (!file) return;
@@ -141,12 +151,24 @@ export function Settings() {
     }
   };
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const payload = JSON.stringify({ riskProfile, notifications });
-    localStorage.setItem('aio_settings_v1', payload);
-    window.dispatchEvent(new Event('aio_settings_updated'));
-  }, [riskProfile, notifications]);
+  const handleNotificationsSave = async () => {
+    setNotificationsError(null);
+    setNotificationsSaving(true);
+    try {
+      // Save to localStorage
+      const payload = JSON.stringify({ riskProfile, notifications });
+      localStorage.setItem('aio_settings_v1', payload);
+      window.dispatchEvent(new Event('aio_settings_updated'));
+      
+      setNotificationsSaved(true);
+      setTimeout(() => setNotificationsSaved(false), 2000);
+    } catch (err) {
+      console.error(err);
+      setNotificationsError('Opslaan mislukt. Probeer het opnieuw.');
+    } finally {
+      setNotificationsSaving(false);
+    }
+  };
 
   const riskCopy: Record<RiskProfile, string> = {
     Voorzichtig: 'Lage volatiliteit, focus op defensief gedrag en beperkte drawdowns.',
@@ -345,6 +367,17 @@ export function Settings() {
 
       <Card title="Notificaties" subtitle="Blijf op de hoogte">
         <div className="space-y-3 text-sm text-slate-700">
+          {notificationsError && (
+            <div className="p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
+              ⚠️ {notificationsError}
+            </div>
+          )}
+          {notificationsSaved && (
+            <div className="p-2 bg-green-50 border border-green-200 rounded text-green-700 text-xs">
+              ✓ Instellingen opgeslagen!
+            </div>
+          )}
+
           <div className="border-b border-slate-200 pb-3 mb-3">
             <p className="text-xs font-semibold text-slate-500 mb-2">E-mail notificaties</p>
             <label className="flex items-center justify-between gap-2 cursor-pointer mb-2">
@@ -410,6 +443,15 @@ export function Settings() {
           <p className="text-xs text-slate-500 pt-2 border-t border-slate-200">
             💡 Tip: Zet push notificaties aan in Dashboard om ze op je telefoon/browser te ontvangen.
           </p>
+
+          <button
+            type="button"
+            onClick={handleNotificationsSave}
+            disabled={notificationsSaving}
+            className="w-full pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {notificationsSaving ? '⏳ Opslaan...' : '💾 Instellingen opslaan'}
+          </button>
         </div>
       </Card>
 
