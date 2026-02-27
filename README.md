@@ -1,5 +1,7 @@
 # Auto Invest Oracle
 
+**Last Updated:** February 27, 2026
+
 ## Exchange Connections (WIP)
 
 Dit project bevat een eerste scaffolding voor exchange‑koppelingen (Bitvavo, Kraken, Coinbase, Bybit).
