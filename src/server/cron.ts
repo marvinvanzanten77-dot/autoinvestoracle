@@ -22,7 +22,7 @@ export async function jobRecordOutcomes(): Promise<void> {
   console.log('🔄 [CRON] Running: Record Outcomes');
 
   try {
-    const observations = getRecentObservations('all', 24 + 1); // 24-25 uur oud
+    const observations = await getRecentObservations('all', 24 + 1); // 24-25 uur oud
     
     if (observations.length === 0) {
       console.log('  → Geen observaties van 24h geleden');
@@ -30,19 +30,19 @@ export async function jobRecordOutcomes(): Promise<void> {
     }
 
     for (const obs of observations) {
-      // Alleen observaties ZONDER outcome
-      if (obs.outcome) continue;
-
-      // Mock: Zeg wat er gebeurde
-      // In productie: Query externe bron (exchange, etc)
       const mockOutcome = {
-        what_happened: `Gemiddeld +${(Math.random() * 5).toFixed(1)}% waargenomen`,
-        duration: '24 uur',
-        was_significant: Math.random() > 0.5,
-        pattern_broken: Math.random() > 0.3
+        predictedAction: 'HOLD',
+        predictedAsset: 'BTC',
+        predictedConfidence: 50,
+        predictedAt: new Date(),
+        actualOutcome: `+${(Math.random() * 5).toFixed(1)}%`,
+        actualResult: 'success' as const,
+        durationHours: 24,
+        profitLossPercent: Math.random() * 5,
+        wasSignificant: Math.random() > 0.5
       };
 
-      await recordOutcome(obs.id, mockOutcome);
+      await recordOutcome('all', obs.id, mockOutcome);
       console.log(`  ✓ Outcome recorded for ${obs.id}`);
     }
   } catch (err) {

@@ -3093,25 +3093,12 @@ const routes: Record<string, Handler> = {
                 (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
                 
-                // Log execution ticket for user notification
-                try {
-                  // Dynamically import to avoid top-level dependency
-                  const { logExecutionTicket } = await import('../src/lib/observation/logger');
-                  await logExecutionTicket(userId, {
-                    proposalId: proposalId,
-                    action: 'buy',
-                    asset: params.to_currency || params.asset || 'BTC',
-                    amount: parseFloat(amountEur),
-                    currency: 'EUR',
-                    orderId: orderId,
-                    confidence: proposal.confidence || 50, // Use proposal confidence if available, fallback to 50
-                    rationale: `Market buy order placed for ${params.to_currency || params.asset || 'BTC'}`
-                  });
-                  console.log('[trading/proposals] Execution ticket logged for user:', userId);
-                } catch (ticketErr) {
-                  console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
-                  // Don't fail the order if ticket logging fails
-                }
+                // Log execution ticket for user notification (disabled - function removed)
+                // try {
+                //   const { logTicket } = await import('../src/lib/observation/logger');
+                // } catch (ticketErr) {
+                //   console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
+                // }
                 
                 // Optionally send email notification (async, fire-and-forget)
                 // This will be sent in the background without blocking the response
@@ -3186,23 +3173,12 @@ const routes: Record<string, Handler> = {
                 (proposal as any).orderId = orderId;
                 await kv.set(proposalKey, proposal);
                 
-                // Log execution ticket for user notification
-                try {
-                  const { logExecutionTicket } = await import('../src/lib/observation/logger');
-                  await logExecutionTicket(userId, {
-                    proposalId: proposalId,
-                    action: 'sell',
-                    asset: params.asset || 'BTC',
-                    amount: parseFloat(amountQuote),
-                    currency: 'EUR',
-                    orderId: orderId,
-                    confidence: proposal.confidence || 50, // Use proposal confidence if available
-                    rationale: `Market sell order placed for ${params.asset || 'BTC'}`
-                  });
-                  console.log('[trading/proposals] Execution ticket logged for user:', userId);
-                } catch (ticketErr) {
-                  console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
-                }
+                // Log execution ticket for user notification (disabled - function removed)
+                // try {
+                //   const { logExecutionTicket } = await import('../src/lib/observation/logger');
+                // } catch (ticketErr) {
+                //   console.warn('[trading/proposals] Could not log execution ticket:', ticketErr);
+                // }
                 
                 // Optionally send email notification (async, fire-and-forget)
                 (async () => {
@@ -4309,22 +4285,23 @@ const routes: Record<string, Handler> = {
         }
 
         // Build settings object from profile or defaults
+        const profileData = (profile && typeof profile === 'object') ? (profile as any) : {};
         const settings = {
           exchange: 'bitvavo',
           apiMode: 'readonly',
           enabled: true,
-          monitoringInterval: profile?.agent_monitoring_interval ?? 60,
-          alertOnVolatility: profile?.agent_alert_on_volatility ?? false,
-          volatilityThreshold: profile?.agent_volatility_threshold ?? 5,
-          analysisDepth: profile?.agent_analysis_depth ?? 'basic',
-          autoTrade: profile?.agent_auto_trade ?? false,
-          riskPerTrade: profile?.agent_risk_per_trade ?? 2,
-          maxDailyLoss: profile?.agent_max_daily_loss ?? 5,
-          confidenceThreshold: profile?.agent_confidence_threshold ?? 70,
-          orderLimit: profile?.agent_order_limit ?? 100,
-          tradingStrategy: profile?.agent_trading_strategy ?? 'balanced',
-          enableStopLoss: profile?.agent_enable_stop_loss ?? false,
-          stopLossPercent: profile?.agent_stop_loss_percent ?? 5
+          monitoringInterval: profileData?.agent_monitoring_interval ?? 60,
+          alertOnVolatility: profileData?.agent_alert_on_volatility ?? false,
+          volatilityThreshold: profileData?.agent_volatility_threshold ?? 5,
+          analysisDepth: profileData?.agent_analysis_depth ?? 'basic',
+          autoTrade: profileData?.agent_auto_trade ?? false,
+          riskPerTrade: profileData?.agent_risk_per_trade ?? 2,
+          maxDailyLoss: profileData?.agent_max_daily_loss ?? 5,
+          confidenceThreshold: profileData?.agent_confidence_threshold ?? 70,
+          orderLimit: profileData?.agent_order_limit ?? 100,
+          tradingStrategy: profileData?.agent_trading_strategy ?? 'balanced',
+          enableStopLoss: profileData?.agent_enable_stop_loss ?? false,
+          stopLossPercent: profileData?.agent_stop_loss_percent ?? 5
         };
         
         console.log('[agent/settings GET] Retrieved settings for user', userId, 'interval:', settings.monitoringInterval);
@@ -4423,22 +4400,23 @@ const routes: Record<string, Handler> = {
           throw fetchError;
         }
 
+        const profileData = (profile && typeof profile === 'object') ? (profile as any) : {};
         const settings = {
           exchange: 'bitvavo',
           apiMode: 'readonly',
           enabled: true,
-          monitoringInterval: profile?.agent_monitoring_interval ?? 60,
-          alertOnVolatility: profile?.agent_alert_on_volatility ?? false,
-          volatilityThreshold: profile?.agent_volatility_threshold ?? 5,
-          analysisDepth: profile?.agent_analysis_depth ?? 'basic',
-          autoTrade: profile?.agent_auto_trade ?? false,
-          riskPerTrade: profile?.agent_risk_per_trade ?? 2,
-          maxDailyLoss: profile?.agent_max_daily_loss ?? 5,
-          confidenceThreshold: profile?.agent_confidence_threshold ?? 70,
-          orderLimit: profile?.agent_order_limit ?? 100,
-          tradingStrategy: profile?.agent_trading_strategy ?? 'balanced',
-          enableStopLoss: profile?.agent_enable_stop_loss ?? false,
-          stopLossPercent: profile?.agent_stop_loss_percent ?? 5
+          monitoringInterval: profileData?.agent_monitoring_interval ?? 60,
+          alertOnVolatility: profileData?.agent_alert_on_volatility ?? false,
+          volatilityThreshold: profileData?.agent_volatility_threshold ?? 5,
+          analysisDepth: profileData?.agent_analysis_depth ?? 'basic',
+          autoTrade: profileData?.agent_auto_trade ?? false,
+          riskPerTrade: profileData?.agent_risk_per_trade ?? 2,
+          maxDailyLoss: profileData?.agent_max_daily_loss ?? 5,
+          confidenceThreshold: profileData?.agent_confidence_threshold ?? 70,
+          orderLimit: profileData?.agent_order_limit ?? 100,
+          tradingStrategy: profileData?.agent_trading_strategy ?? 'balanced',
+          enableStopLoss: profileData?.agent_enable_stop_loss ?? false,
+          stopLossPercent: profileData?.agent_stop_loss_percent ?? 5
         };
 
         console.log('[agent/settings POST] Saved settings for user', userId, 'new interval:', settings.monitoringInterval);
@@ -4561,6 +4539,123 @@ const routes: Record<string, Handler> = {
     }
   }
 };
+
+// Push notification endpoints
+const pushRoutes = {
+  'push/subscribe': async (req: any, res: any) => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    try {
+      const { userId, subscription } = req.body;
+      if (!userId || !subscription) {
+        return res.status(400).json({ error: 'Missing userId or subscription' });
+      }
+      
+      // Save subscription in Supabase
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || '',
+        process.env.VITE_SUPABASE_ANON_KEY || ''
+      );
+      
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .upsert({
+          user_id: userId,
+          endpoint: subscription.endpoint,
+          auth_key: subscription.keys?.auth,
+          p256dh_key: subscription.keys?.p256dh,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) {
+        console.error('[Push] DB error:', error);
+        return res.status(500).json({ error: 'Failed to save subscription' });
+      }
+
+      console.log('[Push] Subscription saved for user:', userId);
+      res.status(200).json({ message: 'Subscribed successfully' });
+    } catch (err) {
+      console.error('[Push] Subscribe error:', err);
+      res.status(500).json({ error: 'Subscription failed' });
+    }
+  },
+
+  'push/unsubscribe': async (req: any, res: any) => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+      }
+
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || '',
+        process.env.VITE_SUPABASE_ANON_KEY || ''
+      );
+
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('[Push] DB error:', error);
+        return res.status(500).json({ error: 'Failed to delete subscription' });
+      }
+
+      console.log('[Push] Unsubscribed user:', userId);
+      res.status(200).json({ message: 'Unsubscribed successfully' });
+    } catch (err) {
+      console.error('[Push] Unsubscribe error:', err);
+      res.status(500).json({ error: 'Unsubscription failed' });
+    }
+  },
+
+  'push/status': async (req: any, res: any) => {
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    try {
+      const userId = req.query.userId;
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+      }
+
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || '',
+        process.env.VITE_SUPABASE_ANON_KEY || ''
+      );
+
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .select('user_id, created_at, updated_at')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        return res.status(200).json({ subscribed: false });
+      }
+
+      res.status(200).json({
+        subscribed: !!data,
+        createdAt: data?.created_at,
+        updatedAt: data?.updated_at
+      });
+    } catch (err) {
+      console.error('[Push] Status error:', err);
+      res.status(500).json({ error: 'Status check failed' });
+    }
+  }
+};
+
+// Merge push routes into main routes
+Object.assign(routes, pushRoutes);
 
 function getOriginalPath(req: { headers?: Record<string, string | string[] | undefined>; url?: string }) {
   const headers = req.headers || {};

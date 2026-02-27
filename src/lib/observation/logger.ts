@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '../supabase/client';
-import type { MarketObservation, Ticket, ExecutionOutcome } from './types';
+import type { MarketObservation, Ticket } from './types';
 
 /**
  * Log a market observation to Supabase
@@ -237,3 +237,4 @@ export async function exportObservationLog(userId: string): Promise<{
       recent: []
     };
   }
+}

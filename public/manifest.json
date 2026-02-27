@@ -1,0 +1,43 @@
+{
+  "name": "Auto Invest Oracle",
+  "short_name": "Auto Invest",
+  "description": "AI-powered cryptocurrency portfolio management and trading agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["finance"],
+  "screenshots": [
+    {
+      "src": "/favicon.png",
+      "sizes": "540x720",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "1080x1440",
+      "type": "image/png"
+    }
+  ]
+}
