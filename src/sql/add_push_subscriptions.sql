@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 CREATE INDEX idx_push_subscriptions_user_id ON push_subscriptions(user_id);
 CREATE INDEX idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);
 
+-- Create or replace the update_timestamp function
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Add trigger for updated_at
 CREATE TRIGGER update_push_subscriptions_timestamp BEFORE UPDATE ON push_subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
@@ -33,4 +42,4 @@ CREATE POLICY "Users can delete own subscriptions" ON push_subscriptions
 
 -- Allow cron jobs to read subscriptions (service role)
 CREATE POLICY "Service role can read subscriptions" ON push_subscriptions
-  FOR SELECT USING (true) WITH CHECK (false);
+  FOR SELECT USING (true);
