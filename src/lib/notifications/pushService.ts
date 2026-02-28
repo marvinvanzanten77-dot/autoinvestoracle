@@ -34,20 +34,56 @@ export class PushNotificationService {
    * Initialiseer service worker en push notifications
    */
   async initialize(): Promise<boolean> {
+    console.log('[AIO Push] initialize() START - checking browser support');
+    console.log('[AIO Push] browser support flags:', {
+      serviceWorkerSupport: 'serviceWorker' in navigator,
+      pushManagerSupport: 'PushManager' in window,
+      notificationSupport: 'Notification' in window,
+      isSupported: this.isSupported
+    });
+
     if (!this.isSupported) {
-      console.log('[Push] Push notifications niet ondersteund op dit device');
+      console.error('[AIO Push] ❌ Push notifications not supported on this device');
       return false;
     }
 
     try {
+      console.log('[AIO Push] initialize() - registering service worker from /service-worker.js');
+      
+      // Check if service worker already registered
+      const existingReg = await navigator.serviceWorker.getRegistration('/');
+      if (existingReg) {
+        console.log('[AIO Push] Service Worker already registered:', {
+          scope: existingReg.scope,
+          active: !!existingReg.active,
+          installing: !!existingReg.installing
+        });
+        this.registration = existingReg;
+        return true;
+      }
+
       // Registreer service worker
       this.registration = await navigator.serviceWorker.register('/service-worker.js', {
         scope: '/'
       });
-      console.log('[Push] Service Worker geregistreerd');
+      
+      console.log('[AIO Push] ✅ Service Worker registered successfully:', {
+        scope: this.registration.scope,
+        active: !!this.registration.active,
+        installing: !!this.registration.installing,
+        waiting: !!this.registration.waiting
+      });
+      
       return true;
     } catch (err) {
-      console.error('[Push] Service Worker registratie mislukt:', err);
+      console.error('[AIO Push] ❌ Service Worker registration failed:', {
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : 'Unknown',
+        code: (err as any)?.code,
+        stack: err instanceof Error ? err.stack : undefined,
+        filePath: '/service-worker.js'
+      });
       return false;
     }
   }
@@ -56,23 +92,46 @@ export class PushNotificationService {
    * Request toestemming voor push notifications
    */
   async requestPermission(): Promise<NotificationPermission | null> {
-    if (!this.isSupported) return null;
+    console.log('[AIO Push] requestPermission() START');
+    
+    if (!this.isSupported) {
+      console.error('[AIO Push] ❌ Cannot request permission - push not supported');
+      return null;
+    }
 
-    if (Notification.permission === 'granted') {
+    const currentPermission = Notification.permission;
+    console.log('[AIO Push] current notification permission:', currentPermission);
+
+    if (currentPermission === 'granted') {
+      console.log('[AIO Push] ✅ Permission already granted');
       return 'granted';
     }
 
-    if (Notification.permission === 'denied') {
-      console.log('[Push] Push notifications geweigerd door user');
+    if (currentPermission === 'denied') {
+      console.error('[AIO Push] ❌ Push notifications denied by user - cannot request again', {
+        previous: 'denied'
+      });
       return 'denied';
     }
 
+    // currentPermission === 'default', request it
     try {
+      console.log('[AIO Push] Requesting notification permission from user...');
       const permission = await Notification.requestPermission();
-      console.log('[Push] Permission request resultaat:', permission);
+      
+      console.log('[AIO Push] ✅ Permission request completed:', {
+        result: permission,
+        now: Notification.permission
+      });
+      
       return permission;
     } catch (err) {
-      console.error('[Push] Permission request error:', err);
+      console.error('[AIO Push] ❌ Permission request error:', {
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : 'Unknown',
+        stack: err instanceof Error ? err.stack : undefined
+      });
       return null;
     }
   }
@@ -88,29 +147,115 @@ export class PushNotificationService {
    * Abonneer op push notifications
    */
   async subscribe(userId: string): Promise<string | null> {
-    if (!this.isSupported || !this.registration) {
-      console.log('[AIO Push] Push niet ondersteund in deze browser');
+    console.log('[AIO Push] subscribe() START - validating environment');
+    
+    // Check browser support
+    if (!this.isSupported) {
+      console.error('[AIO Push] ❌ Browser support check FAILED - push not supported');
+      console.log('[AIO Push] support check:', {
+        serviceWorkerSupport: 'serviceWorker' in navigator,
+        pushManagerSupport: 'PushManager' in window,
+        notificationSupport: 'Notification' in window
+      });
+      return null;
+    }
+    
+    // Check service worker registration
+    if (!this.registration) {
+      console.error('[AIO Push] ❌ No service worker registration');
+      
+      // Attempt to get registration directly
+      try {
+        const existingReg = await navigator.serviceWorker.getRegistration();
+        if (existingReg) {
+          console.log('[AIO Push] 📍 Found existing service worker registration:', {
+            scope: existingReg.scope,
+            active: !!existingReg.active,
+            installing: !!existingReg.installing,
+            waiting: !!existingReg.waiting
+          });
+        } else {
+          console.error('[AIO Push] ❌ navigator.serviceWorker.getRegistration() returned null - no service worker registered');
+        }
+      } catch (regErr) {
+        console.error('[AIO Push] Error checking service worker registration:', regErr);
+      }
       return null;
     }
 
     try {
-      console.log('[AIO Push] subscribe() - step 1: requesting PushManager subscription');
-      console.log('[AIO Push] VAPID key present:', !!process.env.VITE_VAPID_PUBLIC_KEY);
-      
-      const subscription = await this.registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: process.env.VITE_VAPID_PUBLIC_KEY
+      // Step 1: Verify service worker is ready
+      console.log('[AIO Push] subscribe() - step 1: service worker ready check');
+      console.log('[AIO Push] service worker ready:', {
+        scope: this.registration.scope,
+        active: !!this.registration.active,
+        installing: !!this.registration.installing,
+        waiting: !!this.registration.waiting
       });
 
-      console.log('[AIO Push] subscribe() - step 2: PushManager subscription successful', {
+      // Step 2: Verify pushManager exists
+      console.log('[AIO Push] subscribe() - step 2: pushManager exists check');
+      const hasPushManager = !!this.registration.pushManager;
+      console.log('[AIO Push] pushManager exists:', hasPushManager);
+      
+      if (!hasPushManager) {
+        console.error('[AIO Push] ❌ pushManager not available on service worker registration');
+        return null;
+      }
+
+      // Step 3: Check notification permission
+      console.log('[AIO Push] subscribe() - step 3: notification permission check');
+      const permission = Notification.permission;
+      console.log('[AIO Push] notification permission:', permission);
+      
+      if (permission !== 'granted') {
+        console.error('[AIO Push] ❌ Notification permission not granted', {
+          current: permission,
+          expected: 'granted'
+        });
+        return null;
+      }
+
+      // Step 4: Check VAPID key
+      console.log('[AIO Push] subscribe() - step 4: VAPID key check');
+      const vapidKey = process.env.VITE_VAPID_PUBLIC_KEY;
+      console.log('[AIO Push] vapid key present:', !!vapidKey);
+      if (vapidKey) {
+        console.log('[AIO Push] vapid key length:', vapidKey.length);
+      } else {
+        console.error('[AIO Push] ❌ VAPID key missing or undefined');
+      }
+
+      // Step 5: Wrap subscribe call with detailed error handling
+      console.log('[AIO Push] subscribe() - step 5: calling pushManager.subscribe()');
+      let subscription: PushSubscription;
+      
+      try {
+        subscription = await this.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey
+        });
+        console.log('[AIO Push] ✅ pushManager.subscribe() succeeded');
+      } catch (subscribeErr) {
+        console.error('[AIO Push] ❌ pushManager.subscribe() failed with error:', {
+          error: subscribeErr,
+          message: subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr),
+          name: subscribeErr instanceof Error ? subscribeErr.name : 'Unknown',
+          code: (subscribeErr as any)?.code,
+          stack: subscribeErr instanceof Error ? subscribeErr.stack : undefined
+        });
+        return null;
+      }
+
+      console.log('[AIO Push] subscribe() - step 6: subscription object created', {
         endpoint: subscription.endpoint,
         endpointLength: subscription.endpoint.length,
         keys: Object.keys(subscription.toJSON().keys || {})
       });
 
-      // Stuur subscription naar backend
+      // Step 7: Send to backend
       const subscriptionPayload = subscription.toJSON();
-      console.log('[AIO Push] subscribe() - step 3: sending to backend', {
+      console.log('[AIO Push] subscribe() - step 7: sending to backend', {
         userId,
         hasEndpoint: !!subscriptionPayload.endpoint,
         hasKeys: !!subscriptionPayload.keys
@@ -125,7 +270,7 @@ export class PushNotificationService {
         })
       });
 
-      console.log('[AIO Push] subscribe() - step 4: backend response', {
+      console.log('[AIO Push] subscribe() - step 8: backend response', {
         status: response.status,
         statusText: response.statusText,
         contentType: response.headers.get('content-type')
