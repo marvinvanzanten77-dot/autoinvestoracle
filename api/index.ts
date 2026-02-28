@@ -2910,15 +2910,17 @@ const routes: Record<string, Handler> = {
           const proposal = (await kv.get(`user:${userId}:proposal:${id}`)) as Proposal | null;
           if (proposal) {
             proposals.push(proposal);
-            console.log(`[trading/proposals GET] Found proposal: ${proposal.asset} ${proposal.action}`);
+            console.log(`[trading/proposals GET] Found proposal: ${proposal.action.type}`);
           }
         }
         
         console.log(`[trading/proposals GET] Returning ${proposals.length} proposals for user ${userId}`);
         
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
+        if (res.setHeader) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
         res.status(200).json({ proposals: proposals.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )});
@@ -5006,6 +5008,16 @@ const tradingRoutes = {
           },
           dataPoints: safeMarket.series.length,
           signals: signals.length > 0 ? signals : ['Geen bijzondere signalen']
+        });
+        
+        // DEBUG: Log the actual condition checks
+        console.log(`[trading/scan/now] PROPOSAL GENERATION DEBUG:`, {
+          btc_change: changes.bitcoin,
+          btc_gt_3: changes.bitcoin > 3,
+          eth_change: changes.ethereum,
+          eth_gt_2: changes.ethereum > 2,
+          volatility_hoog: volatilityLevel === 'hoog',
+          total_proposals: proposals.length
         });
 
         // Generate trading proposals based on market signals
