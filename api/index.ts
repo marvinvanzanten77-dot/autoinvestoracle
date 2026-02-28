@@ -368,22 +368,13 @@ async function verifyJwtAndGetUserId(authHeader?: string): Promise<string | null
 // SHARED PORTFOLIO INSIGHTS (Observer + Trading Modes)
 // ============================================================================
 
-// Type-safe balance representation
-type Balance = {
-  asset?: string;
-  total?: number;
-  available?: number;
-  priceEUR?: number;
-  estimatedValue?: number;
-};
-
 interface PortfolioInsight {
   analysis: string;
   hasMissingPrices: boolean;
   totalValue: number | null;
 }
 
-function buildPortfolioInsight(balances: Balance[], availableCash: number, mode: string): PortfolioInsight {
+function buildPortfolioInsight(balances: any[], availableCash: number, mode: string): PortfolioInsight {
   // Guard: Detect missing prices (€0 or invalid values)
   const missingPrices = balances.filter(b => {
     const price = b.priceEUR;
@@ -566,6 +557,22 @@ type Balance = {
   priceEUR?: number;  // Current EUR price per unit
   estimatedValue?: number;  // total * priceEUR in EUR
   updatedAt: string;
+};
+
+// Trading proposal for market signals
+type TradingProposal = {
+  id: string;
+  policyId: string;
+  exchange: string;
+  asset: string;
+  action: 'buy' | 'sell' | 'hold' | 'monitor';
+  price: number;
+  amount: number;
+  estimatedValue: number;
+  confidence: number;
+  reasoning: string;
+  status: 'PROPOSED' | 'approved' | 'rejected' | 'executed' | 'failed';
+  createdAt: string;
 };
 
 type PriceSnapshot = {
@@ -3164,14 +3171,18 @@ const routes: Record<string, Handler> = {
         // If approved, EXECUTE the proposal on Bitvavo
         if (approved) {
           // GUARD: Validate proposal before execution
-          if (!proposal || !proposal.asset || !proposal.action) {
+          const typedProposal = proposal as TradingProposal | Proposal;
+          const hasAsset = 'asset' in typedProposal && !!typedProposal.asset;
+          const hasAction = 'action' in typedProposal && !!typedProposal.action;
+          
+          if (!proposal || !hasAsset || !hasAction) {
             console.error('[AIO Proposals] Invalid proposal structure - missing asset or action', {
               proposalId,
-              hasAsset: !!proposal?.asset,
-              hasAction: !!proposal?.action,
+              hasAsset,
+              hasAction,
               proposal: proposal
             });
-            proposal.status = 'failed';
+            (proposal as any).status = 'failed';
             await kv.set(proposalKey, proposal);
             return res.status(400).json({ 
               error: 'Ongeldige proposal - asset of actie ontbreekt' 
@@ -3210,8 +3221,8 @@ const routes: Record<string, Handler> = {
             }
             
             console.log('[trading/proposals] Using credentials for user:', userId, 'exchange:', exchange);
-            const action = proposal.action;
-            const params = action.params || {};
+            const tradingProposal = proposal as any as TradingProposal;
+            const action = tradingProposal.action as string;
             
             // Get operatorId from credentials or use default
             const operatorId = credentials.operatorId ? parseInt(credentials.operatorId, 10) : 101;
@@ -3295,10 +3306,10 @@ const routes: Record<string, Handler> = {
             };
             
             // Handle different action types
-            if (action.type === 'buy' || action.type === 'BUY') {
-              // params should have: asset (e.g., 'BTC'), amount (EUR), currency, to_currency
-              const asset = params.to_currency || params.asset || 'BTC';
-              const amountEur = (params.amount || params.amountEur || '10').toString(); // EUR amount for market order
+            if (action === 'buy' || action === 'BUY') {
+              // Get asset and amount from proposal fields
+              const asset = tradingProposal.asset || 'BTC';
+              const amountEur = (tradingProposal.amount * 100).toString(); // Convert amount to EUR estimate
               const market = `${asset}-EUR`;
               
               console.log('[AIO Proposals] Buy order params:', {
@@ -3349,12 +3360,12 @@ const routes: Record<string, Handler> = {
                     await sendExecutionEmail({
                       userId,
                       userEmail,
-                      asset: params.to_currency || params.asset || 'BTC',
+                      asset: tradingProposal.asset || 'BTC',
                       action: 'buy',
                       amount: parseFloat(amountEur),
                       currency: 'EUR',
                       orderId: orderId,
-                      confidence: proposal.confidence || 50 // Use proposal confidence if available
+                      confidence: tradingProposal.confidence || 50 // Use proposal confidence if available
                     });
                     console.log('[trading/proposals] Execution email sent for user:', userId);
                   } catch (emailErr) {
@@ -3375,18 +3386,17 @@ const routes: Record<string, Handler> = {
                 await kv.set(proposalKey, proposal);
                 return res.status(500).json({ error: 'Order kon niet geplaatst worden - geen order ID in response' });
               }
-            } else if (action.type === 'sell' || action.type === 'SELL') {
-              // Sell order - note: for sell orders, amount is typically in base currency (BTC qty), 
-              // but for market orders we might need amountQuote (EUR). Using amount as fallback.
-              const asset = params.asset || 'BTC';
-              const amountQuote = params.amountQuote || params.amount || '10'; // EUR amount or fallback
+            } else if (action === 'sell' || action === 'SELL') {
+              // Sell order  
+              const asset = tradingProposal.asset || 'BTC';
+              const amountQuote = (tradingProposal.amount * 100).toString(); // Convert to EUR
               const market = `${asset}-EUR`;
               
               console.log('[AIO Proposals] Sell order params:', {
                 asset,
                 amountQuote,
                 market,
-                paramsReceived: params
+                proposalAsset: tradingProposal.asset
               });
               
               const orderData = await executeBitvavoOrder(market, 'sell', amountQuote);
@@ -3424,12 +3434,12 @@ const routes: Record<string, Handler> = {
                     await sendExecutionEmail({
                       userId,
                       userEmail,
-                      asset: params.asset || 'BTC',
+                      asset: tradingProposal.asset || 'BTC',
                       action: 'sell',
                       amount: parseFloat(amountQuote),
                       currency: 'EUR',
                       orderId: orderId,
-                      confidence: proposal.confidence || 50 // Use proposal confidence if available
+                      confidence: tradingProposal.confidence || 50 // Use proposal confidence if available
                     });
                     console.log('[trading/proposals] Execution email sent for user:', userId);
                   } catch (emailErr) {
@@ -4581,6 +4591,10 @@ const routes: Record<string, Handler> = {
         connector.setCredentials(creds);
         
         const balances = await connector.fetchBalances();
+        if (!Array.isArray(balances)) {
+          console.error('[trading/proposals] Invalid balances format');
+          return res.status(500).json({ error: 'Invalid balances data' });
+        }
         const settings = (await kv.get(`user:${userId}:agent:${exchange}:settings`)) as any;
         
         // Generate AI analysis based on mode
@@ -5340,6 +5354,22 @@ const tradingRoutes = {
       console.log(`[trading/scan/now] Manual scan requested by user ${userId}`);
 
       try {
+        // Fetch user balances for proposal generation
+        const storage = getStorageAdapter();
+        const connection = await storage.getConnection(userId, 'bitvavo');
+        if (!connection) {
+          return res.status(404).json({ error: 'Exchange connection not found' });
+        }
+        
+        const connector = createConnector('bitvavo');
+        const creds = decryptSecrets(connection.encryptedSecrets) as any;
+        connector.setCredentials(creds);
+        const balances = await connector.fetchBalances();
+        if (!Array.isArray(balances)) {
+          console.error('[trading/scan/now] Invalid balances format');
+          return res.status(500).json({ error: 'Failed to fetch balances' });
+        }
+        
         const market = await buildMarketScanFromSparkline('24h');
         
         // Ensure market object has required fields
@@ -5381,16 +5411,16 @@ const tradingRoutes = {
         });
 
         // Generate trading proposals based on market signals
-        const proposals = [];
+        const proposals: TradingProposal[] = [];
         
         // Filter to only owned assets (total > 0, not EUR)
-        const ownedAssets = balances.filter(b => 
+        const ownedAssets = balances.filter((b: any) => 
           b.asset !== 'EUR' && 
           Number.isFinite(b.total) && 
           b.total > 0
         );
         
-        const ownedAssetSymbols = ownedAssets.map(b => b.asset).toUpperCase();
+        const ownedAssetSymbols = ownedAssets.map((b: any) => b.asset).toUpperCase();
         
         console.log('[AIO Proposals] owned assets', {
           total: ownedAssets.length,
