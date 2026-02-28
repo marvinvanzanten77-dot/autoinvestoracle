@@ -5013,7 +5013,12 @@ const tradingRoutes = {
         // Generate trading proposals based on market signals
         const proposals = [];
         
-        if (changes.bitcoin > 3) {
+        // Use absolute changes for better responsiveness
+        const btcAbsChange = Math.abs(changes.bitcoin);
+        const ethAbsChange = Math.abs(changes.ethereum);
+        
+        // BTC signals: Buy if up >1.5%, Sell if down >2%
+        if (changes.bitcoin > 1.5) {
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5023,31 +5028,12 @@ const tradingRoutes = {
             price: 0,
             amount: 0.01,
             estimatedValue: 550,
-            confidence: 75,
-            reasoning: 'Bitcoin showing strong bullish momentum (>3%), consider accumulation',
+            confidence: Math.min(85, 50 + changes.bitcoin * 10),
+            reasoning: `Bitcoin showing bullish momentum (+${changes.bitcoin.toFixed(2)}%), consider accumulation`,
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
-        }
-        
-        if (changes.ethereum > 2) {
-          proposals.push({
-            id: randomUUID(),
-            policyId: 'default',
-            exchange: 'bitvavo',
-            asset: 'ETH',
-            action: 'buy',
-            price: 0,
-            amount: 0.1,
-            estimatedValue: 350,
-            confidence: 70,
-            reasoning: 'Ethereum showing positive momentum, tactical position suggested',
-            status: 'PROPOSED',
-            createdAt: new Date().toISOString()
-          });
-        }
-
-        if (volatilityLevel === 'hoog' && (changes.bitcoin < 0 || changes.ethereum < 0)) {
+        } else if (changes.bitcoin < -2) {
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5057,8 +5043,77 @@ const tradingRoutes = {
             price: 0,
             amount: 0.005,
             estimatedValue: 275,
-            confidence: 60,
-            reasoning: 'High volatility with negative momentum - risk management suggested',
+            confidence: Math.min(75, 50 + Math.abs(changes.bitcoin) * 8),
+            reasoning: `Bitcoin showing weakness (${changes.bitcoin.toFixed(2)}%), risk management suggested`,
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+        
+        // ETH signals: Buy if up >1%, Sell if down >1.5%
+        if (changes.ethereum > 1) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'ETH',
+            action: 'buy',
+            price: 0,
+            amount: 0.1,
+            estimatedValue: 350,
+            confidence: Math.min(80, 50 + changes.ethereum * 12),
+            reasoning: `Ethereum showing positive momentum (+${changes.ethereum.toFixed(2)}%), tactical position suggested`,
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        } else if (changes.ethereum < -1.5) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'ETH',
+            action: 'sell',
+            price: 0,
+            amount: 0.05,
+            estimatedValue: 175,
+            confidence: Math.min(70, 50 + Math.abs(changes.ethereum) * 10),
+            reasoning: `Ethereum showing weakness (${changes.ethereum.toFixed(2)}%), rebalancing recommended`,
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        // Volatility-based signal: High volatility warrants protective position
+        if (volatilityLevel === 'hoog') {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'BTC',
+            action: 'hold',
+            price: 0,
+            amount: 0,
+            estimatedValue: 0,
+            confidence: 65,
+            reasoning: 'Market volatility elevated - hold positions and monitor closely',
+            status: 'PROPOSED',
+            createdAt: new Date().toISOString()
+          });
+        }
+        
+        // Fallback: If no other signals, generate a "monitor" proposal
+        if (proposals.length === 0) {
+          proposals.push({
+            id: randomUUID(),
+            policyId: 'default',
+            exchange: 'bitvavo',
+            asset: 'PORTFOLIO',
+            action: 'monitor',
+            price: 0,
+            amount: 0,
+            estimatedValue: 0,
+            confidence: 40,
+            reasoning: `Market conditions neutral (BTC: ${changes.bitcoin.toFixed(2)}%, ETH: ${changes.ethereum.toFixed(2)}%) - continue monitoring`,
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
