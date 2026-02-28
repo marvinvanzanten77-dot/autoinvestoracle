@@ -20,4 +20,15 @@ export type UserProfile = {
   ethicalConstraints?: string;
   advisorMode: 'conservative' | 'balanced' | 'aggressive';
   explanationDepth: 'short' | 'normal' | 'deep';
+  // Trading bot settings
+  tradingEnabled?: boolean;
+  riskPercentPerTrade?: number;
+  stopLossPercent?: number;
+  takeProfitPercent?: number;
+  maxDrawdownPercent?: number;
+  dailyNotificationsEnabled?: boolean;
+  volAlerts?: boolean;
+  marketUpdates?: boolean;
+  accountUpdates?: boolean;
+  actionSuggestions?: boolean;
 };

@@ -39,6 +39,13 @@ export function Settings() {
   const [notificationsSaving, setNotificationsSaving] = useState(false);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [notificationsSaved, setNotificationsSaved] = useState(false);
+  const [tradingSettings, setTradingSettings] = useState({
+    enabled: false,
+    riskPercent: 2,
+    stopLoss: 5,
+    takeProfit: 10,
+    maxDrawdown: 20
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -79,6 +86,25 @@ export function Settings() {
           bio: data.profile.bio || '',
           emailUpdatesOptIn: Boolean(data.profile.emailUpdatesOptIn)
         });
+        // Load trading settings
+        setTradingSettings({
+          enabled: data.profile.tradingEnabled ?? false,
+          riskPercent: data.profile.riskPercentPerTrade ?? 2,
+          stopLoss: data.profile.stopLossPercent ?? 5,
+          takeProfit: data.profile.takeProfitPercent ?? 10,
+          maxDrawdown: data.profile.maxDrawdownPercent ?? 20
+        });
+        // Load notification settings
+        if (data.profile.dailyNotificationsEnabled !== undefined) {
+          setNotifications(n => ({
+            ...n,
+            dailyEmail: data.profile.dailyNotificationsEnabled ?? true,
+            volAlerts: data.profile.volAlerts ?? true,
+            marketUpdates: data.profile.marketUpdates ?? true,
+            accountUpdates: data.profile.accountUpdates ?? true,
+            actionSuggestions: data.profile.actionSuggestions ?? true
+          }));
+        }
       })
       .catch(() => {
         // ignore profile fetch error
@@ -155,7 +181,43 @@ export function Settings() {
     setNotificationsError(null);
     setNotificationsSaving(true);
     try {
-      // Save to localStorage
+      if (!profile) {
+        setNotificationsError('Profiel is nog niet geladen.');
+        setNotificationsSaving(false);
+        return;
+      }
+
+      // Update profile with notification settings and trading settings
+      const updatedProfile: UserProfile = {
+        ...profile,
+        dailyNotificationsEnabled: notifications.dailyEmail,
+        volAlerts: notifications.volAlerts,
+        marketUpdates: notifications.marketUpdates,
+        accountUpdates: notifications.accountUpdates,
+        actionSuggestions: notifications.actionSuggestions,
+        tradingEnabled: tradingSettings.enabled,
+        riskPercentPerTrade: tradingSettings.riskPercent,
+        stopLossPercent: tradingSettings.stopLoss,
+        takeProfitPercent: tradingSettings.takeProfit,
+        maxDrawdownPercent: tradingSettings.maxDrawdown
+      };
+
+      const resp = await fetch('/api/profile/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: updatedProfile })
+      });
+
+      if (!resp.ok) {
+        throw new Error('Opslaan mislukt.');
+      }
+
+      const data = (await resp.json()) as { profile?: UserProfile };
+      if (data.profile) {
+        setProfile(data.profile);
+      }
+
+      // Also save to localStorage for immediate access
       const payload = JSON.stringify({ riskProfile, notifications });
       localStorage.setItem('aio_settings_v1', payload);
       window.dispatchEvent(new Event('aio_settings_updated'));
@@ -362,6 +424,109 @@ export function Settings() {
             />
             Altcoins
           </label>
+        </div>
+      </Card>
+
+      <Card title="Trading Bot" subtitle="Stel risico en voorwaarden in">
+        <div className="space-y-4">
+          <label className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Trading Bot</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {tradingSettings.enabled ? '✅ Ingeschakeld' : '❌ Uitgeschakeld'}
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={tradingSettings.enabled}
+              onChange={(e) => setTradingSettings(t => ({ ...t, enabled: e.target.checked }))}
+              className="h-5 w-10 accent-primary"
+            />
+          </label>
+
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs font-semibold text-slate-500 mb-3">🎯 Risico-instellingen</p>
+            
+            <label className="space-y-2 text-sm text-slate-700">
+              <div className="flex justify-between items-center">
+                <span>Risico per trade</span>
+                <span className="text-primary font-semibold">{tradingSettings.riskPercent}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="10"
+                step="0.5"
+                value={tradingSettings.riskPercent}
+                onChange={(e) => setTradingSettings(t => ({ ...t, riskPercent: parseFloat(e.target.value) }))}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                disabled={!tradingSettings.enabled}
+              />
+              <p className="text-xs text-slate-500">Hoeveel % van je portfolio riskeer je per trade</p>
+            </label>
+          </div>
+
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs font-semibold text-slate-500 mb-3">🛑 Stop Loss & Take Profit</p>
+            
+            <label className="space-y-2 text-sm text-slate-700 mb-3">
+              <div className="flex justify-between items-center">
+                <span>Stop Loss %</span>
+                <span className="text-red-600 font-semibold">{tradingSettings.stopLoss}%</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                step="1"
+                value={tradingSettings.stopLoss}
+                onChange={(e) => setTradingSettings(t => ({ ...t, stopLoss: parseInt(e.target.value) }))}
+                className="w-full h-2 bg-red-200 rounded-lg appearance-none cursor-pointer accent-red-600"
+                disabled={!tradingSettings.enabled}
+              />
+              <p className="text-xs text-slate-500">Verkoopprijs als verlies dit % bereikt</p>
+            </label>
+
+            <label className="space-y-2 text-sm text-slate-700">
+              <div className="flex justify-between items-center">
+                <span>Take Profit %</span>
+                <span className="text-green-600 font-semibold">+{tradingSettings.takeProfit}%</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="50"
+                step="1"
+                value={tradingSettings.takeProfit}
+                onChange={(e) => setTradingSettings(t => ({ ...t, takeProfit: parseInt(e.target.value) }))}
+                className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                disabled={!tradingSettings.enabled}
+              />
+              <p className="text-xs text-slate-500">Verkoopprijs als winst dit % bereikt</p>
+            </label>
+          </div>
+
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs font-semibold text-slate-500 mb-3">📊 Maximale Drawdown</p>
+            
+            <label className="space-y-2 text-sm text-slate-700">
+              <div className="flex justify-between items-center">
+                <span>Max Portfolio Verlies</span>
+                <span className="text-orange-600 font-semibold">{tradingSettings.maxDrawdown}%</span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="50"
+                step="5"
+                value={tradingSettings.maxDrawdown}
+                onChange={(e) => setTradingSettings(t => ({ ...t, maxDrawdown: parseInt(e.target.value) }))}
+                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                disabled={!tradingSettings.enabled}
+              />
+              <p className="text-xs text-slate-500">Bot stopt als portfolio dit % verliest</p>
+            </label>
+          </div>
         </div>
       </Card>
 
