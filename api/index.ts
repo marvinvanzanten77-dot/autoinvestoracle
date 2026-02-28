@@ -276,14 +276,25 @@ class RateLimiter {
 const rateLimiter = new RateLimiter();
 
 function getClientIp(req: ApiRequest): string {
+  // Priority 1: x-forwarded-for (set by reverse proxy)
   const forwarded = req.headers?.['x-forwarded-for'];
   if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim();
+    const firstIp = forwarded.split(',')[0]?.trim();
+    if (firstIp && firstIp !== '') return firstIp;
   }
-  if (Array.isArray(forwarded)) {
-    return forwarded[0]?.split(',')[0]?.trim() || 'unknown';
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    const firstIp = forwarded[0]?.split(',')[0]?.trim();
+    if (firstIp && firstIp !== '') return firstIp;
   }
-  return req.headers?.['x-real-ip'] as string || 'unknown';
+  
+  // Priority 2: x-real-ip (alternative proxy header)
+  const realIp = req.headers?.['x-real-ip'];
+  if (typeof realIp === 'string' && realIp !== '') return realIp;
+  
+  // Fallback: socket address (direct connection)
+  // Note: In Vercel serverless, socket is typically unavailable; proxies should set headers
+  
+  return 'unknown';
 }
 
 // ============================================================================
@@ -298,22 +309,29 @@ interface JwtPayload {
 }
 
 async function verifyJwtAndGetUserId(authHeader?: string): Promise<string | null> {
+  // Fail-fast: no bearer token
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.debug('[Auth] No Bearer token provided');
     return null;
   }
 
   const token = authHeader.substring(7);
   
+  // Fail-fast: env validation
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+  
+  if (!SUPABASE_URL) {
+    console.error('[Auth] FATAL: SUPABASE_URL environment variable missing');
+    return null;
+  }
+  if (!SUPABASE_ANON_KEY) {
+    console.error('[Auth] FATAL: SUPABASE_ANON_KEY environment variable missing');
+    return null;
+  }
+  
   try {
     // Verify with Supabase auth endpoint
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-    
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.error('[Auth] Missing SUPABASE_URL or SUPABASE_ANON_KEY');
-      return null;
-    }
-
     const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: 'GET',
       headers: {
@@ -323,14 +341,25 @@ async function verifyJwtAndGetUserId(authHeader?: string): Promise<string | null
     });
 
     if (!resp.ok) {
-      console.warn(`[Auth] Supabase auth check failed: ${resp.status}`);
+      const statusText = resp.statusText || 'Unknown';
+      console.warn(`[Auth] Supabase auth check failed: ${resp.status} ${statusText}`);
       return null;
     }
 
-    const user = (await resp.json()) as { id: string };
-    return user.id || null;
+    const userData = (await resp.json()) as { id?: string };
+    const userId = userData?.id;
+    
+    if (!userId) {
+      console.warn('[Auth] JWT verified but user.id missing in response');
+      return null;
+    }
+    
+    return userId;
   } catch (err) {
-    console.error('[Auth] JWT verification error:', err);
+    console.error('[Auth] JWT verification error:', {
+      error: err,
+      message: err instanceof Error ? err.message : String(err)
+    });
     return null;
   }
 }
@@ -339,20 +368,45 @@ async function verifyJwtAndGetUserId(authHeader?: string): Promise<string | null
 // SHARED PORTFOLIO INSIGHTS (Observer + Trading Modes)
 // ============================================================================
 
+// Type-safe balance representation
+type Balance = {
+  asset?: string;
+  total?: number;
+  available?: number;
+  priceEUR?: number;
+  estimatedValue?: number;
+};
+
 interface PortfolioInsight {
   analysis: string;
   hasMissingPrices: boolean;
   totalValue: number | null;
 }
 
-function buildPortfolioInsight(balances: any[], availableCash: number, mode: string): PortfolioInsight {
-  // Guard: Detect missing prices (€0 values)
-  const missingPrices = balances.filter(b => !b.priceEUR || b.priceEUR <= 0);
+function buildPortfolioInsight(balances: Balance[], availableCash: number, mode: string): PortfolioInsight {
+  // Guard: Detect missing prices (€0 or invalid values)
+  const missingPrices = balances.filter(b => {
+    const price = b.priceEUR;
+    return !price || !Number.isFinite(price) || price <= 0;
+  });
   const hasMissingPrices = balances.length > 0 && missingPrices.length > 0;
   
-  // Only sum assets with valid prices
-  const validBalances = balances.filter(b => b.priceEUR && b.priceEUR > 0);
-  const totalValue = hasMissingPrices ? null : validBalances.reduce((sum: number, b: any) => sum + (b.estimatedValue || 0), 0);
+  // Only sum assets with valid, finite prices
+  const validBalances = balances.filter(b => {
+    const price = b.priceEUR;
+    const estimated = b.estimatedValue;
+    return Number.isFinite(price) && price > 0 && Number.isFinite(estimated) && estimated > 0;
+  });
+  
+  // Safely reduce with NaN guards
+  let totalValue: number | null = null;
+  if (!hasMissingPrices && validBalances.length > 0) {
+    const sum = validBalances.reduce<number>((acc: number, b: Balance) => {
+      const val = b.estimatedValue || 0;
+      return acc + (Number.isFinite(val) ? val : 0);
+    }, 0);
+    totalValue = Number.isFinite(sum) ? sum : null;
+  }
   
   const topAssets = validBalances
     .filter((b: any) => b && b.asset && b.estimatedValue && b.estimatedValue > 0)
@@ -374,7 +428,7 @@ function buildPortfolioInsight(balances: any[], availableCash: number, mode: str
   }
   
   return {
-    analysis,
+    analysis: analysis || 'Portfolio status onbekend.',
     hasMissingPrices,
     totalValue
   };
@@ -4886,13 +4940,31 @@ const pushRoutes = {
       // RATE LIMIT CHECK
       if (!rateLimiter.isAllowed(clientIp)) {
         const remaining = rateLimiter.getRemaining(clientIp);
-        console.warn(`[Push] Rate limit exceeded for IP ${clientIp}`, { requestId });
+        const resetEpoch = Math.floor(Date.now() / 1000) + 60; // Reset in 60 seconds
+        
+        console.warn(`[Push] Rate limit exceeded`, { 
+          requestId, 
+          clientIp,
+          remaining,
+          resetEpoch
+        });
+        
         return res.status(429).json({ 
           error: 'Rate limit exceeded',
           retryAfter: 60,
           remaining
         });
       }
+      
+      // Rate limit succeeded - set response headers
+      const remaining = rateLimiter.getRemaining(clientIp);
+      const resetEpoch = Math.floor(Date.now() / 1000) + 60;
+      
+      // Note: In-memory limiter is best-effort; per Vercel instance.
+      // Across multiple instances, users may exceed limit slightly.
+      res.setHeader?.('X-RateLimit-Limit', '5');
+      res.setHeader?.('X-RateLimit-Remaining', String(remaining));
+      res.setHeader?.('X-RateLimit-Reset', String(resetEpoch));
       
       // JWT VERIFICATION (Option A: AuthToken)
       const authUserId = await verifyJwtAndGetUserId(authHeader);
@@ -5016,8 +5088,36 @@ const pushRoutes = {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+    
+    const requestId = randomUUID();
+    const clientIp = getClientIp(req);
+    const authHeader = req.headers?.authorization;
+    
     try {
+      // RATE LIMIT CHECK
+      if (!rateLimiter.isAllowed(clientIp)) {
+        const remaining = rateLimiter.getRemaining(clientIp);
+        console.warn(`[Push] Rate limit exceeded (unsubscribe)`, { requestId, clientIp });
+        const resetEpoch = Math.floor(Date.now() / 1000) + 60;
+        res.setHeader?.('X-RateLimit-Remaining', String(remaining));
+        res.setHeader?.('X-RateLimit-Reset', String(resetEpoch));
+        return res.status(429).json({ error: 'Rate limit exceeded', remaining });
+      }
+      
+      // JWT VERIFICATION
+      const authUserId = await verifyJwtAndGetUserId(authHeader);
       const { userId } = req.body;
+      
+      if (!authUserId) {
+        console.warn('[Push] No valid JWT for unsubscribe', { requestId });
+        return res.status(401).json({ error: 'Missing or invalid authorization token' });
+      }
+      
+      if (authUserId !== userId) {
+        console.warn('[Push] Unsubscribe userId mismatch', { requestId, bodyUserId: userId, authUserId });
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       if (!userId) {
         return res.status(400).json({ error: 'Missing userId' });
       }
@@ -5033,12 +5133,12 @@ const pushRoutes = {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('[Push] DB error:', error);
+        console.error('[Push] DB error (unsubscribe):', error);
         return res.status(500).json({ error: 'Failed to delete subscription' });
       }
 
-      console.log('[Push] Unsubscribed user:', userId);
-      res.status(200).json({ message: 'Unsubscribed successfully' });
+      console.log('[Push] ✅ Unsubscribed', { requestId, user_id: userId });
+      res.status(200).json({ ok: true, message: 'Unsubscribed successfully' });
     } catch (err) {
       console.error('[Push] Unsubscribe error:', err);
       res.status(500).json({ error: 'Unsubscription failed' });
@@ -5049,8 +5149,36 @@ const pushRoutes = {
     if (req.method !== 'GET') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+    
+    const requestId = randomUUID();
+    const clientIp = getClientIp(req);
+    const authHeader = req.headers?.authorization;
+    
     try {
+      // RATE LIMIT CHECK
+      if (!rateLimiter.isAllowed(clientIp)) {
+        const remaining = rateLimiter.getRemaining(clientIp);
+        console.warn(`[Push] Rate limit exceeded (status)`, { requestId, clientIp });
+        const resetEpoch = Math.floor(Date.now() / 1000) + 60;
+        res.setHeader?.('X-RateLimit-Remaining', String(remaining));
+        res.setHeader?.('X-RateLimit-Reset', String(resetEpoch));
+        return res.status(429).json({ error: 'Rate limit exceeded', remaining });
+      }
+      
+      // JWT VERIFICATION
+      const authUserId = await verifyJwtAndGetUserId(authHeader);
       const userId = req.query.userId;
+      
+      if (!authUserId) {
+        console.warn('[Push] No valid JWT for status check', { requestId });
+        return res.status(401).json({ error: 'Missing or invalid authorization token' });
+      }
+      
+      if (authUserId !== userId) {
+        console.warn('[Push] Status userId mismatch', { requestId, queryUserId: userId, authUserId });
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       if (!userId) {
         return res.status(400).json({ error: 'Missing userId' });
       }
@@ -5062,18 +5190,23 @@ const pushRoutes = {
 
       const { data, error } = await supabase
         .from('push_subscriptions')
-        .select('user_id, created_at, updated_at')
+        .select('id, created_at, updated_at')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
+        console.error('[Push] DB error (status):', error);
         return res.status(200).json({ subscribed: false });
       }
 
+      const subscribed = !!data;
+      console.log('[Push] Status check', { requestId, user_id: userId, subscribed });
+      
       res.status(200).json({
-        subscribed: !!data,
-        createdAt: data?.created_at,
-        updatedAt: data?.updated_at
+        ok: true,
+        subscribed,
+        createdAt: data?.created_at || null,
+        updatedAt: data?.updated_at || null
       });
     } catch (err) {
       console.error('[Push] Status error:', err);
