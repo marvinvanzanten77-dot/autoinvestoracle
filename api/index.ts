@@ -3315,8 +3315,7 @@ const routes: Record<string, Handler> = {
               console.log('[AIO Proposals] Buy order params:', {
                 asset,
                 amountEur,
-                market,
-                paramsReceived: params
+                market
               });
               
               // Place market buy order with EUR amount (amountQuote)
@@ -3461,10 +3460,10 @@ const routes: Record<string, Handler> = {
               }
             } else {
               // Unknown action type
-              console.warn('[trading/proposals] Unknown action type:', action.type);
+              console.warn('[trading/proposals] Unknown action type:', action);
               proposal.status = 'failed';
               await kv.set(proposalKey, proposal);
-              return res.status(400).json({ error: `Onbekend actietype: ${action.type}` });
+              return res.status(400).json({ error: `Onbekend actietype: ${action}` });
             }
           } catch (execErr) {
             console.error('[trading/proposals] Execution error:', execErr);
@@ -5420,7 +5419,7 @@ const tradingRoutes = {
           b.total > 0
         );
         
-        const ownedAssetSymbols = ownedAssets.map((b: any) => b.asset).toUpperCase();
+        const ownedAssetSymbols = ownedAssets.map((b: any) => b.asset.toUpperCase());
         
         console.log('[AIO Proposals] owned assets', {
           total: ownedAssets.length,

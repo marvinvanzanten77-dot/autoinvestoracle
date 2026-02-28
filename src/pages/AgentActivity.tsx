@@ -235,7 +235,6 @@ export function AgentActivity() {
         tradingEnabled: agentSettings.autoTrade,
         riskPercentPerTrade: agentSettings.riskPerTrade,
         stopLossPercent: agentSettings.stopLossPercent,
-        takeProfitPercent: agentSettings.takeProfit,
         maxDrawdownPercent: agentSettings.maxDailyLoss
       });
 
@@ -245,7 +244,6 @@ export function AgentActivity() {
         tradingEnabled: agentSettings.autoTrade,
         riskPercentPerTrade: agentSettings.riskPerTrade,
         stopLossPercent: agentSettings.stopLossPercent,
-        takeProfitPercent: agentSettings.takeProfit,
         maxDrawdownPercent: agentSettings.maxDailyLoss
       };
 
