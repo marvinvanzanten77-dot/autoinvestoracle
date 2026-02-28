@@ -4373,9 +4373,17 @@ const routes: Record<string, Handler> = {
         if (mode === 'observer') {
           // OBSERVER MODE: What is the current situation?
           // SAFETY: Only safe normalized data, no raw exchange responses
-          const totalValue = balances.reduce((sum, b) => sum + (b.estimatedValue || 0), 0);
-          const topAssets = balances
-            .filter(b => b && b.asset && b.estimatedValue)
+          
+          // Guard: Detect missing prices (€0 values)
+          const missingPrices = balances.filter(b => !b.priceEUR || b.priceEUR <= 0);
+          const hasMissingPrices = balances.length > 0 && missingPrices.length > 0;
+          
+          // Only sum assets with valid prices
+          const validBalances = balances.filter(b => b.priceEUR && b.priceEUR > 0);
+          const totalValue = hasMissingPrices ? null : validBalances.reduce((sum, b) => sum + (b.estimatedValue || 0), 0);
+          
+          const topAssets = validBalances
+            .filter(b => b && b.asset && b.estimatedValue && b.estimatedValue > 0)
             .sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0))
             .slice(0, 1);
           const topAsset = topAssets.length > 0 ? topAssets[0] : null;
@@ -4384,13 +4392,18 @@ const routes: Record<string, Handler> = {
           
           console.log('[agent/analyze] Portfolio calculation:', {
             balancesCount: balances.length,
+            validBalancesCount: validBalances.length,
+            missingPricesCount: missingPrices.length,
             totalValue,
+            hasMissingPrices,
             topAsset: topAsset?.asset,
             topAssetValue: topAsset?.estimatedValue,
             eurBalance: availableCash
           });
           
-          if (balances.length > 0 && totalValue > 0) {
+          if (hasMissingPrices) {
+            analysis = `Portfolio waarde nog niet beschikbaar - prijzen laden. Probeer over enkele seconden opnieuw.`;
+          } else if (balances.length > 0 && totalValue && totalValue > 0) {
             analysis = `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
               (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.estimatedValue || 0).toFixed(2)}). ` : '') +
               `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`;
@@ -4750,41 +4763,60 @@ const pushRoutes = {
       const { userId, subscription } = req.body;
       console.log(`[Push] Subscribe request from user: ${userId}, subscription endpoint: ${subscription?.endpoint?.substring(0, 50)}...`);
       
-      if (!userId || !subscription) {
-        console.warn('[Push] Missing userId or subscription in request body');
-        return res.status(400).json({ error: 'Missing userId or subscription' });
+      // Validate userId (required parameter)
+      if (!userId || typeof userId !== 'string') {
+        console.warn('[Push] Invalid userId in request body');
+        return res.status(400).json({ error: 'Invalid userId' });
       }
       
-      // Save subscription in Supabase
+      if (!subscription || !subscription.endpoint) {
+        console.warn('[Push] Missing subscription data');
+        return res.status(400).json({ error: 'Missing subscription data' });
+      }
+      
+      // Use Service Role Key for database insert (bypasses RLS, safe with server-side validation)
       const supabase = createClient(
-        process.env.VITE_SUPABASE_URL || '',
-        process.env.VITE_SUPABASE_ANON_KEY || ''
+        process.env.SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false
+          }
+        }
       );
       
-      console.log(`[Push] Attempting to save subscription to DB for user: ${userId}`);
+      console.log(`[Push] Inserting subscription to DB for user: ${userId}`);
       
-      const { error } = await supabase
+      // Upsert with correct conflict target matching UNIQUE(user_id, endpoint)
+      const { data, error } = await supabase
         .from('push_subscriptions')
         .upsert({
           user_id: userId,
           endpoint: subscription.endpoint,
-          auth_key: subscription.keys?.auth,
-          p256dh_key: subscription.keys?.p256dh,
+          auth_key: subscription.keys?.auth || '',
+          p256dh_key: subscription.keys?.p256dh || '',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id'
-        });
+          onConflict: 'user_id,endpoint'  // Match the UNIQUE(user_id, endpoint) constraint
+        })
+        .select();
 
       if (error) {
-        console.error('[Push] DB error - Full error:', JSON.stringify(error));
-        console.warn('[Push] Hint: The push_subscriptions table may not exist. Run: src/sql/add_push_subscriptions.sql');
+        console.error('[Push] DB error:', {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+          details: error.details
+        });
         
-        // Check if it's a table not found error
+        // Check for specific errors
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
           return res.status(500).json({ 
-            error: 'Push subscriptions table not found - database migration needed',
-            hint: 'Execute: src/sql/add_push_subscriptions.sql in Supabase'
+            error: 'Push subscriptions table not found',
+            hint: 'Migration needed: src/sql/add_push_subscriptions.sql'
           });
         }
         
@@ -4794,11 +4826,22 @@ const pushRoutes = {
         });
       }
 
-      console.log('[Push] ✅ Subscription saved for user:', userId);
-      res.status(200).json({ message: 'Subscribed successfully' });
+      console.log('[Push] ✅ Subscription saved:', {
+        user_id: userId,
+        endpoint: subscription.endpoint?.substring(0, 50) + '...'
+      });
+      
+      res.status(200).json({ 
+        ok: true,
+        message: 'Subscribed successfully',
+        subscriptionId: data?.[0]?.id
+      });
     } catch (err) {
       console.error('[Push] Subscribe error:', err);
-      res.status(500).json({ error: 'Subscription failed' });
+      res.status(500).json({ 
+        error: 'Subscription failed',
+        message: err instanceof Error ? err.message : 'Unknown error'
+      });
     }
   },
 
@@ -4813,8 +4856,8 @@ const pushRoutes = {
       }
 
       const supabase = createClient(
-        process.env.VITE_SUPABASE_URL || '',
-        process.env.VITE_SUPABASE_ANON_KEY || ''
+        process.env.SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
       );
 
       const { error } = await supabase
@@ -4846,8 +4889,8 @@ const pushRoutes = {
       }
 
       const supabase = createClient(
-        process.env.VITE_SUPABASE_URL || '',
-        process.env.VITE_SUPABASE_ANON_KEY || ''
+        process.env.SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
       );
 
       const { data, error } = await supabase
