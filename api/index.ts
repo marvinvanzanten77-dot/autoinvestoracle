@@ -2916,9 +2916,9 @@ const routes: Record<string, Handler> = {
         
         console.log(`[trading/proposals GET] Returning ${proposals.length} proposals for user ${userId}`);
         
-        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         res.status(200).json({ proposals: proposals.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )});
