@@ -219,7 +219,7 @@ export function Agent() {
                 </div>
 
                 {/* Observation agent settings */}
-                {!agentSettings.autoTrade && (
+                {agentSettings.apiMode === 'readonly' && (
                   <div className="space-y-4 rounded-lg bg-blue-50/50 border border-blue-200/50 p-4">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="text-xl">👁️</span>
@@ -311,7 +311,7 @@ export function Agent() {
                 )}
 
                 {/* Trading agent settings */}
-                {agentSettings.autoTrade && (
+                {agentSettings.apiMode === 'trading' && (
                   <div className="space-y-4 rounded-lg bg-amber-50/50 border border-amber-200/50 p-4">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="text-xl">🤖</span>

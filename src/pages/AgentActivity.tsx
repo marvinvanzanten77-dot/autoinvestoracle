@@ -501,7 +501,7 @@ export function AgentActivity() {
                     >
                       <p className="text-subtitle text-slate-900 font-serif capitalize">{conn.exchange}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        {agentSettings?.autoTrade ? '🤖 Trading Agent' : '👁️ Observation Only'}
+                        {agentSettings?.apiMode === 'trading' ? '🤖 Trading Agent' : '👁️ Observation Only'}
                       </p>
                     </button>
                   ))}
@@ -532,7 +532,7 @@ export function AgentActivity() {
                   </div>
 
                   {/* Observation agent settings */}
-                  {!agentSettings.autoTrade && (
+                  {agentSettings.apiMode === 'readonly' && (
                     <div className="space-y-4 rounded-lg bg-blue-50/50 border border-blue-200/50 p-4">
                       <div className="flex items-center gap-2 mb-4">
                         <span className="text-xl">👁️</span>
@@ -624,7 +624,7 @@ export function AgentActivity() {
                   )}
 
                   {/* Trading agent settings */}
-                  {agentSettings.autoTrade && (
+                  {agentSettings.apiMode === 'trading' && (
                     <div className="space-y-4 rounded-lg bg-amber-50/50 border border-amber-200/50 p-4">
                       <div className="flex items-center gap-2 mb-4">
                         <span className="text-xl">🤖</span>
@@ -632,21 +632,12 @@ export function AgentActivity() {
                       </div>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg bg-white/50 hover:bg-white/70 transition cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={agentSettings.autoTrade || false}
-                          onChange={(e) =>
-                            setAgentSettings((current) =>
-                              current ? { ...current, autoTrade: e.target.checked } : null
-                            )
-                          }
-                          className="h-4 w-4 text-amber-600 rounded"
-                        />
-                        <span className="text-sm text-slate-700">Automatisch handelen inschakelen</span>
+                        <span className="text-sm text-slate-700">
+                          💡 Trading is ingeschakeld in <strong>Settings → Trading Bot</strong>
+                        </span>
                       </label>
 
-                      {agentSettings.autoTrade && (
-                        <div className="space-y-3 pt-3 border-t border-white/50">
+                      <div className="space-y-3 pt-3 border-t border-white/50">
                           <div>
                             <label className="text-xs text-slate-600 font-medium">
                               Handelsintensiteit
@@ -798,7 +789,6 @@ export function AgentActivity() {
                             </div>
                           )}
                         </div>
-                      )}
                     </div>
                   )}
 
