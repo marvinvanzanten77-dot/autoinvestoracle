@@ -152,7 +152,9 @@ export function AgentActivity() {
         const data = (await resp.json()) as { profile?: any };
         if (data.profile) {
           setProfile(data.profile);
-          console.log('[AIO AgentMode] Profile loaded, tradingEnabled:', data.profile.tradingEnabled);
+          console.log('[AIO AgentMode] Profile loaded - FULL STRUCTURE:', JSON.stringify(data.profile));
+          console.log('[AIO AgentMode] All profile fields:', Object.keys(data.profile));
+          console.log('[AIO AgentMode] profile.tradingEnabled:', data.profile.tradingEnabled);
         }
       }
     } catch (err) {
@@ -206,16 +208,29 @@ export function AgentActivity() {
       return;
     }
 
-    // Initialize from profile.tradingEnabled (single source of truth)
+    // Initialize from profile - single source of truth for all settings
     const settings = getDefaultSettings(exch, connection.apiMode || 'readonly');
     
-    // Override autoTrade with profile.tradingEnabled
+    // Override ALL settings from profile
     if (profile) {
       settings.autoTrade = profile.tradingEnabled || false;
-      console.log('[AIO AgentMode] Initialized agentSettings from profile', {
+      settings.monitoringInterval = profile.monitoringInterval || 5;
+      settings.alertOnVolatility = profile.alertOnVolatility !== false;
+      settings.volatilityThreshold = profile.volatilityThreshold || 5;
+      settings.analysisDepth = profile.analysisDepth || 'basic';
+      settings.riskPerTrade = profile.riskPercentPerTrade || 2;
+      settings.maxDailyLoss = profile.maxDrawdownPercent || 5;
+      settings.confidenceThreshold = profile.confidenceThreshold || 70;
+      settings.orderLimit = profile.orderLimit || 100;
+      settings.tradingStrategy = profile.tradingStrategy || 'balanced';
+      settings.enableStopLoss = profile.enableStopLoss !== false;
+      settings.stopLossPercent = profile.stopLossPercent || 5;
+      
+      console.log('[AIO AgentSettings] Loaded from profile', {
         exchange: exch,
-        profile_tradingEnabled: profile.tradingEnabled,
-        agentSettings_autoTrade: settings.autoTrade
+        autoTrade: settings.autoTrade,
+        monitoringInterval: settings.monitoringInterval,
+        allSettings: settings
       });
     }
     
@@ -236,18 +251,34 @@ export function AgentActivity() {
       console.log('[AIO AgentSettings] Saving agent settings to profile', {
         exchange: selectedExchange,
         tradingEnabled: agentSettings.autoTrade,
+        monitoringInterval: agentSettings.monitoringInterval,
+        alertOnVolatility: agentSettings.alertOnVolatility,
+        volatilityThreshold: agentSettings.volatilityThreshold,
+        analysisDepth: agentSettings.analysisDepth,
         riskPercentPerTrade: agentSettings.riskPerTrade,
         stopLossPercent: agentSettings.stopLossPercent,
-        maxDrawdownPercent: agentSettings.maxDailyLoss
+        maxDrawdownPercent: agentSettings.maxDailyLoss,
+        confidenceThreshold: agentSettings.confidenceThreshold,
+        orderLimit: agentSettings.orderLimit,
+        tradingStrategy: agentSettings.tradingStrategy,
+        enableStopLoss: agentSettings.enableStopLoss
       });
 
-      // Update profile with trading settings
+      // Update profile with ALL agent settings
       const updatedProfile = {
         ...profile,
         tradingEnabled: agentSettings.autoTrade,
+        monitoringInterval: agentSettings.monitoringInterval,
+        alertOnVolatility: agentSettings.alertOnVolatility,
+        volatilityThreshold: agentSettings.volatilityThreshold,
+        analysisDepth: agentSettings.analysisDepth,
         riskPercentPerTrade: agentSettings.riskPerTrade,
         stopLossPercent: agentSettings.stopLossPercent,
-        maxDrawdownPercent: agentSettings.maxDailyLoss
+        maxDrawdownPercent: agentSettings.maxDailyLoss,
+        confidenceThreshold: agentSettings.confidenceThreshold,
+        orderLimit: agentSettings.orderLimit,
+        tradingStrategy: agentSettings.tradingStrategy,
+        enableStopLoss: agentSettings.enableStopLoss
       };
 
       const resp = await fetch('/api/profile/upsert', {
@@ -264,12 +295,9 @@ export function AgentActivity() {
       const data = (await resp.json()) as { profile?: any };
       if (data.profile) {
         setProfile(data.profile);
-        // Sync agentSettings with saved profile
-        setAgentSettings((curr) => curr ? { ...curr, autoTrade: data.profile.tradingEnabled } : null);
-        console.log('[AIO AgentMode] saved tradingEnabled to profile', {
-          tradingEnabled: data.profile.tradingEnabled
-        });
-        console.log('[AIO AgentSettings] ✅ Settings saved successfully');
+        // Reload all settings from saved profile
+        loadAgentSettings(selectedExchange);
+        console.log('[AIO AgentSettings] ✅ All settings saved successfully');
       }
 
       setSaveSuccess(true);

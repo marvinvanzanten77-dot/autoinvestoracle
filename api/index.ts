@@ -3293,6 +3293,7 @@ const routes: Record<string, Handler> = {
               }
               
               const data = await response.json();
+              console.log('[AIO Trade] Bitvavo raw response:', JSON.stringify(data));
               console.log('[trading/proposals] Bitvavo market order placed successfully:', {
                 market,
                 side,

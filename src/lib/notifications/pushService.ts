@@ -218,12 +218,12 @@ export class PushNotificationService {
 
       // Step 4: Check VAPID key
       console.log('[AIO Push] subscribe() - step 4: VAPID key check');
-      const vapidKey = process.env.VITE_VAPID_PUBLIC_KEY;
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       console.log('[AIO Push] vapid key present:', !!vapidKey);
       if (vapidKey) {
         console.log('[AIO Push] vapid key length:', vapidKey.length);
       } else {
-        console.error('[AIO Push] ❌ VAPID key missing or undefined');
+        console.error('[AIO Push] ❌ VAPID key missing or undefined - ensure VITE_VAPID_PUBLIC_KEY is set in .env');
       }
 
       // Step 5: Wrap subscribe call with detailed error handling
