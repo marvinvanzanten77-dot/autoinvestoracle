@@ -40,12 +40,29 @@ export function Agent() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
 
   const initSession = async () => {
     const resp = await fetch('/api/session/init');
     if (!resp.ok) return;
     const data = (await resp.json()) as { userId: string };
     setUserId(data.userId);
+  };
+
+  // Load profile to get tradingEnabled setting
+  const loadProfile = async () => {
+    try {
+      const resp = await fetch('/api/profile/get');
+      if (resp.ok) {
+        const data = (await resp.json()) as { profile?: any };
+        if (data.profile) {
+          setProfile(data.profile);
+          console.log('[AIO AgentMode] Profile loaded, tradingEnabled:', data.profile.tradingEnabled);
+        }
+      }
+    } catch (err) {
+      console.error('[AIO AgentMode] Failed to load profile:', err);
+    }
   };
 
   const loadConnections = async (id: string) => {
@@ -114,6 +131,7 @@ export function Agent() {
 
   useEffect(() => {
     initSession();
+    loadProfile();
   }, []);
 
   useEffect(() => {
@@ -129,26 +147,61 @@ export function Agent() {
   }, [selectedExchange, connections]);
 
   const handleSaveSettings = async () => {
-    if (!agentSettings) return;
+    if (!agentSettings || !profile) {
+      setError('Profiel is nog niet geladen.');
+      return;
+    }
+    
     setSaving(true);
     setError(null);
     setSaveSuccess(false);
 
     try {
-      const resp = await fetch('/api/agent/settings', {
+      console.log('[AIO AgentSettings] Saving agent settings to profile', {
+        exchange: selectedExchange,
+        tradingEnabled: agentSettings.autoTrade,
+        riskPercentPerTrade: agentSettings.riskPerTrade,
+        stopLossPercent: agentSettings.stopLossPercent,
+        takeProfitPercent: agentSettings.takeProfit,
+        maxDrawdownPercent: agentSettings.maxDailyLoss
+      });
+
+      // Update profile with trading settings
+      const updatedProfile = {
+        ...profile,
+        tradingEnabled: agentSettings.autoTrade,
+        riskPercentPerTrade: agentSettings.riskPerTrade,
+        stopLossPercent: agentSettings.stopLossPercent,
+        takeProfitPercent: agentSettings.takeProfit,
+        maxDrawdownPercent: agentSettings.maxDailyLoss
+      };
+
+      const resp = await fetch('/api/profile/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: agentSettings })
+        body: JSON.stringify({ profile: updatedProfile })
       });
 
       if (!resp.ok) {
-        throw new Error('Kon instellingen niet opslaan.');
+        const data = await resp.json();
+        throw new Error(data.error || 'Kon instellingen niet opslaan.');
+      }
+
+      const data = (await resp.json()) as { profile?: any };
+      if (data.profile) {
+        setProfile(data.profile);
+        console.log('[AIO AgentSettings] ✅ Settings saved successfully');
       }
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fout bij opslaan');
+      const errorMsg = err instanceof Error ? err.message : 'Fout bij opslaan';
+      console.error('[AIO AgentSettings] ❌ Error saving settings:', {
+        message: errorMsg,
+        error: err
+      });
+      setError(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -188,7 +241,7 @@ export function Agent() {
                   >
                     <p className="text-subtitle text-slate-900 font-serif capitalize">{conn.exchange}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      {agentSettings?.autoTrade ? '🤖 Trading Agent' : '👁️ Observation Only'}
+                      {profile?.tradingEnabled ? '🤖 Trading Agent' : '👁️ Observation Only'}
                     </p>
                   </button>
                 ))}

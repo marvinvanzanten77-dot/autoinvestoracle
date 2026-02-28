@@ -89,35 +89,76 @@ export class PushNotificationService {
    */
   async subscribe(userId: string): Promise<string | null> {
     if (!this.isSupported || !this.registration) {
-      console.log('[Push] Push niet ondersteund');
+      console.log('[AIO Push] Push niet ondersteund in deze browser');
       return null;
     }
 
     try {
+      console.log('[AIO Push] subscribe() - step 1: requesting PushManager subscription');
+      console.log('[AIO Push] VAPID key present:', !!process.env.VITE_VAPID_PUBLIC_KEY);
+      
       const subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: process.env.VITE_VAPID_PUBLIC_KEY
       });
 
+      console.log('[AIO Push] subscribe() - step 2: PushManager subscription successful', {
+        endpoint: subscription.endpoint,
+        endpointLength: subscription.endpoint.length,
+        keys: Object.keys(subscription.toJSON().keys || {})
+      });
+
       // Stuur subscription naar backend
+      const subscriptionPayload = subscription.toJSON();
+      console.log('[AIO Push] subscribe() - step 3: sending to backend', {
+        userId,
+        hasEndpoint: !!subscriptionPayload.endpoint,
+        hasKeys: !!subscriptionPayload.keys
+      });
+
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          subscription: subscription.toJSON()
+          subscription: subscriptionPayload
         })
       });
 
+      console.log('[AIO Push] subscribe() - step 4: backend response', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type')
+      });
+
       if (response.ok) {
-        console.log('[Push] Subscription succesvol geregistreerd');
+        const responseData = await response.json();
+        console.log('[AIO Push] ✅ subscribe() SUCCESS', {
+          userId,
+          subscriptionId: responseData.subscriptionId,
+          message: responseData.message
+        });
         return userId;
       } else {
-        console.error('[Push] Subscription registration failed');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[AIO Push] ❌ subscribe() FAILED - backend error', {
+          step: 'backend response',
+          status: response.status,
+          error: errorData.error || 'Unknown error',
+          details: errorData.details || 'No details provided'
+        });
         return null;
       }
     } catch (err) {
-      console.error('[Push] Subscription error:', err);
+      console.error('[AIO Push] ❌ subscribe() FAILED - exception', {
+        step: 'subscription process',
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : 'Unknown',
+        stack: err instanceof Error ? err.stack : undefined,
+        isSupported: this.isSupported,
+        hasRegistration: !!this.registration
+      });
       return null;
     }
   }
@@ -126,28 +167,51 @@ export class PushNotificationService {
    * Unsubscribe van push notifications
    */
   async unsubscribe(userId: string): Promise<boolean> {
-    if (!this.registration) return false;
-
-    try {
-      const subscription = await this.registration.pushManager.getSubscription();
-      if (subscription) {
-        await subscription.unsubscribe();
-        
-        // Notify backend
-        await fetch('/api/push/unsubscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId })
-        });
-
-        console.log('[Push] Unsubscribed successfully');
-        return true;
-      }
-    } catch (err) {
-      console.error('[Push] Unsubscribe error:', err);
+    if (!this.registration) {
+      console.log('[AIO Push] unsubscribe() - no registration');
+      return false;
     }
 
-    return false;
+    try {
+      console.log('[AIO Push] unsubscribe() - step 1: getting current subscription');
+      const subscription = await this.registration.pushManager.getSubscription();
+      
+      if (!subscription) {
+        console.log('[AIO Push] unsubscribe() - no active subscription found');
+        return true; // Already unsubscribed
+      }
+
+      console.log('[AIO Push] unsubscribe() - step 2: found subscription, unsubscribing from browser');
+      await subscription.unsubscribe();
+      
+      console.log('[AIO Push] unsubscribe() - step 3: notifying backend');
+      // Notify backend
+      const response = await fetch('/api/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+
+      if (response.ok) {
+        console.log('[AIO Push] ✅ unsubscribe() SUCCESS', { userId });
+        return true;
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[AIO Push] unsubscribe() - backend error but local unsubscribe OK', {
+          backendStatus: response.status,
+          backendError: errorData.error
+        });
+        return true; // Local unsubscribe succeeded
+      }
+    } catch (err) {
+      console.error('[AIO Push] ❌ unsubscribe() FAILED', {
+        step: 'unsubscription process',
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : 'Unknown'
+      });
+      return false;
+    }
   }
 
   /**

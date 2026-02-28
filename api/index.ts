@@ -3163,7 +3163,22 @@ const routes: Record<string, Handler> = {
         
         // If approved, EXECUTE the proposal on Bitvavo
         if (approved) {
-          console.log('[trading/proposals] Executing proposal:', proposalId, proposal.action);
+          // GUARD: Validate proposal before execution
+          if (!proposal || !proposal.asset || !proposal.action) {
+            console.error('[AIO Proposals] Invalid proposal structure - missing asset or action', {
+              proposalId,
+              hasAsset: !!proposal?.asset,
+              hasAction: !!proposal?.action,
+              proposal: proposal
+            });
+            proposal.status = 'failed';
+            await kv.set(proposalKey, proposal);
+            return res.status(400).json({ 
+              error: 'Ongeldige proposal - asset of actie ontbreekt' 
+            });
+          }
+          
+          console.log('[AIO Proposals] Executing proposal:', proposalId, proposal.action);
           
           try {
             // Get user's Bitvavo credentials from database
@@ -3286,7 +3301,7 @@ const routes: Record<string, Handler> = {
               const amountEur = (params.amount || params.amountEur || '10').toString(); // EUR amount for market order
               const market = `${asset}-EUR`;
               
-              console.log('[trading/proposals] Buy order params:', {
+              console.log('[AIO Proposals] Buy order params:', {
                 asset,
                 amountEur,
                 market,
@@ -3296,11 +3311,11 @@ const routes: Record<string, Handler> = {
               // Place market buy order with EUR amount (amountQuote)
               const orderData = await executeBitvavoOrder(market, 'buy', amountEur);
               
-              console.log('[trading/proposals] Bitvavo order response:', orderData);
+              console.log('[AIO Proposals] Bitvavo order response:', orderData);
               
               if (orderData && (orderData.orderId || orderData.id)) {
                 const orderId = orderData.orderId || orderData.id;
-                console.log('[trading/proposals] ✅ Order placed successfully:', orderId);
+                console.log('[AIO Proposals] ✅ Order placed successfully:', orderId);
                 proposal.status = 'executed';
                 proposal.executedAt = new Date().toISOString();
                 (proposal as any).orderId = orderId;
@@ -3355,7 +3370,7 @@ const routes: Record<string, Handler> = {
                   message: `BTC order placed: ${orderId}`
                 });
               } else {
-                console.error('[trading/proposals] Order placement failed - no order ID in response:', JSON.stringify(orderData));
+                console.error('[AIO Proposals] Order placement failed - no order ID in response:', JSON.stringify(orderData));
                 proposal.status = 'failed';
                 await kv.set(proposalKey, proposal);
                 return res.status(500).json({ error: 'Order kon niet geplaatst worden - geen order ID in response' });
@@ -3367,7 +3382,7 @@ const routes: Record<string, Handler> = {
               const amountQuote = params.amountQuote || params.amount || '10'; // EUR amount or fallback
               const market = `${asset}-EUR`;
               
-              console.log('[trading/proposals] Sell order params:', {
+              console.log('[AIO Proposals] Sell order params:', {
                 asset,
                 amountQuote,
                 market,
@@ -3376,11 +3391,11 @@ const routes: Record<string, Handler> = {
               
               const orderData = await executeBitvavoOrder(market, 'sell', amountQuote);
               
-              console.log('[trading/proposals] Bitvavo sell order response:', orderData);
+              console.log('[AIO Proposals] Bitvavo sell order response:', orderData);
               
               if (orderData && (orderData.orderId || orderData.id)) {
                 const orderId = orderData.orderId || orderData.id;
-                console.log('[trading/proposals] ✅ Sell order placed:', orderId);
+                console.log('[AIO Proposals] ✅ Sell order placed:', orderId);
                 proposal.status = 'executed';
                 proposal.executedAt = new Date().toISOString();
                 (proposal as any).orderId = orderId;
@@ -3429,7 +3444,7 @@ const routes: Record<string, Handler> = {
                   message: `Sell order placed: ${orderId}`
                 });
               } else {
-                console.error('[trading/proposals] Sell order placement failed - no order ID in response:', JSON.stringify(orderData));
+                console.error('[AIO Proposals] Sell order placement failed - no order ID in response:', JSON.stringify(orderData));
                 proposal.status = 'failed';
                 await kv.set(proposalKey, proposal);
                 return res.status(500).json({ error: 'Verkooporder kon niet geplaatst worden - geen order ID in response' });
@@ -5368,6 +5383,21 @@ const tradingRoutes = {
         // Generate trading proposals based on market signals
         const proposals = [];
         
+        // Filter to only owned assets (total > 0, not EUR)
+        const ownedAssets = balances.filter(b => 
+          b.asset !== 'EUR' && 
+          Number.isFinite(b.total) && 
+          b.total > 0
+        );
+        
+        const ownedAssetSymbols = ownedAssets.map(b => b.asset).toUpperCase();
+        
+        console.log('[AIO Proposals] owned assets', {
+          total: ownedAssets.length,
+          assets: ownedAssetSymbols,
+          changes: { bitcoin: changes.bitcoin, ethereum: changes.ethereum }
+        });
+        
         // Use absolute changes for better responsiveness
         const btcAbsChange = Math.abs(changes.bitcoin);
         const ethAbsChange = Math.abs(changes.ethereum);
@@ -5388,7 +5418,8 @@ const tradingRoutes = {
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
-        } else if (changes.bitcoin < -2) {
+        } else if (changes.bitcoin < -2 && ownedAssetSymbols.includes('BTC')) {
+          // Only propose SELL if user currently owns BTC
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5421,7 +5452,8 @@ const tradingRoutes = {
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
-        } else if (changes.ethereum < -1.5) {
+        } else if (changes.ethereum < -1.5 && ownedAssetSymbols.includes('ETH')) {
+          // Only propose SELL if user currently owns ETH
           proposals.push({
             id: randomUUID(),
             policyId: 'default',

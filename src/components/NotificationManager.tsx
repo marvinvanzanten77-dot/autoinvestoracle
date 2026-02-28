@@ -54,14 +54,19 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     setError(null);
 
     try {
+      console.log('[AIO Notif] handleSubscribe() - step 1: requesting permission', { userId });
+      
       // Request permission
       const permission = await pushService.requestPermission();
+      console.log('[AIO Notif] handleSubscribe() - step 2: permission response', { permission });
       
       if (permission === 'granted') {
+        console.log('[AIO Notif] handleSubscribe() - step 3: calling subscribe');
         // Subscribe
         const result = await pushService.subscribe(userId);
         
         if (result) {
+          console.log('[AIO Notif] ✅ handleSubscribe() SUCCESS');
           setIsEnabled(true);
           setIsSubscribed(true);
           onStatusChange?.(true);
@@ -76,19 +81,42 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
             });
           }, 500);
         } else {
-          setError('Subscription failed');
+          const msg = '[AIO Notif] Abonnement mislukt - check browser console voor details';
+          console.error('[AIO Notif] handleSubscribe() FAILED - subscribe returned null');
+          setError(msg);
         }
       } else if (permission === 'denied') {
-        setError('Je hebt push notifications geweigerd in je browser');
+        const msg = 'Je hebt push notifications geweigerd in je browser';
+        console.warn('[AIO Notif] handleSubscribe() - permission denied', { permission });
+        setError(msg);
+      } else {
+        const msg = '[AIO Notif] Toestemming niet verleend';
+        console.warn('[AIO Notif] handleSubscribe() - permission not granted', { permission });
+        setError(msg);
       }
     } catch (err) {
-      console.error('[Push Subscribe] Failed:', {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorName = err instanceof Error ? err.name : 'Unknown';
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      
+      console.error('[AIO Notif] ❌ handleSubscribe() EXCEPTION', {
+        step: 'handleSubscribe catch block',
         error: err,
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-        type: err instanceof Error ? err.name : typeof err
+        message: errorMsg,
+        name: errorName,
+        stack: errorStack,
+        userId,
+        isSupported
       });
-      setError(`Melding mislukt: ${err instanceof Error ? err.message : 'Onbekende fout'}`);
+      
+      // Show user a more helpful error message
+      const userMsg = errorMsg.includes('VAPID') 
+        ? 'VAPID configuratie fout - neem contact op met support'
+        : errorMsg.includes('permission')
+        ? 'Browsertoestemming fout'
+        : `Melding mislukt: ${errorMsg}`;
+      
+      setError(userMsg);
     } finally {
       setIsLoading(false);
     }
@@ -101,18 +129,25 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     setError(null);
 
     try {
+      console.log('[AIO Notif] handleUnsubscribe() - starting', { userId });
       const result = await pushService.unsubscribe(userId);
       
       if (result) {
+        console.log('[AIO Notif] ✅ handleUnsubscribe() SUCCESS');
         setIsEnabled(false);
         setIsSubscribed(false);
         onStatusChange?.(false);
       } else {
-        setError('Unsubscription failed');
+        console.error('[AIO Notif] handleUnsubscribe() FAILED - unsubscribe returned false');
+        setError('Kon meldingen niet uitschakelen - check browser console');
       }
     } catch (err) {
-      console.error('Unsubscribe error:', err);
-      setError('Failed to disable notifications');
+      console.error('[AIO Notif] ❌ handleUnsubscribe() EXCEPTION', {
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : 'Unknown'
+      });
+      setError('Fout bij uitschakelen - probeer opnieuw');
     } finally {
       setIsLoading(false);
     }
