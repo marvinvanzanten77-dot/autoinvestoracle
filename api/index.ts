@@ -233,6 +233,153 @@ function getSupabaseClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+// ============================================================================
+// RATE LIMITER (In-Memory, Per IP)
+// ============================================================================
+
+class RateLimiter {
+  private attempts: Map<string, number[]> = new Map();
+  private readonly maxAttempts = 5;
+  private readonly windowMs = 60 * 1000; // 1 minute
+
+  isAllowed(ip: string): boolean {
+    const now = Date.now();
+    const key = ip || 'unknown';
+    
+    if (!this.attempts.has(key)) {
+      this.attempts.set(key, [now]);
+      return true;
+    }
+
+    const timestamps = this.attempts.get(key)!;
+    // Filter out old attempts outside the window
+    const recentAttempts = timestamps.filter(t => now - t < this.windowMs);
+    
+    if (recentAttempts.length < this.maxAttempts) {
+      recentAttempts.push(now);
+      this.attempts.set(key, recentAttempts);
+      return true;
+    }
+
+    return false;
+  }
+
+  getRemaining(ip: string): number {
+    const now = Date.now();
+    const key = ip || 'unknown';
+    const timestamps = this.attempts.get(key) || [];
+    const recentAttempts = timestamps.filter(t => now - t < this.windowMs);
+    return Math.max(0, this.maxAttempts - recentAttempts.length);
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+function getClientIp(req: ApiRequest): string {
+  const forwarded = req.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  if (Array.isArray(forwarded)) {
+    return forwarded[0]?.split(',')[0]?.trim() || 'unknown';
+  }
+  return req.headers?.['x-real-ip'] as string || 'unknown';
+}
+
+// ============================================================================
+// JWT VERIFICATION (Supabase Access Token)
+// ============================================================================
+
+interface JwtPayload {
+  sub: string;
+  email?: string;
+  aud?: string;
+  exp?: number;
+}
+
+async function verifyJwtAndGetUserId(authHeader?: string): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+  
+  try {
+    // Verify with Supabase auth endpoint
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+    
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[Auth] Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+      return null;
+    }
+
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY
+      }
+    });
+
+    if (!resp.ok) {
+      console.warn(`[Auth] Supabase auth check failed: ${resp.status}`);
+      return null;
+    }
+
+    const user = (await resp.json()) as { id: string };
+    return user.id || null;
+  } catch (err) {
+    console.error('[Auth] JWT verification error:', err);
+    return null;
+  }
+}
+
+// ============================================================================
+// SHARED PORTFOLIO INSIGHTS (Observer + Trading Modes)
+// ============================================================================
+
+interface PortfolioInsight {
+  analysis: string;
+  hasMissingPrices: boolean;
+  totalValue: number | null;
+}
+
+function buildPortfolioInsight(balances: any[], availableCash: number, mode: string): PortfolioInsight {
+  // Guard: Detect missing prices (€0 values)
+  const missingPrices = balances.filter(b => !b.priceEUR || b.priceEUR <= 0);
+  const hasMissingPrices = balances.length > 0 && missingPrices.length > 0;
+  
+  // Only sum assets with valid prices
+  const validBalances = balances.filter(b => b.priceEUR && b.priceEUR > 0);
+  const totalValue = hasMissingPrices ? null : validBalances.reduce((sum: number, b: any) => sum + (b.estimatedValue || 0), 0);
+  
+  const topAssets = validBalances
+    .filter((b: any) => b && b.asset && b.estimatedValue && b.estimatedValue > 0)
+    .sort((a: any, b: any) => (b.estimatedValue || 0) - (a.estimatedValue || 0))
+    .slice(0, 1);
+  const topAsset = topAssets.length > 0 ? topAssets[0] : null;
+  
+  let analysis = '';
+  
+  if (hasMissingPrices) {
+    analysis = `Portfolio waarde nog niet beschikbaar - prijzen laden. Probeer over enkele seconden opnieuw.`;
+  } else if (balances.length > 0 && totalValue && totalValue > 0) {
+    analysis = `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
+      (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.estimatedValue || 0).toFixed(2)}). ` : '');
+  } else if (availableCash > 0) {
+    analysis = `Je portfolio is leeg. Je hebt €${availableCash.toFixed(2)} beschikbaar saldo. `;
+  } else {
+    analysis = `Je portfolio is leeg en je hebt geen beschikbaar saldo. Voeg eerst geld toe aan je account om te kunnen handelen.`;
+  }
+  
+  return {
+    analysis,
+    hasMissingPrices,
+    totalValue
+  };
+}
+
 type UserProfile = {
   displayName: string;
   email: string;
@@ -4373,47 +4520,18 @@ const routes: Record<string, Handler> = {
         if (mode === 'observer') {
           // OBSERVER MODE: What is the current situation?
           // SAFETY: Only safe normalized data, no raw exchange responses
-          
-          // Guard: Detect missing prices (€0 values)
-          const missingPrices = balances.filter(b => !b.priceEUR || b.priceEUR <= 0);
-          const hasMissingPrices = balances.length > 0 && missingPrices.length > 0;
-          
-          // Only sum assets with valid prices
-          const validBalances = balances.filter(b => b.priceEUR && b.priceEUR > 0);
-          const totalValue = hasMissingPrices ? null : validBalances.reduce((sum, b) => sum + (b.estimatedValue || 0), 0);
-          
-          const topAssets = validBalances
-            .filter(b => b && b.asset && b.estimatedValue && b.estimatedValue > 0)
-            .sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0))
-            .slice(0, 1);
-          const topAsset = topAssets.length > 0 ? topAssets[0] : null;
           const eurBalance = balances.find(b => b.asset === 'EUR');
           const availableCash = eurBalance?.available || 0;
           
+          const portfolio = buildPortfolioInsight(balances, availableCash, mode);
+          analysis = portfolio.analysis + (settings?.apiMode ? ` Je agent werkt in ${settings.apiMode} modus.` : '');
+          
           console.log('[agent/analyze] Portfolio calculation:', {
             balancesCount: balances.length,
-            validBalancesCount: validBalances.length,
-            missingPricesCount: missingPrices.length,
-            totalValue,
-            hasMissingPrices,
-            topAsset: topAsset?.asset,
-            topAssetValue: topAsset?.estimatedValue,
+            hasMissingPrices: portfolio.hasMissingPrices,
+            totalValue: portfolio.totalValue,
             eurBalance: availableCash
           });
-          
-          if (hasMissingPrices) {
-            analysis = `Portfolio waarde nog niet beschikbaar - prijzen laden. Probeer over enkele seconden opnieuw.`;
-          } else if (balances.length > 0 && totalValue && totalValue > 0) {
-            analysis = `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
-              (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.estimatedValue || 0).toFixed(2)}). ` : '') +
-              `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`;
-          } else if (availableCash > 0) {
-            analysis = `Je portfolio is leeg. Je hebt €${availableCash.toFixed(2)} beschikbaar saldo. ` +
-              `${settings?.autoTrade ? 'Je agent wacht op trading signalen om dit in te zetten.' : 'Je agent observeert marktcondities.'}`;
-          } else {
-            analysis = `Je portfolio is leeg en je hebt geen beschikbaar saldo. ` +
-              `Voeg eerst geld toe aan je account om te kunnen handelen.`;
-          }
         } else if (mode === 'planner_explainer') {
           // PLANNER MODE: What will happen next and why?
           // SAFETY: Only explains existing settings, never suggests market actions
@@ -4759,22 +4877,68 @@ const pushRoutes = {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+    
+    const requestId = randomUUID();
+    const clientIp = getClientIp(req);
+    const authHeader = req.headers?.authorization;
+    
     try {
-      const { userId, subscription } = req.body;
-      console.log(`[Push] Subscribe request from user: ${userId}, subscription endpoint: ${subscription?.endpoint?.substring(0, 50)}...`);
+      // RATE LIMIT CHECK
+      if (!rateLimiter.isAllowed(clientIp)) {
+        const remaining = rateLimiter.getRemaining(clientIp);
+        console.warn(`[Push] Rate limit exceeded for IP ${clientIp}`, { requestId });
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded',
+          retryAfter: 60,
+          remaining
+        });
+      }
       
-      // Validate userId (required parameter)
+      // JWT VERIFICATION (Option A: AuthToken)
+      const authUserId = await verifyJwtAndGetUserId(authHeader);
+      
+      const { userId, subscription } = req.body;
+      
+      console.log(`[Push] Subscribe attempt:`, {
+        requestId,
+        clientIp,
+        bodyUserId: userId,
+        authUserId,
+        hasAuth: !!authHeader,
+        endpointPrefix: subscription?.endpoint?.substring(0, 30) + '...'
+      });
+      
+      // Validate userId format
       if (!userId || typeof userId !== 'string') {
-        console.warn('[Push] Invalid userId in request body');
+        console.warn('[Push] Invalid userId in request body', { requestId, userId });
         return res.status(400).json({ error: 'Invalid userId' });
       }
       
+      // CHECK: Auth user must match request userId
+      if (!authUserId) {
+        console.warn('[Push] No valid JWT provided', { requestId, bodyUserId: userId });
+        return res.status(401).json({ error: 'Missing or invalid authorization token' });
+      }
+      
+      if (authUserId !== userId) {
+        console.warn('[Push] userId mismatch - possible spoof attempt', {
+          requestId,
+          bodyUserId: userId,
+          authUserId,
+          clientIp
+        });
+        return res.status(403).json({ 
+          error: 'Unauthorized: userId does not match authenticated user',
+          details: 'You can only subscribe for your own user ID'
+        });
+      }
+      
       if (!subscription || !subscription.endpoint) {
-        console.warn('[Push] Missing subscription data');
+        console.warn('[Push] Missing subscription data', { requestId });
         return res.status(400).json({ error: 'Missing subscription data' });
       }
       
-      // Use Service Role Key for database insert (bypasses RLS, safe with server-side validation)
+      // All checks passed - use Service Role for insert
       const supabase = createClient(
         process.env.SUPABASE_URL || '',
         process.env.SUPABASE_SERVICE_ROLE_KEY || '',
@@ -4787,7 +4951,7 @@ const pushRoutes = {
         }
       );
       
-      console.log(`[Push] Inserting subscription to DB for user: ${userId}`);
+      console.log(`[Push] Inserting subscription to DB`, { requestId, userId });
       
       // Upsert with correct conflict target matching UNIQUE(user_id, endpoint)
       const { data, error } = await supabase
@@ -4806,6 +4970,7 @@ const pushRoutes = {
 
       if (error) {
         console.error('[Push] DB error:', {
+          requestId,
           code: error.code,
           message: error.message,
           hint: error.hint,
@@ -4827,7 +4992,9 @@ const pushRoutes = {
       }
 
       console.log('[Push] ✅ Subscription saved:', {
+        requestId,
         user_id: userId,
+        subscriptionId: data?.[0]?.id,
         endpoint: subscription.endpoint?.substring(0, 50) + '...'
       });
       
