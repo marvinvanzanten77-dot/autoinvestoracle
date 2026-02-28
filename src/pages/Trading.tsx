@@ -335,22 +335,32 @@ export function Trading() {
 
   // Force scan
   const handleForceScan = async () => {
+    console.log('[AIO Proposals] scan button clicked');
     setScanLoading(true);
     progress.startProgress('Marktanalyse uitvoeren');
     
     try {
       progress.addUpdate('Scan voorbereiding', 'Initialisatie...', 5, 'processing');
 
+      const payload = { userId, exchange };
+      console.log('[AIO Proposals] request payload', payload);
+
       // Start the scan
       const resp = await fetch('/api/trading/scan/now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, exchange })
+        body: JSON.stringify(payload)
       });
 
       progress.updateLatest({ progress: 30, message: 'Marktdata ophalen...' });
 
       if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error('[AIO Proposals] scan endpoint error', {
+          status: resp.status,
+          statusText: resp.statusText,
+          response: errorText
+        });
         throw new Error(`HTTP ${resp.status}`);
       }
 

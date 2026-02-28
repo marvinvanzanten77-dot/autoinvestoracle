@@ -5350,6 +5350,12 @@ const tradingRoutes = {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
+      console.log('[AIO Proposals] scan endpoint hit', {
+        timestamp: Date.now(),
+        userId,
+        body: req.body,
+        method: req.method
+      });
       console.log(`[trading/scan/now] Manual scan requested by user ${userId}`);
 
       try {
@@ -5364,6 +5370,10 @@ const tradingRoutes = {
         const creds = decryptSecrets(connection.encryptedSecrets) as any;
         connector.setCredentials(creds);
         const balances = await connector.fetchBalances();
+        console.log('[AIO Proposals] balances snapshot', {
+          count: Array.isArray(balances) ? balances.length : 'not-array',
+          balances: Array.isArray(balances) ? balances.slice(0, 5) : balances
+        });
         if (!Array.isArray(balances)) {
           console.error('[trading/scan/now] Invalid balances format');
           return res.status(500).json({ error: 'Failed to fetch balances' });
@@ -5420,6 +5430,11 @@ const tradingRoutes = {
         );
         
         const ownedAssetSymbols = ownedAssets.map((b: any) => b.asset.toUpperCase());
+        console.log('[AIO Proposals] owned assets AFTER filtering', {
+          count: ownedAssets.length,
+          symbols: ownedAssetSymbols,
+          details: ownedAssets.map((b: any) => ({ asset: b.asset, total: b.total }))
+        });
         
         console.log('[AIO Proposals] owned assets', {
           total: ownedAssets.length,
@@ -5519,6 +5534,11 @@ const tradingRoutes = {
         
         // Fallback: If no other signals, generate a "monitor" proposal
         if (proposals.length === 0) {
+          console.warn('[AIO Proposals] no proposals generated', {
+            marketChanges: changes,
+            ownedAssets: ownedAssetSymbols,
+            reason: 'Adding fallback monitor proposal'
+          });
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5545,6 +5565,11 @@ const tradingRoutes = {
           total_proposals: proposals.length
         });
 
+        console.log('[AIO Proposals] generated proposals output', {
+          count: proposals.length,
+          proposals: proposals.map(p => ({ id: p.id, asset: p.asset, action: p.action, reasoning: p.reasoning }))
+        });
+        
         if (proposals.length > 0) {
           // Save proposals to KV store
           const pendingIds = proposals.map(p => p.id);
@@ -5556,6 +5581,12 @@ const tradingRoutes = {
           }
           
           console.log(`[trading/scan/now] Generated ${proposals.length} proposals for user ${userId}`);
+        } else {
+          console.error('[AIO Proposals] ERROR: No proposals in array after generation', {
+            changes,
+            ownedAssets: ownedAssetSymbols,
+            volatility: volatilityLevel
+          });
         }
         
         res.status(200).json({
