@@ -4373,18 +4373,26 @@ const routes: Record<string, Handler> = {
         if (mode === 'observer') {
           // OBSERVER MODE: What is the current situation?
           // SAFETY: Only safe normalized data, no raw exchange responses
-          const totalValue = balances.reduce((sum, b) => sum + (b.total || 0), 0);
+          const totalValue = balances.reduce((sum, b) => sum + (b.estimatedValue || 0), 0);
           const topAssets = balances
-            .filter(b => b && b.asset && b.total)
-            .sort((a, b) => (b.total || 0) - (a.total || 0))
+            .filter(b => b && b.asset && b.estimatedValue)
+            .sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0))
             .slice(0, 1);
           const topAsset = topAssets.length > 0 ? topAssets[0] : null;
           const eurBalance = balances.find(b => b.asset === 'EUR');
           const availableCash = eurBalance?.available || 0;
           
+          console.log('[agent/analyze] Portfolio calculation:', {
+            balancesCount: balances.length,
+            totalValue,
+            topAsset: topAsset?.asset,
+            topAssetValue: topAsset?.estimatedValue,
+            eurBalance: availableCash
+          });
+          
           if (balances.length > 0 && totalValue > 0) {
             analysis = `Volgens je portfolio: je hebt ${balances.length} activa met totaalwaarde €${totalValue.toFixed(2)}. ` +
-              (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.total || 0).toFixed(2)}). ` : '') +
+              (topAsset ? `Grootste positie: ${topAsset.asset} (€${(topAsset.estimatedValue || 0).toFixed(2)}). ` : '') +
               `Je agent werkt in ${settings?.apiMode || 'monitoring'} modus.`;
           } else if (availableCash > 0) {
             analysis = `Je portfolio is leeg. Je hebt €${availableCash.toFixed(2)} beschikbaar saldo. ` +

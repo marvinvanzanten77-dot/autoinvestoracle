@@ -82,8 +82,13 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
         setError('Je hebt push notifications geweigerd in je browser');
       }
     } catch (err) {
-      console.error('Subscribe error:', err);
-      setError('Failed to enable notifications');
+      console.error('[Push Subscribe] Failed:', {
+        error: err,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        type: err instanceof Error ? err.name : typeof err
+      });
+      setError(`Melding mislukt: ${err instanceof Error ? err.message : 'Onbekende fout'}`);
     } finally {
       setIsLoading(false);
     }

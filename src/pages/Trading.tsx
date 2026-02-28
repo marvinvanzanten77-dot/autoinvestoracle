@@ -538,15 +538,23 @@ export function Trading() {
 
       {/* Proposals Tab */}
       {activeTab === 'proposals' && (
-        <Card title="Handelsvoorstellen" subtitle="Agent heeft voorstellen gemaakt - review en keur goed">
+        <Card 
+          title="Handelsvoorstellen" 
+          subtitle={
+            proposalsLoading 
+              ? "Voorstellen laden..." 
+              : proposals.length > 0 
+                ? "Agent heeft voorstellen gemaakt - review en keur goed"
+                : "Geen actieve voorstellen"
+          }
+        >
           {proposalsLoading ? (
             <div className="text-center py-8">
-              <p className="text-slate-500 text-sm">Voorstellen laden...</p>
+              <p className="text-slate-500 text-sm">Wacht op voorstellen...</p>
             </div>
           ) : proposals.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-slate-500 text-sm">Geen actieve voorstellen</p>
-              <p className="text-xs text-slate-400 mt-2">Agent zal voorstellen doen bij geschikte marktomstandigheden</p>
+              <p className="text-slate-500 text-sm">Agent zal voorstellen doen bij geschikte marktomstandigheden</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -710,7 +718,7 @@ export function Trading() {
           ) : (
             <div className="text-center py-8">
               <p className="text-slate-500 text-sm">Geen actief policy</p>
-              <p className="text-xs text-slate-400 mt-2">Maak een policy aan in Agent instellingen</p>
+              <p className="text-xs text-slate-400 mt-2">Policy management momenteel in voorbereiding</p>
             </div>
           )}
         </Card>
