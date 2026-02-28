@@ -4474,9 +4474,11 @@ const routes: Record<string, Handler> = {
 
         // Build settings object from profile or defaults
         const profileData = (profile && typeof profile === 'object') ? (profile as any) : {};
+        // Determine API mode based on profile trading_enabled setting
+        const tradingEnabled = profileData?.trading_enabled ?? false;
         const settings = {
           exchange: 'bitvavo',
-          apiMode: 'readonly',
+          apiMode: tradingEnabled ? 'trading' : 'readonly',
           enabled: true,
           monitoringInterval: profileData?.agent_monitoring_interval ?? 60,
           alertOnVolatility: profileData?.agent_alert_on_volatility ?? false,
@@ -4589,9 +4591,11 @@ const routes: Record<string, Handler> = {
         }
 
         const profileData = (profile && typeof profile === 'object') ? (profile as any) : {};
+        // Determine API mode based on profile trading_enabled setting
+        const tradingEnabled = profileData?.trading_enabled ?? false;
         const settings = {
           exchange: 'bitvavo',
-          apiMode: 'readonly',
+          apiMode: tradingEnabled ? 'trading' : 'readonly',
           enabled: true,
           monitoringInterval: profileData?.agent_monitoring_interval ?? 60,
           alertOnVolatility: profileData?.agent_alert_on_volatility ?? false,
@@ -4607,7 +4611,7 @@ const routes: Record<string, Handler> = {
           stopLossPercent: profileData?.agent_stop_loss_percent ?? 5
         };
 
-        console.log('[agent/settings POST] Saved settings for user', userId, 'new interval:', settings.monitoringInterval);
+        console.log('[agent/settings POST] Saved settings for user', userId, 'new interval:', settings.monitoringInterval, 'apiMode:', settings.apiMode);
         res.status(200).json({ settings });
       } catch (err) {
         console.error('[agent/settings POST] Error:', err);

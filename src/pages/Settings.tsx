@@ -105,6 +105,15 @@ export function Settings() {
             actionSuggestions: data.profile.actionSuggestions ?? true
           }));
         }
+        // Load market preferences from strategies array
+        if (Array.isArray(data.profile.strategies)) {
+          setMarkets({
+            bitcoin: data.profile.strategies.includes('bitcoin'),
+            ethereum: data.profile.strategies.includes('ethereum'),
+            stable: data.profile.strategies.includes('stable') || data.profile.strategies.includes('stablecoins'),
+            altcoins: data.profile.strategies.includes('altcoins')
+          });
+        }
       })
       .catch(() => {
         // ignore profile fetch error
@@ -187,20 +196,28 @@ export function Settings() {
         return;
       }
 
-      // Update profile with notification settings and trading settings
+      // Update profile with ALL settings: notifications, trading, and markets
       const updatedProfile: UserProfile = {
         ...profile,
+        // Notification settings
         dailyNotificationsEnabled: notifications.dailyEmail,
         volAlerts: notifications.volAlerts,
         marketUpdates: notifications.marketUpdates,
         accountUpdates: notifications.accountUpdates,
         actionSuggestions: notifications.actionSuggestions,
+        // Trading settings
         tradingEnabled: tradingSettings.enabled,
         riskPercentPerTrade: tradingSettings.riskPercent,
         stopLossPercent: tradingSettings.stopLoss,
         takeProfitPercent: tradingSettings.takeProfit,
-        maxDrawdownPercent: tradingSettings.maxDrawdown
+        maxDrawdownPercent: tradingSettings.maxDrawdown,
+        // Store marked selection as strategies
+        strategies: Object.entries(markets)
+          .filter(([_k, v]) => v)
+          .map(([k]) => k)
       };
+
+      console.log('[Settings] Saving profile:', updatedProfile);
 
       const resp = await fetch('/api/profile/upsert', {
         method: 'POST',
@@ -209,7 +226,8 @@ export function Settings() {
       });
 
       if (!resp.ok) {
-        throw new Error('Opslaan mislukt.');
+        const errData = await resp.json();
+        throw new Error(errData.error || 'Opslaan mislukt.');
       }
 
       const data = (await resp.json()) as { profile?: UserProfile };
@@ -218,15 +236,15 @@ export function Settings() {
       }
 
       // Also save to localStorage for immediate access
-      const payload = JSON.stringify({ riskProfile, notifications });
+      const payload = JSON.stringify({ riskProfile, notifications, markets });
       localStorage.setItem('aio_settings_v1', payload);
       window.dispatchEvent(new Event('aio_settings_updated'));
       
       setNotificationsSaved(true);
       setTimeout(() => setNotificationsSaved(false), 2000);
     } catch (err) {
-      console.error(err);
-      setNotificationsError('Opslaan mislukt. Probeer het opnieuw.');
+      console.error('[Settings] Save error:', err);
+      setNotificationsError(err instanceof Error ? err.message : 'Opslaan mislukt. Probeer het opnieuw.');
     } finally {
       setNotificationsSaving(false);
     }
@@ -460,7 +478,6 @@ export function Settings() {
                 value={tradingSettings.riskPercent}
                 onChange={(e) => setTradingSettings(t => ({ ...t, riskPercent: parseFloat(e.target.value) }))}
                 className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                disabled={!tradingSettings.enabled}
               />
               <p className="text-xs text-slate-500">Hoeveel % van je portfolio riskeer je per trade</p>
             </label>
@@ -482,7 +499,6 @@ export function Settings() {
                 value={tradingSettings.stopLoss}
                 onChange={(e) => setTradingSettings(t => ({ ...t, stopLoss: parseInt(e.target.value) }))}
                 className="w-full h-2 bg-red-200 rounded-lg appearance-none cursor-pointer accent-red-600"
-                disabled={!tradingSettings.enabled}
               />
               <p className="text-xs text-slate-500">Verkoopprijs als verlies dit % bereikt</p>
             </label>
@@ -500,7 +516,6 @@ export function Settings() {
                 value={tradingSettings.takeProfit}
                 onChange={(e) => setTradingSettings(t => ({ ...t, takeProfit: parseInt(e.target.value) }))}
                 className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                disabled={!tradingSettings.enabled}
               />
               <p className="text-xs text-slate-500">Verkoopprijs als winst dit % bereikt</p>
             </label>
@@ -522,7 +537,6 @@ export function Settings() {
                 value={tradingSettings.maxDrawdown}
                 onChange={(e) => setTradingSettings(t => ({ ...t, maxDrawdown: parseInt(e.target.value) }))}
                 className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
-                disabled={!tradingSettings.enabled}
               />
               <p className="text-xs text-slate-500">Bot stopt als portfolio dit % verliest</p>
             </label>
