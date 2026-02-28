@@ -5009,16 +5009,6 @@ const tradingRoutes = {
           dataPoints: safeMarket.series.length,
           signals: signals.length > 0 ? signals : ['Geen bijzondere signalen']
         });
-        
-        // DEBUG: Log the actual condition checks
-        console.log(`[trading/scan/now] PROPOSAL GENERATION DEBUG:`, {
-          btc_change: changes.bitcoin,
-          btc_gt_3: changes.bitcoin > 3,
-          eth_change: changes.ethereum,
-          eth_gt_2: changes.ethereum > 2,
-          volatility_hoog: volatilityLevel === 'hoog',
-          total_proposals: proposals.length
-        });
 
         // Generate trading proposals based on market signals
         const proposals = [];
@@ -5073,6 +5063,16 @@ const tradingRoutes = {
             createdAt: new Date().toISOString()
           });
         }
+
+        // DEBUG: Log the actual condition checks
+        console.log(`[trading/scan/now] PROPOSAL GENERATION DEBUG:`, {
+          btc_change: changes.bitcoin,
+          btc_gt_3: changes.bitcoin > 3,
+          eth_change: changes.ethereum,
+          eth_gt_2: changes.ethereum > 2,
+          volatility_hoog: volatilityLevel === 'hoog',
+          total_proposals: proposals.length
+        });
 
         if (proposals.length > 0) {
           // Save proposals to KV store
