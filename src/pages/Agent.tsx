@@ -106,27 +106,26 @@ export function Agent() {
     };
   };
 
-  const loadAgentSettings = async (exchange: ExchangeId) => {
+  const loadAgentSettings = (exchange: ExchangeId) => {
     const connection = connections.find((c) => c.exchange === exchange);
     if (!connection) {
       setAgentSettings(null);
       return;
     }
 
-    try {
-      const resp = await fetch(`/api/agent/settings?exchange=${exchange}`);
-      if (resp.ok) {
-        const data = (await resp.json()) as { settings: AgentSettings };
-        setAgentSettings(data.settings);
-        return;
-      }
-    } catch {
-      // Fall through to defaults
+    // Initialize from profile.tradingEnabled (single source of truth)
+    const settings = getDefaultSettings(exchange, 'readonly' as const);
+    
+    // Override autoTrade with profile.tradingEnabled
+    if (profile) {
+      settings.autoTrade = profile.tradingEnabled || false;
+      console.log('[AIO AgentMode] Initialized agentSettings from profile', {
+        profile_tradingEnabled: profile.tradingEnabled,
+        agentSettings_autoTrade: settings.autoTrade
+      });
     }
-
-    // If API call fails or returns nothing, use defaults
-    const apiMode = 'readonly' as const;
-    setAgentSettings(getDefaultSettings(exchange, apiMode));
+    
+    setAgentSettings(settings);
   };
 
   useEffect(() => {
@@ -141,10 +140,10 @@ export function Agent() {
   }, [userId]);
 
   useEffect(() => {
-    if (selectedExchange && connections.length > 0) {
+    if (selectedExchange && connections.length > 0 && profile) {
       loadAgentSettings(selectedExchange);
     }
-  }, [selectedExchange, connections]);
+  }, [selectedExchange, connections, profile]);
 
   const handleSaveSettings = async () => {
     if (!agentSettings || !profile) {
@@ -188,6 +187,11 @@ export function Agent() {
       const data = (await resp.json()) as { profile?: any };
       if (data.profile) {
         setProfile(data.profile);
+        // Sync agentSettings with saved profile
+        setAgentSettings((curr) => curr ? { ...curr, autoTrade: data.profile.tradingEnabled } : null);
+        console.log('[AIO AgentMode] saved tradingEnabled to profile', {
+          tradingEnabled: data.profile.tradingEnabled
+        });
         console.log('[AIO AgentSettings] ✅ Settings saved successfully');
       }
 

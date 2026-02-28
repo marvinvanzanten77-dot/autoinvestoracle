@@ -199,24 +199,27 @@ export function AgentActivity() {
     };
   };
 
-  const loadAgentSettings = async (exch: ExchangeId) => {
+  const loadAgentSettings = (exch: ExchangeId) => {
     const connection = connections.find((c) => c.exchange === exch);
     if (!connection) {
       setAgentSettings(null);
       return;
     }
 
-    try {
-      const resp = await fetch(`/api/agent/settings?exchange=${exch}`);
-      if (!resp.ok) {
-        setAgentSettings(getDefaultSettings(exch, connection.apiMode || 'readonly'));
-        return;
-      }
-      const data = (await resp.json()) as { settings?: AgentSettings };
-      setAgentSettings(data.settings || getDefaultSettings(exch, connection.apiMode || 'readonly'));
-    } catch {
-      setAgentSettings(getDefaultSettings(exch, connection.apiMode || 'readonly'));
+    // Initialize from profile.tradingEnabled (single source of truth)
+    const settings = getDefaultSettings(exch, connection.apiMode || 'readonly');
+    
+    // Override autoTrade with profile.tradingEnabled
+    if (profile) {
+      settings.autoTrade = profile.tradingEnabled || false;
+      console.log('[AIO AgentMode] Initialized agentSettings from profile', {
+        exchange: exch,
+        profile_tradingEnabled: profile.tradingEnabled,
+        agentSettings_autoTrade: settings.autoTrade
+      });
     }
+    
+    setAgentSettings(settings);
   };
 
   const handleSaveSettings = async () => {
@@ -261,6 +264,11 @@ export function AgentActivity() {
       const data = (await resp.json()) as { profile?: any };
       if (data.profile) {
         setProfile(data.profile);
+        // Sync agentSettings with saved profile
+        setAgentSettings((curr) => curr ? { ...curr, autoTrade: data.profile.tradingEnabled } : null);
+        console.log('[AIO AgentMode] saved tradingEnabled to profile', {
+          tradingEnabled: data.profile.tradingEnabled
+        });
         console.log('[AIO AgentSettings] ✅ Settings saved successfully');
       }
 
@@ -290,10 +298,10 @@ export function AgentActivity() {
   }, [userId]);
 
   useEffect(() => {
-    if (selectedExchange) {
+    if (selectedExchange && profile) {
       loadAgentSettings(selectedExchange);
     }
-  }, [selectedExchange, connections]);
+  }, [selectedExchange, connections, profile]);
 
   const getStatusBadge = (status: 'success' | 'pending' | 'failed') => {
     const styles =
