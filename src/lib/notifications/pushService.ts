@@ -216,14 +216,37 @@ export class PushNotificationService {
         return null;
       }
 
-      // Step 4: Check VAPID key
-      console.log('[AIO Push] subscribe() - step 4: VAPID key check');
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      console.log('[AIO Push] vapid key present:', !!vapidKey);
-      if (vapidKey) {
-        console.log('[AIO Push] vapid key length:', vapidKey.length);
-      } else {
+      // Step 4: Check VAPID key and convert to Uint8Array
+      console.log('[AIO Push] subscribe() - step 4: VAPID key check and conversion');
+      const vapidKeyString = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      console.log('[AIO Push] vapid key present:', !!vapidKeyString);
+      
+      if (!vapidKeyString) {
         console.error('[AIO Push] ❌ VAPID key missing or undefined - ensure VITE_VAPID_PUBLIC_KEY is set in .env');
+        return null;
+      }
+      
+      // Convert base64 VAPID key string to Uint8Array
+      let vapidKey: Uint8Array;
+      try {
+        const binaryString = atob(vapidKeyString);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        vapidKey = bytes;
+        console.log('[AIO Push] VAPID key decoded successfully:', {
+          originalLength: vapidKeyString.length,
+          decodedLength: vapidKey.length,
+          type: vapidKey.constructor.name
+        });
+      } catch (decodeErr) {
+        console.error('[AIO Push] ❌ Failed to decode VAPID key from base64:', {
+          error: decodeErr,
+          vapidLength: vapidKeyString.length,
+          message: decodeErr instanceof Error ? decodeErr.message : String(decodeErr)
+        });
+        return null;
       }
 
       // Step 5: Wrap subscribe call with detailed error handling

@@ -3459,6 +3459,30 @@ const routes: Record<string, Handler> = {
                 await kv.set(proposalKey, proposal);
                 return res.status(500).json({ error: 'Verkooporder kon niet geplaatst worden - geen order ID in response' });
               }
+            } else if (action === 'hold' || action === 'HOLD') {
+              // Hold action - no execution needed, just mark as acknowledged
+              console.log('[AIO Proposals] Hold action - market volatility warning, no trade executed');
+              proposal.status = 'acknowledged';
+              proposal.executedAt = new Date().toISOString();
+              await kv.set(proposalKey, proposal);
+              
+              return res.status(200).json({ 
+                success: true,
+                proposal,
+                message: 'Hold recommendation acknowledged - no trade executed'
+              });
+            } else if (action === 'monitor' || action === 'MONITOR') {
+              // Monitor action - no execution needed, just track the recommendation
+              console.log('[AIO Proposals] Monitor action - observing market conditions');
+              proposal.status = 'monitoring';
+              proposal.executedAt = new Date().toISOString();
+              await kv.set(proposalKey, proposal);
+              
+              return res.status(200).json({ 
+                success: true,
+                proposal,
+                message: 'Portfolio monitoring active - no trade recommended at this time'
+              });
             } else {
               // Unknown action type
               console.warn('[trading/proposals] Unknown action type:', action);
