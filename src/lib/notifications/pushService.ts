@@ -147,6 +147,14 @@ export class PushNotificationService {
    * Abonneer op push notifications
    */
   async subscribe(userId: string): Promise<string | null> {
+    // Graceful feature flag: disable push notifications if needed
+    // Set window.disablePushNotifications = true in console to skip push
+    const isDisabled = (window as any).disablePushNotifications === true;
+    if (isDisabled) {
+      console.log('[AIO Push] Subscribe disabled via feature flag - skipping');
+      return null;
+    }
+    
     console.log('[AIO Push] subscribe() START - validating environment');
     
     // Check browser support
