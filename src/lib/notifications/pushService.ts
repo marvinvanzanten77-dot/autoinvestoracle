@@ -249,17 +249,38 @@ export class PushNotificationService {
         });
         
         const binaryString = atob(standardBase64);
-        const bytes = new Uint8Array(binaryString.length);
+        let bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
+        
+        // P-256 VAPID keys can be:
+        // - 65 bytes: 0x04 (uncompressed prefix) + 32 bytes X + 32 bytes Y
+        // - 64 bytes: 32 bytes X + 32 bytes Y (raw coordinates, need 0x04 prefix)
+        // - 33 bytes: 0x02/0x03 (compressed, not typically used for VAPID)
+        
+        const initialLength = bytes.length;
+        console.log('[AIO Push] VAPID key initial decode:', {
+          initialLength,
+          startsWith0x04: bytes[0] === 0x04,
+          firstByte: bytes[0]?.toString(16).padStart(2, '0'),
+          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' ')
+        });
+        
+        // If we got 64 bytes (raw coordinates without 0x04 prefix), add the prefix
+        if (bytes.length === 64 && bytes[0] !== 0x04) {
+          console.log('[AIO Push] ⚠️ Raw P-256 coordinates detected (64 bytes, no 0x04 prefix) - prepending 0x04');
+          const newBytes = new Uint8Array(65);
+          newBytes[0] = 0x04;
+          newBytes.set(bytes, 1);
+          bytes = newBytes;
+        }
+        
         vapidKey = bytes;
         
-        // P-256 VAPID keys should be exactly 65 bytes
         const isValidLength = vapidKey.length === 65;
-        console.log('[AIO Push] VAPID key decoded successfully:', {
-          originalLength: vapidKeyString.length,
-          decodedLength: vapidKey.length,
+        console.log('[AIO Push] VAPID key after normalization:', {
+          finalLength: vapidKey.length,
           isValidP256: isValidLength,
           isUncompressed: bytes[0] === 0x04,
           firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' '),
@@ -267,7 +288,7 @@ export class PushNotificationService {
         });
         
         if (!isValidLength) {
-          console.warn('[AIO Push] ⚠️ VAPID key length mismatch - may cause subscribe() to fail');
+          console.warn('[AIO Push] ⚠️ VAPID key length invalid - subscribe() will likely fail');
         }
       } catch (decodeErr) {
         console.error('[AIO Push] ❌ Failed to decode VAPID key from base64:', {
