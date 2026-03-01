@@ -571,7 +571,7 @@ type TradingProposal = {
   estimatedValue: number;
   confidence: number;
   reasoning: string;
-  status: 'PROPOSED' | 'approved' | 'rejected' | 'executed' | 'failed';
+  status: 'PROPOSED' | 'approved' | 'rejected' | 'executed' | 'failed' | 'acknowledged' | 'monitoring';
   createdAt: string;
 };
 
@@ -1971,7 +1971,7 @@ type Proposal = {
   reasoning: string;
   confidence?: number; // Optional: proposal confidence score (0-100)
   createdAt: string;
-  status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed';
+  status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed' | 'acknowledged' | 'monitoring';
   executedAt?: string;
   exchange?: string;
 };
@@ -5498,7 +5498,8 @@ const tradingRoutes = {
         } else if (changes.bitcoin < -2 && ownedAssetSymbols.includes('BTC')) {
           // Only propose SELL if user currently owns BTC
           const btcOwned = ownedAssets.find((b: any) => b.asset.toUpperCase() === 'BTC');
-          if (btcOwned && btcOwned.available > 0) {
+          const btcAvailable = btcOwned?.available ?? 0;
+          if (btcOwned && btcAvailable > 0) {
             proposals.push({
               id: randomUUID(),
               policyId: 'default',
@@ -5506,10 +5507,10 @@ const tradingRoutes = {
               asset: 'BTC',
               action: 'sell',
               price: 0,
-              amount: Math.min(0.005, btcOwned.available * 0.5),
+              amount: Math.min(0.005, btcAvailable * 0.5),
               estimatedValue: 275,
               confidence: Math.min(75, 50 + Math.abs(changes.bitcoin) * 8),
-              reasoning: `Bitcoin showing weakness (${changes.bitcoin.toFixed(2)}%), risk management suggested. Owned: ${btcOwned.available.toFixed(8)} BTC`,
+              reasoning: `Bitcoin showing weakness (${changes.bitcoin.toFixed(2)}%), risk management suggested. Owned: ${btcAvailable.toFixed(8)} BTC`,
               status: 'PROPOSED',
               createdAt: new Date().toISOString()
             });

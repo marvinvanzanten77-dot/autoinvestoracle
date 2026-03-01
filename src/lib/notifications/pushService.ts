@@ -326,7 +326,7 @@ export class PushNotificationService {
       try {
         subscription = await this.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: vapidKey
+          applicationServerKey: vapidKey as any
         });
         console.log('[AIO Push] ✅ pushManager.subscribe() succeeded');
       } catch (subscribeErr) {
