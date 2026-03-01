@@ -227,9 +227,20 @@ export class PushNotificationService {
       }
       
       // Convert base64 VAPID key string to Uint8Array
+      // Handle both standard base64 and URL-safe base64 encoding
       let vapidKey: Uint8Array;
       try {
-        const binaryString = atob(vapidKeyString);
+        // Convert URL-safe base64 (- and _) to standard base64 (+ and /)
+        const standardBase64 = vapidKeyString
+          .replace(/-/g, '+')
+          .replace(/_/g, '/');
+        
+        console.log('[AIO Push] VAPID key format check:', {
+          original: vapidKeyString.substring(0, 20) + '...',
+          hasUrlSafeChars: /[-_]/.test(vapidKeyString)
+        });
+        
+        const binaryString = atob(standardBase64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
@@ -238,12 +249,14 @@ export class PushNotificationService {
         console.log('[AIO Push] VAPID key decoded successfully:', {
           originalLength: vapidKeyString.length,
           decodedLength: vapidKey.length,
-          type: vapidKey.constructor.name
+          type: vapidKey.constructor.name,
+          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' ')
         });
       } catch (decodeErr) {
         console.error('[AIO Push] ❌ Failed to decode VAPID key from base64:', {
           error: decodeErr,
           vapidLength: vapidKeyString.length,
+          vapidSample: vapidKeyString.substring(0, 30) + '...',
           message: decodeErr instanceof Error ? decodeErr.message : String(decodeErr)
         });
         return null;
