@@ -5537,7 +5537,8 @@ const tradingRoutes = {
         } else if (changes.ethereum < -1.5 && ownedAssetSymbols.includes('ETH')) {
           // Only propose SELL if user currently owns ETH
           const ethOwned = ownedAssets.find((b: any) => b.asset.toUpperCase() === 'ETH');
-          if (ethOwned && ethOwned.available > 0) {
+          const ethAvailable = ethOwned?.available ?? 0;
+          if (ethOwned && ethAvailable > 0) {
             proposals.push({
               id: randomUUID(),
               policyId: 'default',
@@ -5545,10 +5546,10 @@ const tradingRoutes = {
               asset: 'ETH',
               action: 'sell',
               price: 0,
-              amount: Math.min(0.05, ethOwned.available * 0.5),
+              amount: Math.min(0.05, ethAvailable * 0.5),
               estimatedValue: 175,
               confidence: Math.min(70, 50 + Math.abs(changes.ethereum) * 10),
-              reasoning: `Ethereum showing weakness (${changes.ethereum.toFixed(2)}%), rebalancing recommended. Owned: ${ethOwned.available.toFixed(8)} ETH`,
+              reasoning: `Ethereum showing weakness (${changes.ethereum.toFixed(2)}%), rebalancing recommended. Owned: ${ethAvailable.toFixed(8)} ETH`,
               status: 'PROPOSED',
               createdAt: new Date().toISOString()
             });
