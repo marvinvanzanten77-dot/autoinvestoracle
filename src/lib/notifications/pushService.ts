@@ -231,13 +231,21 @@ export class PushNotificationService {
       let vapidKey: Uint8Array;
       try {
         // Convert URL-safe base64 (- and _) to standard base64 (+ and /)
-        const standardBase64 = vapidKeyString
+        let standardBase64 = vapidKeyString
           .replace(/-/g, '+')
           .replace(/_/g, '/');
         
+        // Add proper padding if needed (base64 should be multiple of 4)
+        while (standardBase64.length % 4) {
+          standardBase64 += '=';
+        }
+        
         console.log('[AIO Push] VAPID key format check:', {
           original: vapidKeyString.substring(0, 20) + '...',
-          hasUrlSafeChars: /[-_]/.test(vapidKeyString)
+          hasUrlSafeChars: /[-_]/.test(vapidKeyString),
+          lengthBefore: vapidKeyString.length,
+          lengthAfter: standardBase64.length,
+          paddingAdded: standardBase64.length - vapidKeyString.length
         });
         
         const binaryString = atob(standardBase64);
@@ -246,12 +254,21 @@ export class PushNotificationService {
           bytes[i] = binaryString.charCodeAt(i);
         }
         vapidKey = bytes;
+        
+        // P-256 VAPID keys should be exactly 65 bytes
+        const isValidLength = vapidKey.length === 65;
         console.log('[AIO Push] VAPID key decoded successfully:', {
           originalLength: vapidKeyString.length,
           decodedLength: vapidKey.length,
-          type: vapidKey.constructor.name,
-          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' ')
+          isValidP256: isValidLength,
+          isUncompressed: bytes[0] === 0x04,
+          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' '),
+          warningMsg: !isValidLength ? `⚠️ Expected 65 bytes for P-256, got ${vapidKey.length}` : undefined
         });
+        
+        if (!isValidLength) {
+          console.warn('[AIO Push] ⚠️ VAPID key length mismatch - may cause subscribe() to fail');
+        }
       } catch (decodeErr) {
         console.error('[AIO Push] ❌ Failed to decode VAPID key from base64:', {
           error: decodeErr,
