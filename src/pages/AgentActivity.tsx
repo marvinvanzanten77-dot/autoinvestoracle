@@ -197,7 +197,16 @@ export function AgentActivity() {
       orderLimit: 100,
       tradingStrategy: 'balanced',
       enableStopLoss: false,
-      stopLossPercent: 5
+      stopLossPercent: 5,
+      assetPreferences: {
+        bitcoin: 50,
+        ethereum: 50,
+        stablecoins: 50,
+        altcoins: 30,
+        memecoins: 0,
+        hypeCoins: 0,
+        newCoins: 20
+      }
     };
   };
 
@@ -225,11 +234,16 @@ export function AgentActivity() {
       settings.tradingStrategy = profile.tradingStrategy || 'balanced';
       settings.enableStopLoss = profile.enableStopLoss !== false;
       settings.stopLossPercent = profile.stopLossPercent || 5;
+      // Load assetPreferences from profile
+      if (profile.assetPreferences) {
+        settings.assetPreferences = profile.assetPreferences;
+      }
       
       console.log('[AIO AgentSettings] Loaded from profile', {
         exchange: exch,
         autoTrade: settings.autoTrade,
         monitoringInterval: settings.monitoringInterval,
+        assetPreferences: settings.assetPreferences,
         allSettings: settings
       });
     }
@@ -261,7 +275,8 @@ export function AgentActivity() {
         confidenceThreshold: agentSettings.confidenceThreshold,
         orderLimit: agentSettings.orderLimit,
         tradingStrategy: agentSettings.tradingStrategy,
-        enableStopLoss: agentSettings.enableStopLoss
+        enableStopLoss: agentSettings.enableStopLoss,
+        assetPreferences: agentSettings.assetPreferences
       });
 
       // Update profile with ALL agent settings
@@ -278,7 +293,8 @@ export function AgentActivity() {
         confidenceThreshold: agentSettings.confidenceThreshold,
         orderLimit: agentSettings.orderLimit,
         tradingStrategy: agentSettings.tradingStrategy,
-        enableStopLoss: agentSettings.enableStopLoss
+        enableStopLoss: agentSettings.enableStopLoss,
+        assetPreferences: agentSettings.assetPreferences
       };
 
       const resp = await fetch('/api/profile/upsert', {

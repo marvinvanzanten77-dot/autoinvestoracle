@@ -29,6 +29,16 @@ type AgentSettings = {
   tradingStrategy?: 'conservative' | 'balanced' | 'aggressive';
   enableStopLoss?: boolean;
   stopLossPercent?: number;
+  // Asset preferences
+  assetPreferences?: {
+    bitcoin: number; // 0-100
+    ethereum: number; // 0-100
+    stablecoins: number; // 0-100
+    altcoins: number; // 0-100
+    memecoins: number; // 0-100
+    hypeCoins: number; // 0-100
+    newCoins: number; // 0-100
+  };
 };
 
 export function Agent() {
@@ -104,7 +114,17 @@ export function Agent() {
       orderLimit: 100,
       tradingStrategy: 'balanced',
       enableStopLoss: false,
-      stopLossPercent: 5
+      stopLossPercent: 5,
+      // Asset preferences defaults
+      assetPreferences: {
+        bitcoin: 50,
+        ethereum: 50,
+        stablecoins: 50,
+        altcoins: 30,
+        memecoins: 0,
+        hypeCoins: 0,
+        newCoins: 20
+      }
     };
   };
 
@@ -132,11 +152,16 @@ export function Agent() {
       settings.tradingStrategy = profile.tradingStrategy || 'balanced';
       settings.enableStopLoss = profile.enableStopLoss !== false;
       settings.stopLossPercent = profile.stopLossPercent || 5;
+      // Load assetPreferences from profile
+      if (profile.assetPreferences) {
+        settings.assetPreferences = profile.assetPreferences;
+      }
       
       console.log('[AIO AgentSettings] Loaded from profile', {
         exchange,
         autoTrade: settings.autoTrade,
         monitoringInterval: settings.monitoringInterval,
+        assetPreferences: settings.assetPreferences,
         allSettings: settings
       });
     }
@@ -185,7 +210,8 @@ export function Agent() {
         confidenceThreshold: agentSettings.confidenceThreshold,
         orderLimit: agentSettings.orderLimit,
         tradingStrategy: agentSettings.tradingStrategy,
-        enableStopLoss: agentSettings.enableStopLoss
+        enableStopLoss: agentSettings.enableStopLoss,
+        assetPreferences: agentSettings.assetPreferences
       });
 
       // Update profile with ALL agent settings
@@ -202,7 +228,8 @@ export function Agent() {
         confidenceThreshold: agentSettings.confidenceThreshold,
         orderLimit: agentSettings.orderLimit,
         tradingStrategy: agentSettings.tradingStrategy,
-        enableStopLoss: agentSettings.enableStopLoss
+        enableStopLoss: agentSettings.enableStopLoss,
+        assetPreferences: agentSettings.assetPreferences
       };
 
       const resp = await fetch('/api/profile/upsert', {

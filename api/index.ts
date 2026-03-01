@@ -5431,16 +5431,23 @@ const tradingRoutes = {
         );
         
         const ownedAssetSymbols = ownedAssets.map((b: any) => b.asset.toUpperCase());
+        
+        // Get EUR balance for BUY validation
+        const eurBalance = balances.find((b: any) => b.asset === 'EUR');
+        const availableEUR = eurBalance?.available || 0;
+        
         console.log('[AIO Proposals] owned assets AFTER filtering', {
           count: ownedAssets.length,
           symbols: ownedAssetSymbols,
+          availableEUR: availableEUR,
           details: ownedAssets.map((b: any) => ({ asset: b.asset, total: b.total }))
         });
         
         console.log('[AIO Proposals] owned assets', {
           total: ownedAssets.length,
           assets: ownedAssetSymbols,
-          changes: { bitcoin: changes.bitcoin, ethereum: changes.ethereum }
+          changes: { bitcoin: changes.bitcoin, ethereum: changes.ethereum },
+          availableEUR: availableEUR
         });
         
         // Use absolute changes for better responsiveness
@@ -5448,7 +5455,8 @@ const tradingRoutes = {
         const ethAbsChange = Math.abs(changes.ethereum);
         
         // BTC signals: Buy if up >1.5%, Sell if down >2%
-        if (changes.bitcoin > 1.5) {
+        if (changes.bitcoin > 1.5 && availableEUR > 100) {
+          // Only propose BUY if user has EUR balance
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5459,30 +5467,34 @@ const tradingRoutes = {
             amount: 0.01,
             estimatedValue: 550,
             confidence: Math.min(85, 50 + changes.bitcoin * 10),
-            reasoning: `Bitcoin showing bullish momentum (+${changes.bitcoin.toFixed(2)}%), consider accumulation`,
+            reasoning: `Bitcoin showing bullish momentum (+${changes.bitcoin.toFixed(2)}%), available EUR: €${availableEUR.toFixed(2)}`,
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
         } else if (changes.bitcoin < -2 && ownedAssetSymbols.includes('BTC')) {
           // Only propose SELL if user currently owns BTC
-          proposals.push({
-            id: randomUUID(),
-            policyId: 'default',
-            exchange: 'bitvavo',
-            asset: 'BTC',
-            action: 'sell',
-            price: 0,
-            amount: 0.005,
-            estimatedValue: 275,
-            confidence: Math.min(75, 50 + Math.abs(changes.bitcoin) * 8),
-            reasoning: `Bitcoin showing weakness (${changes.bitcoin.toFixed(2)}%), risk management suggested`,
-            status: 'PROPOSED',
-            createdAt: new Date().toISOString()
-          });
+          const btcOwned = ownedAssets.find((b: any) => b.asset.toUpperCase() === 'BTC');
+          if (btcOwned && btcOwned.available > 0) {
+            proposals.push({
+              id: randomUUID(),
+              policyId: 'default',
+              exchange: 'bitvavo',
+              asset: 'BTC',
+              action: 'sell',
+              price: 0,
+              amount: Math.min(0.005, btcOwned.available * 0.5),
+              estimatedValue: 275,
+              confidence: Math.min(75, 50 + Math.abs(changes.bitcoin) * 8),
+              reasoning: `Bitcoin showing weakness (${changes.bitcoin.toFixed(2)}%), risk management suggested. Owned: ${btcOwned.available.toFixed(8)} BTC`,
+              status: 'PROPOSED',
+              createdAt: new Date().toISOString()
+            });
+          }
         }
         
         // ETH signals: Buy if up >1%, Sell if down >1.5%
-        if (changes.ethereum > 1) {
+        if (changes.ethereum > 1 && availableEUR > 50) {
+          // Only propose BUY if user has EUR balance
           proposals.push({
             id: randomUUID(),
             policyId: 'default',
@@ -5493,26 +5505,29 @@ const tradingRoutes = {
             amount: 0.1,
             estimatedValue: 350,
             confidence: Math.min(80, 50 + changes.ethereum * 12),
-            reasoning: `Ethereum showing positive momentum (+${changes.ethereum.toFixed(2)}%), tactical position suggested`,
+            reasoning: `Ethereum showing positive momentum (+${changes.ethereum.toFixed(2)}%), available EUR: €${availableEUR.toFixed(2)}`,
             status: 'PROPOSED',
             createdAt: new Date().toISOString()
           });
         } else if (changes.ethereum < -1.5 && ownedAssetSymbols.includes('ETH')) {
           // Only propose SELL if user currently owns ETH
-          proposals.push({
-            id: randomUUID(),
-            policyId: 'default',
-            exchange: 'bitvavo',
-            asset: 'ETH',
-            action: 'sell',
-            price: 0,
-            amount: 0.05,
-            estimatedValue: 175,
-            confidence: Math.min(70, 50 + Math.abs(changes.ethereum) * 10),
-            reasoning: `Ethereum showing weakness (${changes.ethereum.toFixed(2)}%), rebalancing recommended`,
-            status: 'PROPOSED',
-            createdAt: new Date().toISOString()
-          });
+          const ethOwned = ownedAssets.find((b: any) => b.asset.toUpperCase() === 'ETH');
+          if (ethOwned && ethOwned.available > 0) {
+            proposals.push({
+              id: randomUUID(),
+              policyId: 'default',
+              exchange: 'bitvavo',
+              asset: 'ETH',
+              action: 'sell',
+              price: 0,
+              amount: Math.min(0.05, ethOwned.available * 0.5),
+              estimatedValue: 175,
+              confidence: Math.min(70, 50 + Math.abs(changes.ethereum) * 10),
+              reasoning: `Ethereum showing weakness (${changes.ethereum.toFixed(2)}%), rebalancing recommended. Owned: ${ethOwned.available.toFixed(8)} ETH`,
+              status: 'PROPOSED',
+              createdAt: new Date().toISOString()
+            });
+          }
         }
 
         // Volatility-based signal: High volatility warrants protective position

@@ -253,7 +253,7 @@ export class PushNotificationService {
         keys: Object.keys(subscription.toJSON().keys || {})
       });
 
-      // Step 7: Send to backend
+      // Step 7: Send to backend with JWT Authorization header
       const subscriptionPayload = subscription.toJSON();
       console.log('[AIO Push] subscribe() - step 7: sending to backend', {
         userId,
@@ -261,9 +261,29 @@ export class PushNotificationService {
         hasKeys: !!subscriptionPayload.keys
       });
 
+      // Get JWT token from Supabase session (stored in localStorage by Supabase)
+      let authToken = '';
+      try {
+        const supabaseAuth = localStorage.getItem('sb-djmfutyxmyhujcygdliy-auth-token');
+        if (supabaseAuth) {
+          const authData = JSON.parse(supabaseAuth);
+          authToken = authData.session?.access_token || '';
+        }
+      } catch (tokenErr) {
+        console.warn('[AIO Push] Could not retrieve auth token from localStorage:', tokenErr);
+      }
+
+      if (!authToken) {
+        console.error('[AIO Push] ❌ No authorization token available - cannot subscribe');
+        return null;
+      }
+
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
         body: JSON.stringify({
           userId,
           subscription: subscriptionPayload
@@ -330,10 +350,26 @@ export class PushNotificationService {
       await subscription.unsubscribe();
       
       console.log('[AIO Push] unsubscribe() - step 3: notifying backend');
+      
+      // Get JWT token for authorization
+      let authToken = '';
+      try {
+        const supabaseAuth = localStorage.getItem('sb-djmfutyxmyhujcygdliy-auth-token');
+        if (supabaseAuth) {
+          const authData = JSON.parse(supabaseAuth);
+          authToken = authData.session?.access_token || '';
+        }
+      } catch (tokenErr) {
+        console.warn('[AIO Push] Could not retrieve auth token for unsubscribe:', tokenErr);
+      }
+
       // Notify backend
       const response = await fetch('/api/push/unsubscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+        },
         body: JSON.stringify({ userId })
       });
 
