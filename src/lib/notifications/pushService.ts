@@ -220,6 +220,11 @@ export class PushNotificationService {
       console.log('[AIO Push] subscribe() - step 4: VAPID key check and conversion');
       const vapidKeyString = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       console.log('[AIO Push] vapid key present:', !!vapidKeyString);
+      console.log('[AIO Push] vapid key env var:', {
+        value: vapidKeyString ? `${vapidKeyString.substring(0, 30)}...` : 'undefined',
+        type: typeof vapidKeyString,
+        length: vapidKeyString?.length || 0
+      });
       
       if (!vapidKeyString) {
         console.error('[AIO Push] ❌ VAPID key missing or undefined - ensure VITE_VAPID_PUBLIC_KEY is set in .env');
@@ -260,11 +265,15 @@ export class PushNotificationService {
         // - 33 bytes: 0x02/0x03 (compressed, not typically used for VAPID)
         
         const initialLength = bytes.length;
+        const toHex = (arr: Uint8Array) => Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+        const fullHex = toHex(bytes);
+        
         console.log('[AIO Push] VAPID key initial decode:', {
           initialLength,
           startsWith0x04: bytes[0] === 0x04,
           firstByte: bytes[0]?.toString(16).padStart(2, '0'),
-          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' ')
+          firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' '),
+          fullHex: fullHex.substring(0, 40) + '...'
         });
         
         // If we got 64 bytes (raw coordinates without 0x04 prefix), add the prefix
@@ -279,11 +288,13 @@ export class PushNotificationService {
         vapidKey = bytes;
         
         const isValidLength = vapidKey.length === 65;
+        const finalHex = toHex(vapidKey);
         console.log('[AIO Push] VAPID key after normalization:', {
           finalLength: vapidKey.length,
           isValidP256: isValidLength,
           isUncompressed: bytes[0] === 0x04,
           firstBytes: Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' '),
+          fullHex: finalHex.substring(0, 60) + '...',
           warningMsg: !isValidLength ? `⚠️ Expected 65 bytes for P-256, got ${vapidKey.length}` : undefined
         });
         
