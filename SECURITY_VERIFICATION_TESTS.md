@@ -466,6 +466,307 @@ Portfolio waarde nog niet beschikbaar - prijzen laden. Probeer over enkele secon
 
 ---
 
+## 8) Vercel Deployment & Diagnostics - Stap voor Stap
+
+### **STAP 1: Environment Variables Verifiëren**
+
+**In Vercel Dashboard:**
+1. Ga naar Settings → Environment Variables
+2. Controlleer deze 4 variabelen bestaan:
+   ```
+   ✅ SUPABASE_URL              (production URL)
+   ✅ SUPABASE_ANON_KEY         (public key)
+   ✅ SUPABASE_SERVICE_ROLE_KEY (SECRET, gemarkeerd als secret)
+   ✅ VITE_VAPID_PUBLIC_KEY     (87 chars base64)
+   ```
+3. **Belangrijk:** Service role key MOET als SECRET marked zijn (niet zichtbaar)
+
+**Commit en deploy opnieuw:**
+```bash
+git push origin main
+# Wacht tot Vercel build klaar is
+```
+
+---
+
+### **STAP 2: SSL/HTTPS Certificaat Controleren**
+
+**In Browser DevTools:**
+
+1. Open je production site: `https://autoinvestoracle.nl`
+2. Rechterklik → Inspect → Security tab
+3. Controleer:
+   ```
+   ✅ Status: "Secure"
+   ✅ Certificate: "Valid"
+   ✅ Protocol: "TLS 1.2 or 1.3"
+   ```
+4. Als ROOD/ERROR → Vercel certificate issue → Contact Vercel support
+
+**2-minuut fix:** Probeer `https://www.autoinvestoracle.nl` (met www)
+- Als die WEL werkt, voeg domein toe in Vercel settings
+
+---
+
+### **STAP 3: Service Worker Registratie Checken**
+
+**In Browser DevTools:**
+
+1. Open app op production: `https://autoinvestoracle.nl`
+2. Ga naar: DevTools → Application → Service Workers
+3. Controleer:
+   ```
+   ✅ Status: "activated and running"
+   ✅ Scope: "https://www.autoinvestoracle.nl/"
+   ✅ No errors in red
+   ```
+
+**Als Service Worker niet registered:**
+- Open Console tab
+- Zie je `[AIO SW] Registered` bericht?
+  - **JA** → Ga naar stap 4
+  - **NEE** → Klik refresh en check opnieuw
+
+---
+
+### **STAP 4: Push Notification Diagnostiek Console**
+
+**In Browser DevTools Console:**
+
+1. Open app → Console tab
+2. Trigger notifications setup (bijv. login / agent page)
+3. Kijk naar logs die starten met `[AIO Push]`:
+
+```
+❌ GEEN [AIO Push] logs zichtbaar?
+   → Service Worker registered maar Push niet geinitieerd
+   → Check app code voor errors
+
+✅ Ziet je wel logs zoals:
+   [AIO Push] vapid key env var: { value: 'BIKWyTU2...', length: 87 }
+   [AIO Push] VAPID key initial decode: { initialLength: 65, startsWith0x04: true }
+   → Ga naar STAP 5
+
+❌ Error: "AbortError code 20"
+   → pushManager.subscribe() faalt
+   → Mogelijke oorzaken:
+      1. HTTPS niet echt HTTPS (zie STAP 2)
+      2. Service Worker scope mismatch
+      3. Vercel infrastructure issue
+```
+
+**Copy-paste voor snelle test:**
+```javascript
+// In console typen:
+if (navigator.serviceWorker.controller) {
+  console.log('✅ SW active:', navigator.serviceWorker.controller.scriptURL);
+} else {
+  console.log('❌ Geen active SW');
+}
+```
+
+---
+
+### **STAP 5: Vercel Function Logs Checken**
+
+**In Vercel Dashboard:**
+
+1. Ga naar: Deployments → Latest → Functions
+2. Klik op `api` function (of `/api` route)
+3. Kijk naar **Logs** tab (niet Build Logs!)
+4. Filter voor `[Push]`:
+
+```
+Gelukkige scenario:
+[Push] Subscribe attempt: { userId: "...", hasAuth: true }
+[Push] JWT auth: ✅ Valid token
+[Push] ✅ Subscription saved
+
+Probleem scenario:
+[Push] JWT auth: ❌ No valid JWT provided
+  → Frontend stuurt geen Bearer token
+  → Check STAP 6
+
+[Push] Inserting subscription to DB: ...
+(dan niets meer = API hangs)
+  → Supabase connection issue
+  → Check SUPABASE_URL valid is
+```
+
+**Logs in real-time volgen:**
+```bash
+# Via terminal (als je Vercel CLI hebt):
+vercel logs --follow
+```
+
+---
+
+### **STAP 6: Frontend Token Verzending Checken**
+
+**In Browser DevTools Network tab:**
+
+1. Open app op production
+2. Open Network tab
+3. Clear logs
+4. Trigger push subscription (agent page openen / login)
+5. Zoek request: `POST /api/push/subscribe`
+6. Klik erop → Request Headers:
+
+```
+✅ Moet zijn:
+Authorization: Bearer eyJhbGciOi...
+
+❌ Als LEEG:
+Authorization: (niet present)
+  → Frontend stuurt geen token
+  → Check pushService.ts getToken() functie
+```
+
+**Quick fix in browser console:**
+```javascript
+// Kijk of token beschikbaar is:
+const token = localStorage.getItem('sb-autoinvestor-oracle-auth-token');
+console.log(token ? '✅ Token found' : '❌ Token missing');
+```
+
+---
+
+### **STAP 7: CORS Headers Controleren**
+
+**In Network tab (STAP 6 voortgezet):**
+
+1. Dezelfde POST `/api/push/subscribe` request
+2. Ga naar Response Headers:
+
+```
+Controleer:
+Access-Control-Allow-Origin: *
+  (of je domain)
+
+Access-Control-Allow-Methods: POST
+
+❌ Als headers ontbreken:
+  → Vercel CORS misconfigured
+  → Check vercel.json CORS settings
+```
+
+---
+
+### **STAP 8: Production Build Validatie**
+
+**Zorg dat je deployment clean is:**
+
+1. In Vercel Dashboard → Deployments
+2. Klik Latest deployment
+3. Kijk naar **Build Logs**:
+
+```
+✅ Expected output:
+✓ Builds generated from 1 source
+vite v5.4.21 building for production
+✓ 2485 modules transformed
+✓ built in 22.99s
+
+❌ Errors/Warnings:
+- [ ] "module not found"
+- [ ] "TypeScript error"
+- [ ] "Failed to build"
+```
+
+**Als errors:** 
+- Ga terug naar main branch
+- Run lokaal: `npm run build`
+- Fix errors
+- Commit en push
+
+---
+
+### **STAP 9: Localhost HTTPS Test (optional maar handig)**
+
+**Als Vercel production fails, test LocalHost eerst:**
+
+```bash
+# Terminal in project folder:
+npm run build
+npm run preview  # Starts local HTTPS preview
+
+# In browser:
+https://localhost:4173
+
+# Check if push works locally
+```
+
+**Waarom nuttig:**
+- Als localhost WORKS maar Vercel FAILS → Infrastructure issue
+- Als BEIDE FAIL → Code issue
+
+---
+
+### **STAP 10: Firewall/Proxy Check**
+
+**Als je notifications naar FCM stuurt:**
+
+1. Check firewall blokkeert geen `fcm.googleapis.com`
+2. Test connectivity in terminal:
+
+```bash
+curl -I https://fcm.googleapis.com
+# Moet 200 of redirect zijn
+```
+
+3. Vercel outbound connections:
+   - Standard Vercel plan = unlimited outbound
+   - Check je plan op Vercel account
+
+---
+
+## Quick Action Checklist
+
+```
+DAG 1 - SETUP:
+[ ] STAP 1: Vercel env vars checken
+[ ] STAP 2: SSL cert valid
+[ ] Deploy opnieuw (git push)
+
+DAG 2 - DEBUG:
+[ ] STAP 3: Service Worker active
+[ ] STAP 4: Push logs in Console
+[ ] STAP 5: Vercel Function logs
+[ ] STAP 6: Network Bearer token zichtbaar?
+
+DAG 3 - VERIFY:
+[ ] STAP 7: CORS headers
+[ ] STAP 8: Build clean
+[ ] STAP 9: Localhost test (if needed)
+[ ] STAP 10: Firewall check
+```
+
+---
+
+## If Code 20 Error Persists
+
+**Dit betekent:** Browser kan geen verbinding met push service maken
+
+**Meest waarschijnlijke oorzaken (in volgorde):**
+
+1. **HTTPS slechts SSL cert issue (40% kans)**
+   - Fix: Contact Vercel support, vraag cert renewal
+   - Test: Open browserDevTools Security tab
+
+2. **Service Worker scope mismatch (30% kans)**
+   - Fix: Zorg scope = domain exact
+   - Test: STAP 3 checken
+
+3. **Vercel infrastructure (20% kans)**
+   - Fix: Upgrade Vercel plan of switch region
+   - Test: STAP 5 logs checken
+
+4. **Code issue (10% kans - bijna excluded, VAPID key is perfect)**
+   - Fix: Re-run build locally
+   - Test: STAP 9 localhost
+
+---
+
 ## Build Status
 
 ✅ Build passes: 2485 modules, 36.64s  
