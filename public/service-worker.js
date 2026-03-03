@@ -18,6 +18,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });
 
+// Message handling (voor SKIP_WAITING command)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] Received SKIP_WAITING command');
+    self.skipWaiting();
+  }
+});
+
 // Push notification ontvangen
 self.addEventListener('push', (event) => {
   console.log('[SW] Push notification received:', event.data);

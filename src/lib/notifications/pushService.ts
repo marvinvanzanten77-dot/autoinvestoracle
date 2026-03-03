@@ -73,6 +73,19 @@ export class PushNotificationService {
         installing: !!this.registration.installing,
         waiting: !!this.registration.waiting
       });
+
+      // Zorg dat wachtende Service Worker onmiddellijk activeert
+      if (this.registration.waiting) {
+        console.log('[AIO Push] 🔄 Activating waiting service worker...');
+        this.registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      // Luister naar controllerchange event
+      const controllerChangeHandler = () => {
+        console.log('[AIO Push] ✅ Service Worker became active as controller');
+        navigator.serviceWorker.removeEventListener('controllerchange', controllerChangeHandler);
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', controllerChangeHandler);
       
       return true;
     } catch (err) {
@@ -357,17 +370,58 @@ export class PushNotificationService {
       // Get JWT token from Supabase session (stored in localStorage by Supabase)
       let authToken = '';
       try {
-        const supabaseAuth = localStorage.getItem('sb-djmfutyxmyhujcygdliy-auth-token');
-        if (supabaseAuth) {
-          const authData = JSON.parse(supabaseAuth);
-          authToken = authData.session?.access_token || '';
+        // Find Supabase auth token in localStorage (key format: sb-{projectId}-auth-token)
+        // Try multiple possible keys for compatibility with different project IDs
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        let foundKey = null;
+        
+        // First try to extract project ID from SUPABASE_URL
+        const projectIdFromUrl = supabaseUrl.split('https://')[1]?.split('.')[0] || '';
+        if (projectIdFromUrl) {
+          foundKey = `sb-${projectIdFromUrl}-auth-token`;
+        }
+        
+        // If not found, scan localStorage for any sb-*-auth-token key
+        if (!foundKey || !localStorage.getItem(foundKey)) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+              foundKey = key;
+              break;
+            }
+          }
+        }
+        
+        console.log('[AIO Push] Auth token key search:', {
+          supabaseUrl: supabaseUrl.substring(0, 40) + '...',
+          projectIdFromUrl,
+          foundKey,
+          keyExists: foundKey ? !!localStorage.getItem(foundKey) : false
+        });
+        
+        if (foundKey) {
+          const supabaseAuth = localStorage.getItem(foundKey);
+          if (supabaseAuth) {
+            const authData = JSON.parse(supabaseAuth);
+            authToken = authData.session?.access_token || '';
+          }
         }
       } catch (tokenErr) {
         console.warn('[AIO Push] Could not retrieve auth token from localStorage:', tokenErr);
       }
 
+      console.log('[AIO Push] Auth token check:', {
+        hasToken: !!authToken,
+        tokenLength: authToken.length,
+        tokenPrefix: authToken ? authToken.substring(0, 20) + '...' : 'no token'
+      });
+
       if (!authToken) {
         console.error('[AIO Push] ❌ No authorization token available - cannot subscribe');
+        console.log('[AIO Push] Debug info:', {
+          localStorageKeys: Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+            .filter(k => k && k.includes('auth'))
+        });
         return null;
       }
 
@@ -386,7 +440,8 @@ export class PushNotificationService {
       console.log('[AIO Push] subscribe() - step 8: backend response', {
         status: response.status,
         statusText: response.statusText,
-        contentType: response.headers.get('content-type')
+        contentType: response.headers.get('content-type'),
+        authHeaderSent: `Bearer ${authToken.substring(0, 20)}...`
       });
 
       if (response.ok) {
@@ -402,8 +457,13 @@ export class PushNotificationService {
         console.error('[AIO Push] ❌ subscribe() FAILED - backend error', {
           step: 'backend response',
           status: response.status,
+          statusText: response.statusText,
           error: errorData.error || 'Unknown error',
-          details: errorData.details || 'No details provided'
+          details: errorData.details || 'No details provided',
+          endpoint: '/api/push/subscribe',
+          authHeaderSent: `Bearer ${authToken.substring(0, 20)}...`,
+          userIdSent: userId,
+          subscriptionEndpoint: subscriptionPayload.endpoint?.substring(0, 40) + '...'
         });
         return null;
       }
