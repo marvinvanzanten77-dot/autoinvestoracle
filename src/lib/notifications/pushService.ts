@@ -337,10 +337,20 @@ export class PushNotificationService {
       let subscription: PushSubscription;
       
       try {
-        subscription = await this.registration.pushManager.subscribe({
+        // Wrap subscribe in a timeout promise to catch hanging
+        const subscribePromise = this.registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: vapidKey as any
         });
+        
+        // Add 15 second timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('pushManager.subscribe() timeout after 15 seconds - browser may not be responding to push service'))
+          }, 15000);
+        });
+        
+        subscription = await Promise.race([subscribePromise, timeoutPromise]) as PushSubscription;
         console.log('[AIO Push] ✅ pushManager.subscribe() succeeded');
       } catch (subscribeErr) {
         console.error('[AIO Push] ❌ pushManager.subscribe() failed with error:', {
@@ -348,6 +358,7 @@ export class PushNotificationService {
           message: subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr),
           name: subscribeErr instanceof Error ? subscribeErr.name : 'Unknown',
           code: (subscribeErr as any)?.code,
+          isTimeout: subscribeErr instanceof Error && subscribeErr.message.includes('timeout'),
           stack: subscribeErr instanceof Error ? subscribeErr.stack : undefined
         });
         return null;
