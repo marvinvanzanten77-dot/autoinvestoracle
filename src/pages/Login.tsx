@@ -65,6 +65,24 @@ export function Login() {
     setLoading(false);
   };
 
+  const handlePinReset = async () => {
+    if (!email.trim()) {
+      setStatus('Vul eerst je e-mailadres in om je pincode te resetten.');
+      return;
+    }
+    setLoading(true);
+    setStatus(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase(), {
+      redirectTo: `${window.location.origin}/login`
+    });
+    if (error) {
+      setStatus('Reset-link sturen mislukt. Probeer het opnieuw.');
+    } else {
+      setStatus('Reset-link verstuurd. Volg de e-mail om je pincode opnieuw in te stellen.');
+    }
+    setLoading(false);
+  };
+
   const handleRegister = async () => {
     if (!email.trim() || !password.trim() || !displayName.trim()) {
       setStatus('Vul je e-mailadres, naam en wachtwoord in.');
@@ -195,6 +213,14 @@ export function Login() {
                     className="pill border border-primary/40 bg-primary/30 text-primary hover:bg-primary/40 transition disabled:opacity-60 disabled:cursor-not-allowed w-full"
                   >
                     {loading ? 'Inloggen...' : 'Inloggen'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePinReset}
+                    disabled={loading}
+                    className="w-full text-sm text-slate-600 hover:text-primary transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Versturen...' : 'PIN vergeten? Reset via e-mail'}
                   </button>
                 </div>
               </Card>
