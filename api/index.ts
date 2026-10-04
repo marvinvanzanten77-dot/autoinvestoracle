@@ -1,3 +1,4 @@
+import { createCronHandler, cronAudit } from '../src/server/orchestration/cron.js';
 import { createHmac, randomBytes, createCipheriv, createDecipheriv, randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -5269,97 +5270,12 @@ const pushRoutes = {
 };
 
 // Cron job endpoints
+const observationCron = createCronHandler(decryptSecrets);
 const cronRoutes = {
-  'cron/portfolio-check': async (req: any, res: any) => {
-    // Verify cron secret
-    const secret = req.headers?.['x-vercel-cron-secret'] || req.body?.secret;
-    const expectedSecret = process.env.CRON_SECRET;
-    
-    if (!expectedSecret || secret !== expectedSecret) {
-      console.warn('[cron] Unauthorized cron request - invalid or missing secret');
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    try {
-      console.log('[cron] Portfolio check running...');
-      
-      // For now, just return success
-      // The actual implementation should:
-      // 1. Fetch all active users with agent_status = 'running'
-      // 2. For each user, check their portfolio
-      // 3. Send notifications if configured
-      // 4. Generate agent reports
-      
-      res.status(200).json({ 
-        ok: true, 
-        message: 'Portfolio check completed',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('[cron] Portfolio check error:', err);
-      res.status(500).json({ error: 'Portfolio check failed' });
-    }
-  },
-
-  'cron/daily-scan': async (req: any, res: any) => {
-    // Verify cron secret
-    const secret = req.headers?.['x-vercel-cron-secret'] || req.body?.secret;
-    const expectedSecret = process.env.CRON_SECRET;
-    
-    if (!expectedSecret || secret !== expectedSecret) {
-      console.warn('[cron] Unauthorized cron request - invalid or missing secret');
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    try {
-      console.log('[cron] Daily scan running...');
-      
-      // For now, just return success
-      // The actual implementation should:
-      // 1. Scan market data
-      // 2. Generate daily reports
-      // 3. Update cache
-      
-      res.status(200).json({ 
-        ok: true, 
-        message: 'Daily scan completed',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('[cron] Daily scan error:', err);
-      res.status(500).json({ error: 'Daily scan failed' });
-    }
-  },
-
-  'cron/market-data-cache': async (req: any, res: any) => {
-    // Verify cron secret
-    const secret = req.headers?.['x-vercel-cron-secret'] || req.body?.secret;
-    const expectedSecret = process.env.CRON_SECRET;
-    
-    if (!expectedSecret || secret !== expectedSecret) {
-      console.warn('[cron] Unauthorized cron request - invalid or missing secret');
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    try {
-      console.log('[cron] Market data cache update running...');
-      
-      // For now, just return success
-      // The actual implementation should:
-      // 1. Fetch latest market data
-      // 2. Update cache with new prices
-      // 3. Run every 30 minutes
-      
-      res.status(200).json({ 
-        ok: true, 
-        message: 'Market data cache updated',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('[cron] Market data cache error:', err);
-      res.status(500).json({ error: 'Market data cache update failed' });
-    }
-  }
+  'cron/audit': cronAudit,
+  'cron/portfolio-check': observationCron,
+  'cron/daily-scan': observationCron,
+  'cron/market-data-cache': observationCron
 };
 
 // Trading/Scanning endpoints
