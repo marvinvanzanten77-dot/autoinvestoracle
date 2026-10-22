@@ -124,3 +124,54 @@ confirm the registered hourly schedule; await a genuine scheduled invocation;
 read its audit and KV observation/delivery records; then invoke the same hourly
 slot once to compare duplicate and delivery evidence. Record the resulting
 deployment ID, scheduled trigger timestamp, run ID and per-step timings here.
+
+
+## Production verification follow-up ? 2026-10-22
+
+**Vercel CLI access restored; milestone still BLOCKED on service configuration.**
+
+- Scoped CLI access now succeeds for `autoinvestoracle` in
+  `marvins-projects-32ae872c`.
+- Project ID: `prj_q2ID4yTPtc6lceC6z17KeB4ZH2F1`; framework Vite, Node 24.x,
+  root directory `.`.
+- Existing production deployment inspected:
+  `dpl_GSqVNreR3f23Ue4WRW98Bqvc4qJT`, Ready, created March 8, 2026.
+- Production metadata and privately loaded environment confirm eight required
+  variables are populated: KV_REST_API_URL, KV_REST_API_TOKEN, ENCRYPTION_KEY,
+  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET, VAPID_PRIVATE_KEY,
+  VAPID_EMAIL. VAPID_PUBLIC_KEY is absent.
+- VITE_VAPID_PUBLIC_KEY exists, but cryptographic derivation of the public key
+  from the existing VAPID_PRIVATE_KEY does not match it. No key was changed.
+- A read-only production KV scan fails before user discovery: fetch failed,
+  cause ENOTFOUND. Independent DNS checks also return ENOTFOUND for the hosts
+  configured in KV_REST_API_URL and SUPABASE_URL. Control lookup of
+  api.bitvavo.com succeeds. URLs are valid HTTPS with expected provider suffixes,
+  no surrounding whitespace or literal newline escapes. NEXT_PUBLIC_SUPABASE_URL
+  matches the server Supabase URL. Provider resource deletion/pause is not proven.
+
+No secret values were printed or committed. No new production deployment or
+cron invocation was performed with this broken configuration. No orders/trades,
+profile updates, notifications, key rotations or production env changes occurred.
+`main` remains unchanged. The unattended run/audit/persistence/idempotency
+acceptance evidence is still outstanding.
+
+### Next external actions
+
+1. In the connected Upstash/Vercel storage console, verify that the original KV
+   database still exists and is active. Restore the resource/endpoint if needed,
+   preserving the existing encrypted connection records. If its endpoint or
+   credentials changed, correct the existing Production variables in Vercel.
+2. In Supabase, verify that the original project is active and its Project URL
+   resolves. Restore it if possible; otherwise restore the required profiles and
+   push subscriptions into the intended project and configure matching server URL
+   and service-role credentials. Do not substitute an empty project and declare
+   success. Do not rotate ENCRYPTION_KEY.
+3. Reconcile the VAPID key pair before testing an allowed push. The missing
+   server public key must correspond to the existing private key; subscriptions
+   must have been created with that same public key. Re-subscription may be
+   necessary if the currently configured frontend public key is wrong.
+
+After service reachability is restored, repeat the read-only preflight; confirm a
+real connected Bitvavo user with a running agent; deploy the existing branch;
+verify cron registration and await a genuine scheduled run before testing duplicate
+invocation. Production environment presence alone is not proof of reachability.
