@@ -73,3 +73,54 @@ errors in other modules. Local fixtures are not production milestone evidence.
 
 `usersProcessed: 0` is not milestone evidence. A 500, unfinished audit or unknown
 push delivery is not a passed run. No production run has yet been verified.
+
+## Production verification attempt — 2026-10-22
+
+**Result: BLOCKED at Vercel project access; milestone NOT PASSED.**
+
+- Remote branch `fix/unattended-observation-cron` was fetched and confirmed at
+  implementation commit `0de6374`. No implementation changes were made.
+- The connected Vercel integration can list team `Marvin's projects`, slug
+  `marvins-projects-32ae872c`, ID `team_DHlbzZ87HCLSfQG2XrzT67Mh`.
+- Project lookup for `autoinvestoracle` in that team returns HTTP 404,
+  `Project not found`.
+- Both filtered and unfiltered project listings in that team return zero
+  projects. This proves the project is not accessible through the current
+  connection; it does not prove that the project was deleted or does not exist.
+- The environment metadata request (`decrypt=false`) also returns project 404.
+- The scoped CLI fallback reports `No existing credentials found`.
+
+Environment presence in Production is **UNVERIFIED** for every required key:
+
+| Variable | Production presence |
+| --- | --- |
+| KV_REST_API_URL | Unverified — project inaccessible |
+| KV_REST_API_TOKEN | Unverified — project inaccessible |
+| ENCRYPTION_KEY | Unverified — project inaccessible |
+| SUPABASE_URL | Unverified — project inaccessible |
+| SUPABASE_SERVICE_ROLE_KEY | Unverified — project inaccessible |
+| CRON_SECRET | Unverified — project inaccessible |
+| VAPID_PUBLIC_KEY | Unverified — project inaccessible |
+| VAPID_PRIVATE_KEY | Unverified — project inaccessible |
+| VAPID_EMAIL | Unverified — project inaccessible |
+
+No secret values were retrieved, printed, changed or rotated. No deployment,
+production cron invocation, order/trade, profile mutation or push was performed.
+The registered production schedule, usersProcessed, step statuses/durations,
+KV observation and delivery records, and production idempotency are all
+**unverified**, not successful or skipped.
+
+### External action required
+
+Reconnect/grant the Vercel integration access to the actual Auto Invest Oracle
+project and its owning team. If the project moved or was renamed, provide its
+current project ID, team and dashboard URL (not credentials). Alternatively,
+authenticate the Vercel CLI locally with `vercel login` using an account with
+access to that project. Never paste tokens or secret values into chat.
+
+After access is restored: inspect production configuration and environment
+metadata; deploy the existing branch to Production without changing `main`;
+confirm the registered hourly schedule; await a genuine scheduled invocation;
+read its audit and KV observation/delivery records; then invoke the same hourly
+slot once to compare duplicate and delivery evidence. Record the resulting
+deployment ID, scheduled trigger timestamp, run ID and per-step timings here.
